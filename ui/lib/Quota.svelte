@@ -41,6 +41,8 @@
     flex-direction: column;
     gap: 3px;
     font-size: var(--t-s);
+    /* A narrow dialog's width: in a Settings form the field column would stretch it edge to edge. */
+    max-width: 377px;
   }
   .bar {
     height: 3px;
