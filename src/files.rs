@@ -42,6 +42,8 @@ struct State {
     entries: Vec<Entry>,
     error: String,
     transfers: Vec<Arc<Mutex<Transfer>>>,
+    /// Operations whose listing is on its way: a slow host's can take seconds.
+    listing: usize,
 }
 
 /// What the UI's panel shows.
@@ -53,6 +55,8 @@ struct Snapshot<'a> {
     entries: &'a [Entry],
     error: &'a str,
     transfers: Vec<TransferView>,
+    /// A listing is on its way: the panel shows it's busy meanwhile.
+    listing: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -409,6 +413,7 @@ impl Browser {
             entries: &st.entries,
             error: &st.error,
             transfers,
+            listing: st.listing > 0,
         };
         let _ = self.app.emit("files", snap);
     }
@@ -443,13 +448,19 @@ impl Browser {
         Fut: Future<Output = Result<(), String>> + Send,
     {
         let Some(fs) = self.state.lock().unwrap().fs.clone() else { return };
-        let cwd = self.state.lock().unwrap().cwd.clone();
+        let cwd = {
+            let mut st = self.state.lock().unwrap();
+            st.listing += 1;
+            st.cwd.clone()
+        };
+        self.publish();
         let b = self.clone();
         tauri::async_runtime::spawn(async move {
             if let Err(e) = f(fs.clone(), cwd.clone()).await {
                 b.state.lock().unwrap().error = e;
             }
             b.list(&fs, path.unwrap_or(cwd)).await;
+            b.state.lock().unwrap().listing -= 1;
             b.publish();
         });
     }

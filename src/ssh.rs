@@ -151,9 +151,8 @@ pub async fn connect(
         Client { host: target.host.clone(), port: target.port, prompt: prompt.clone(), forward_to, agent: opts.agent, link: opts.link.clone() };
     let (mut handle, jump) = match jump {
         None => {
-            let h = client::connect(cfg, (target.host.as_str(), target.port), client)
-                .await
-                .with_context(|| format!("connecting to {}", target.label()))?;
+            let tcp = dial(&target.host, target.port).await?;
+            let h = client::connect_stream(cfg, tcp, client).await.with_context(|| format!("connecting to {}", target.label()))?;
             (h, None)
         }
         Some(j) => {
@@ -169,9 +168,21 @@ pub async fn connect(
 
 async fn connect_auth(ep: &Endpoint, cfg: Arc<client::Config>, prompt: &Prompter) -> Result<Handle<Client>> {
     let client = Client { host: ep.host.clone(), port: ep.port, prompt: prompt.clone(), forward_to: None, agent: false, link: None };
-    let mut h = client::connect(cfg, (ep.host.as_str(), ep.port), client).await?;
+    let mut h = client::connect_stream(cfg, dial(&ep.host, ep.port).await?, client).await?;
     authenticate(&mut h, ep, prompt).await?;
     Ok(h)
+}
+
+/// The TCP connection under an SSH one, given up after 15 s as telnet's and VNC's are (the OS
+/// waits 21 s on Windows, two minutes on Linux). Only the TCP part: the handshake after it waits
+/// as long as it takes to answer a new host key's prompt.
+async fn dial(host: &str, port: u16) -> Result<TcpStream> {
+    let tcp = tokio::time::timeout(Duration::from_secs(15), TcpStream::connect((host, port)))
+        .await
+        .map_err(|_| anyhow!("{host}:{port} didn't answer within 15 s"))?
+        .with_context(|| format!("connecting to {host}:{port}"))?;
+    tcp.set_nodelay(true)?; // client_config's `nodelay`, which only russh's own connect applies
+    Ok(tcp)
 }
 
 /// The ciphers xtermium offers, best first: authenticated (AEAD) ones with 256-bit keys, which

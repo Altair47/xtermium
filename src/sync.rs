@@ -165,7 +165,8 @@ fn base(url: &str) -> Result<String> {
 }
 
 fn client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build()?)
+    // A server that's down fails in 10 s (and the retry schedule starts), not at the 30 s cap.
+    Ok(reqwest::Client::builder().connect_timeout(std::time::Duration::from_secs(10)).timeout(std::time::Duration::from_secs(30)).build()?)
 }
 
 /// The server's own words for a refusal (`{"error": "…"}`), if it gave any.
