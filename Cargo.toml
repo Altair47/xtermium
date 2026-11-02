@@ -33,7 +33,7 @@ ring = "0.17"
 # HTTPS for icons fetched by URL (and, later, sync). Rustls with ring, which russh already uses.
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-russh = { version = "0.64", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh = { version = "0.65", default-features = false, features = ["flate2", "ring", "rsa"] }
 sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
