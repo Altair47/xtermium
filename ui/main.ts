@@ -1,8 +1,16 @@
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { mount } from "svelte";
 import "./app.css";
 import App from "./App.svelte";
+import { ownWindow } from "./lib/actions";
 import Detached from "./lib/Detached.svelte";
 import { tooltips } from "./lib/tooltip";
+
+// Website tabs are browser views with xtermium's own address reachable (http://tauri.localhost)
+// and the same command rights as the main window (capabilities/default.json): a page that
+// navigates its view there, or frames it, would start a second interface on the backend. Only
+// xtermium's own windows run it.
+if (!ownWindow(getCurrentWebview().label, window.top !== window)) throw new Error("not one of xtermium's windows");
 
 // Keep the webview's own shortcuts (reload, print, find) and context menu out of the way:
 // reloading would drop every open session.

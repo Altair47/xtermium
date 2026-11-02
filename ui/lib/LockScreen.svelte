@@ -7,7 +7,7 @@
   import { _ } from "./i18n.svelte";
   import Icon from "./Icon.svelte";
   import { passkeyAnswer, passkeysWork } from "./passkey";
-  import { loadLock, lock } from "./state.svelte";
+  import { app, loadLock, lock } from "./state.svelte";
 
   const shown = $derived(lock.locked || !!lock.confirm);
   let mode = $state<"password" | "pin">("password");
@@ -98,7 +98,10 @@
       {#if lock.confirm}
         <button class="flat" onclick={() => lock.confirm?.(false)}>{_("Cancel")}</button>
       {:else}
-        <p class="weak">{_("Your sessions keep running.")}</p>
+        <p class="weak">
+          {_("Your sessions keep running.")}
+          {#if app.settings?.automation}{_("The MCP server and the command line are locked too.")}{/if}
+        </p>
       {/if}
     </div>
   </div>

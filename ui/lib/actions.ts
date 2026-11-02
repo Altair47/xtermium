@@ -83,6 +83,9 @@ export function chord(e: KeyboardEvent): string {
 }
 
 /** The chord bound to an action, with the user's changes applied. */
+/** Whether the interface may run here: xtermium's own windows (main.rs: `main`, detached tabs' `tab-<id>`), never framed. */
+export const ownWindow = (label: string, framed: boolean) => !framed && (label === "main" || label.startsWith("tab-"));
+
 export const keysOf = (id: string, overrides: Record<string, string>) => overrides[id] ?? ACTIONS.find((a) => a.id === id)?.keys ?? "";
 
 /** Chord → action, for every bound action. */

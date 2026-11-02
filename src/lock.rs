@@ -5,9 +5,11 @@
 //! the passkey's public key, which never go to the UI. Changing them takes an unlock first, unless
 //! none is set yet.
 //!
-//! ponytail: it guards the windows, not the backend: automation and the `xtermium` command line
-//! keep working while it's locked (scripts and agents run unattended). Gate `automation::call` on
-//! `is_locked()` if that should change.
+//! It guards automation too: while it's locked `automation::call` refuses every tool, for MCP
+//! clients and the `xtermium` command line alike (only the MCP handshake and tool list answer).
+//!
+//! ponytail: so scripts and agents left running stop at their next tool call when it locks, the
+//! idle lock included. A per-token "keeps working while locked" switch if someone needs that.
 
 use crate::vault;
 use anyhow::{Result, anyhow, bail, ensure};

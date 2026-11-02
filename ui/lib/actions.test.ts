@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACTIONS, bindings, cell, chord, even, fill, neighbour, nudge, placeholders, quickConnect, resize, score, tile } from "./actions.ts";
+import { ACTIONS, bindings, cell, chord, even, fill, neighbour, nudge, ownWindow, placeholders, quickConnect, resize, score, tile } from "./actions.ts";
 
 const key = (code: string, key: string, mods: Partial<KeyboardEvent> = {}) =>
   chord({ code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods } as KeyboardEvent);
@@ -117,4 +117,10 @@ test("a pane's edge moves the way of the arrow", () => {
   // No neighbour that way: side by side panes have no edge up or down, one pane none at all.
   assert.equal(resize([2], even([2]), 0, 0, 0.1), null);
   assert.equal(resize([1], even([1]), 0, 0.1, 0), null);
+});
+
+test("the interface runs only in xtermium's own windows, never framed", () => {
+  assert.ok(ownWindow("main", false) && ownWindow("tab-7", false));
+  assert.ok(!ownWindow("web3", false), "a website tab's view");
+  assert.ok(!ownWindow("main", true), "framed by a page");
 });

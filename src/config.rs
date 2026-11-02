@@ -611,6 +611,19 @@ fn moved(old: &Path, new: PathBuf) -> PathBuf {
     new
 }
 
+/// Makes the data folder, for this user alone (Unix mode 700): besides the encrypted files it
+/// holds plain ones, website profiles' cookies, terminal logs, browser data, which a shared
+/// computer's other users could otherwise read. Called at start (instance.rs `claim`).
+pub fn private(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
 /// The windows' browser data (WebView2, WebKitGTK; macOS keeps it in its own place), shared by
 /// website views that have no profile of their own (web.rs).
 pub fn webview_dir() -> PathBuf {
@@ -1327,6 +1340,19 @@ pub fn forget(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The data folder is the user's alone, also when it was made more openly before.
+    #[cfg(unix)]
+    #[test]
+    fn data_folder_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("xtermium-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        private(&dir).unwrap();
+        assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     /// The data moves from the old folder once, and never over data already in the new one, nor
     /// while an older xtermium runs on it.
