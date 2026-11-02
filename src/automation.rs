@@ -415,9 +415,20 @@ fn png(p: Picture, region: Option<[u32; 4]>, max_width: u32) -> Result<(Vec<u8>,
     Ok((out.into_inner(), meta))
 }
 
+/// What every tool answers while xtermium is locked; the command line prints it.
+const LOCKED: &str = "xtermium is locked. Unlock it on this computer to use the MCP server and the command line.";
+
+/// Tools wait while xtermium is locked (lock.rs), whoever calls them: an assistant, a script, the
+/// command line. The MCP handshake and the tool list still answer (`rpc`): they say nothing about
+/// your sessions, and a client whose handshake fails drops the server until it's reconnected.
+fn unlocked() -> Result<(), String> {
+    if crate::lock::is_locked() { Err(LOCKED.into()) } else { Ok(()) }
+}
+
 /// Runs a tool. Results are JSON objects; a screenshot puts its PNG (base64) under `IMAGE`, which
 /// the MCP answer turns into image content.
 pub async fn call(handle: &AppHandle, tool: &str, args: &Value) -> Result<Value, String> {
+    unlocked()?;
     let app = handle.state::<App>();
     let text = |k: &str| args.get(k).and_then(Value::as_str).ok_or_else(|| format!("missing \"{k}\""));
     let num = |k: &str| args.get(k).and_then(Value::as_i64);
@@ -1260,8 +1271,9 @@ fn local_origin(origin: &str) -> bool {
     host == "127.0.0.1" || host == "localhost"
 }
 
-/// Compares without stopping at the first difference (timing doesn't leak the token).
-fn same(a: &[u8], b: &[u8]) -> bool {
+/// Compares without stopping at the first difference (timing doesn't leak the token, or
+/// instance.rs's secret).
+pub(crate) fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
@@ -1374,6 +1386,23 @@ mod tests {
         assert_eq!(Kind::agent_argv("cursor", "", "auto", "max", "x"), ["agent", "--force", "--model", "x"], "no effort flag for a tool without one");
         assert_eq!(Kind::agent_argv("copilot", "", "", "", ""), ["copilot"], "defaults add nothing");
         assert_eq!(Kind::agent_argv("custom", "aider --model sonnet", "auto", "", ""), ["aider", "--model", "sonnet"]);
+    }
+
+    /// While xtermium is locked every tool call is refused, saying why, and an unlock lets them
+    /// through again. (`call` needs the running app; this is the guard it starts with.)
+    #[test]
+    fn locked_xtermium_refuses_tools() {
+        use crate::lock::{Change, Proof};
+        crate::config::set_key([7; 32]); // the tests' key (ssh.rs `test_home`): the lock saves its settings
+        let password = || "correct horse".to_string();
+        crate::lock::set(Change::Password { secret: password() }, 0).unwrap();
+        assert!(crate::lock::lock());
+        assert_eq!(unlocked(), Err(LOCKED.to_string()));
+        assert!(crate::lock::unlock(Proof::Password { secret: "wrong horse".into() }, 0).is_err());
+        assert_eq!(unlocked(), Err(LOCKED.to_string()), "a wrong password doesn't open it");
+        crate::lock::unlock(Proof::Password { secret: password() }, 0).unwrap();
+        assert_eq!(unlocked(), Ok(()));
+        crate::lock::set(Change::Password { secret: String::new() }, 0).unwrap();
     }
 
     #[test]

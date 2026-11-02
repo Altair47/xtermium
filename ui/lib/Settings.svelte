@@ -811,6 +811,7 @@
         {_("Anything that has the token can open your sessions, type into your terminals and start tunnels, as you. xtermium only listens on this computer (127.0.0.1), and refuses web pages.")}
       {/if}
     </p>
+    <p class="weak"><button class="link quiet" onclick={() => (page = "security")}>{_("Locking xtermium (Security) also locks the MCP server and the command line until you unlock it.")}</button></p>
     {#if s.automation}
       <div class="form">
         <span>{_("Listen on")}</span>
@@ -1487,6 +1488,7 @@ xtermium close 3`}</pre>
         keys: keysOf("lock", s.shortcuts) || _("its shortcut"),
       })}
     </p>
+    <p class="weak"><button class="link quiet" onclick={() => (page = "automation")}>{_("Locking xtermium also locks the MCP server and the command line until you unlock it.")}</button></p>
     {#if lock.info}
       {@const i = lock.info}
       <div class="form">
