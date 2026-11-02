@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { KIND_COLOR, KIND_ICON, type Background, type Effect, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
+import { oneAtATime } from "./serial";
 
 export const app = $state({
   store: { session: [], tunnel: [], folder: [], snippet: [], credential: [], layout: [] } as Store,
@@ -80,7 +81,9 @@ export async function workspaceOp(
   useWorkspaces(await invoke<Workspaces>("workspace", { op }));
 }
 
-export async function saveStore() {
+/** Stores the sessions. One save at a time, so they reach the backend (which stores off its main
+ *  thread) in order; edits made during one are stored together right after it. */
+export const saveStore = oneAtATime(async () => {
   try {
     // The backend cleans what it stores (no control characters, valid ports, tidy folders).
     const workspace = app.workspace;
@@ -94,7 +97,7 @@ export async function saveStore() {
   } catch (e) {
     app.status = _("save failed: {error}", { error: String(e) });
   }
-}
+});
 
 /** One side of a sync conflict (src/sync.rs `Side`). */
 export type SyncSide = { at: number | null; device: string; os: string; ip: string; location: string; sessions: number; tunnels: number; keys: number };

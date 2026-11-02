@@ -36,11 +36,18 @@
   const dark = document.documentElement.dataset.theme !== "light";
   const DASH_PAGE = 48; // 16 to a row, 3 rows
   let dashQuery = $state("");
+  /** `dashQuery` once typing pauses: each search shows 48 new pictures, fetched from the CDN. */
+  let dashSearch = $state("");
+  $effect(() => {
+    const q = dashQuery.trim();
+    const t = setTimeout(() => (dashSearch = q), 150);
+    return () => clearTimeout(t);
+  });
   let dashPage = $state(0);
   /** Searched: the whole catalogue; otherwise the icons for sysadmins, network and devops people. */
   const dashList = $derived.by((): DashIcon[] => {
     if (!dash) return [];
-    const q = dashQuery.trim();
+    const q = dashSearch;
     if (!q) return dash.DASH.filter((i) => i.ops);
     return dash.DASH.map((i) => [i, score(q, `${i.name} ${i.aliases.join(" ")}`)] as const)
       .filter(([, s]) => s >= 0)

@@ -18,14 +18,16 @@
 
   type Entry = { name: string; dir: boolean; size: number; date: string };
   type Transfer = { upload: boolean; label: string; done: number; total: number; ok: boolean | null; message: string };
-  type Snapshot = { tab: number; connected: boolean; cwd: string; entries: Entry[]; error: string; transfers: Transfer[] };
+  /** `listing`: a listing is on its way (a slow host's can take seconds). */
+  type Snapshot = { tab: number; connected: boolean; cwd: string; entries: Entry[]; error: string; transfers: Transfer[]; listing: boolean };
 
   /** `rdp.connected`: the desktop is up, so its login is known. `cwd`: the shell's folder as the
    *  terminal reports it (OSC 7; "" when it doesn't), followed as it changes. */
   let { tab, session, rdp, cwd = "" }: { tab: number; session: Session; rdp: { host: string; user: string; connected: boolean } | null; cwd?: string } = $props();
   let panel: HTMLElement;
 
-  let snap = $state<Snapshot | null>(null);
+  /** Raw: each event replaces it whole (ten a second during a transfer), nothing edits it. */
+  let snap = $state.raw<Snapshot | null>(null);
   /** RDP: false while the account is being picked. */
   let opened = $state(true);
   let login = $state({ who: "rdp", user: "", password: "", error: "" });
@@ -37,7 +39,7 @@
   let mkdir = $state<string | null>(null);
 
   const cmd = (c: object) => invoke("files", { id: tab, cmd: c });
-  const failed = (e: unknown) => (snap = { tab, connected: false, cwd: "", entries: [], error: String(e), transfers: [] });
+  const failed = (e: unknown) => (snap = { tab, connected: false, cwd: "", entries: [], error: String(e), transfers: [], listing: false });
 
   $effect(() => {
     snap = null;
@@ -104,6 +106,20 @@
   const parent = (p: string) => p.replace(/\/+$/, "").replace(/\/[^/]*$/, "") || "/";
   const join = (d: string, n: string) => (d.endsWith("/") ? d + n : `${d}/${n}`);
 
+  // Only the rows in view are drawn, with a screenful around them: a folder of 10,000 files took
+  // 0.4 s to show, and every tick of a transfer's progress (the whole state comes again) 50 ms.
+  /** An entry's height, `--row` (`.entry`). */
+  const ROW = 21;
+  let scrolled = $state(0);
+  let viewHeight = $state(0);
+  const rows = $derived.by(() => {
+    const all = snap?.entries ?? [];
+    // Even, so the stripes don't swap as it scrolls; within the list when a shorter one came.
+    const first = Math.max(0, Math.min(Math.floor(scrolled / ROW) - 20, all.length - 1)) & ~1;
+    const shown = all.slice(first, first + Math.ceil(viewHeight / ROW) + 40);
+    return { shown, above: first * ROW, below: (all.length - first - shown.length) * ROW };
+  });
+
   function open(e: Entry) {
     if (e.dir) cmd({ op: "cd", path: join(snap!.cwd, e.name) });
     else cmd({ op: "download", name: e.name, size: e.size });
@@ -138,7 +154,7 @@
   {:else}
     <div class="row">
       <button class="icon-only" title={_("Parent folder")} onclick={() => cmd({ op: "cd", path: parent(snap!.cwd) })}><Icon name="up-arrow-alt" /></button>
-      <button class="icon-only" title={_("Refresh")} onclick={() => cmd({ op: "cd", path: snap!.cwd })}><Icon name="refresh" /></button>
+      <button class="icon-only" title={_("Refresh")} onclick={() => cmd({ op: "cd", path: snap!.cwd })}><Icon name={snap.listing ? "loader-alt" : "refresh"} spin={snap.listing} /></button>
       <button class="icon-only" title={_("New folder")} onclick={() => (mkdir = "")}><Icon name="folder-plus" /></button>
     </div>
     <input
@@ -156,8 +172,9 @@
     {#if dropping}
       <div class="row drop"><Icon name="upload" /> {_("Drop to upload to {path}", { path: snap.cwd })}</div>
     {/if}
-    <div class="list">
-      {#each snap.entries as e (e.name)}
+    <div class="list" bind:clientHeight={viewHeight} onscroll={(e) => (scrolled = e.currentTarget.scrollTop)}>
+      <div class="gap" style:height="{rows.above}px"></div>
+      {#each rows.shown as e (e.name)}
         <button
           class="flat entry"
           ondblclick={() => open(e)}
@@ -173,6 +190,7 @@
           <span class="weak date">{e.date}</span>
         </button>
       {/each}
+      <div class="gap" style:height="{rows.below}px"></div>
     </div>
     {#if snap.transfers.length}
       <div class="row"><strong class="grow">{_("Transfers")}</strong><button onclick={() => cmd({ op: "clear" })}>{_("Clear finished")}</button></div>
@@ -273,13 +291,16 @@
     grid-template-columns: 16px 1fr auto auto;
     gap: 8px;
     text-align: start;
-    min-height: var(--row);
+    flex: none;
+    height: var(--row);
+    min-height: 0;
     padding: 0 5px;
-    /* entries out of view aren't laid out or drawn: big folders list at once */
-    content-visibility: auto;
-    contain-intrinsic-size: auto 22px;
   }
-  .entry:nth-child(odd) {
+  .gap {
+    flex: none;
+  }
+  /* the gap above is the first child */
+  .entry:nth-child(even) {
     background: rgba(127, 127, 127, 0.06);
   }
   .name {

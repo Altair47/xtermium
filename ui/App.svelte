@@ -134,9 +134,10 @@
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     document.documentElement.style.setProperty("--chrome-alpha", String(s.effect === "None" ? 1 : s.window_opacity));
     accent(s.accent);
-    getCurrentWebview().setZoom(s.ui_scale).catch(() => {});
-    invoke("set_dark", { dark }).catch((e) => (app.status = String(e)));
   });
+  // Apart, so dragging the opacity slider or the accent picker doesn't call the backend each step.
+  $effect(() => void (app.settings && getCurrentWebview().setZoom(app.settings.ui_scale).catch(() => {})));
+  $effect(() => void (app.settings && invoke("set_dark", { dark }).catch((e) => (app.status = String(e)))));
   /** A custom accent replaces the gold everywhere. On the light theme a preset uses its own darker
    *  value, and any other colour is darkened toward the text as the gold is, so it still reads
    *  (`light-dark()` follows the theme's color-scheme, app.css). Text on it is black or white,
@@ -788,7 +789,7 @@
   const DIALOGS = new Set(["palette", "settings", "snippets", "tunnels", "credentials"]);
 
   // A website with the keyboard hands xtermium's shortcuts back (src/web.rs, Windows).
-  $effect(() => void invoke("web_shortcuts", { chords: [...keymap.keys()] }));
+  $effect(() => void (app.settings && invoke("web_shortcuts", { chords: [...keymap.keys()] })));
   listen<string>("web-key", ({ payload }) => {
     const id = keymap.get(payload);
     if (id && !document.querySelector(".backdrop")) run(id);

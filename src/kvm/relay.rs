@@ -71,7 +71,8 @@ async fn relay(mut page: TcpStream, token: &str) -> anyhow::Result<()> {
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(Pinned { pinned, provider }))
         .with_no_client_auth();
-    let bmc = TcpStream::connect((host.as_str(), port)).await?;
+    // The console's WebSocket waits on this: 15 s, as for every other connection, not the OS's minutes.
+    let bmc = tokio::time::timeout(std::time::Duration::from_secs(15), TcpStream::connect((host.as_str(), port))).await??;
     let mut bmc = tokio_rustls::TlsConnector::from(Arc::new(config)).connect(ServerName::try_from(host.clone())?, bmc).await?;
     bmc.write_all(format!("{request}\r\n{}\r\n\r\n{body}", headers.join("\r\n")).as_bytes()).await?;
     tokio::io::copy_bidirectional(&mut page, &mut bmc).await?;

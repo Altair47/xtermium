@@ -186,8 +186,11 @@ impl App {
         r.map_err(|e| format!("window effect: {e}"))
     }
 
-    /// Stores every workspace.
+    /// Stores every workspace. One write at a time, of the data as it is when it starts: of two
+    /// saves racing (the UI's run off the main thread), the newer is the one left on disk.
     fn save_store(&self) -> Res<()> {
+        static WRITING: Mutex<()> = Mutex::new(());
+        let _one = WRITING.lock().unwrap();
         self.all().save().map_err(fail)
     }
 
@@ -348,20 +351,35 @@ fn boot(app: State<App>) -> Boot {
 }
 
 /// Stores workspace `workspace`'s sessions, cleaned (clean.rs); returns them as stored. One sent
-/// just before a switch lands in the workspace it came from.
+/// just before a switch lands in the workspace it came from. Off the main thread: cleaning,
+/// encrypting and writing 2000 sessions take 8 ms (47 ms in a debug build), on every edit. The UI
+/// sends one save at a time, so they land in order.
 #[tauri::command]
-fn save_store(app: State<App>, mut store: Store, workspace: String) -> Res<Store> {
-    store.sanitize();
-    store.workspaces.clear();
-    if workspace == config::workspace() {
-        *app.store.lock().unwrap() = store.clone();
-    } else {
-        let mut rest = app.rest.lock().unwrap();
-        *rest = rest.join(&workspace, &store);
-    }
-    app.save_store()?;
-    Ok(store)
+async fn save_store(handle: AppHandle, mut store: Store, workspace: String) -> Res<Store> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let app = handle.state::<App>();
+        // First thing, so a switch, import or restore asked for after this save comes after it.
+        let switching = SWITCHING.lock().unwrap();
+        store.sanitize();
+        store.workspaces.clear();
+        if workspace == config::workspace() {
+            *app.store.lock().unwrap() = store.clone();
+        } else {
+            let mut rest = app.rest.lock().unwrap();
+            *rest = rest.join(&workspace, &store);
+        }
+        drop(switching);
+        app.save_store()?;
+        Ok(store)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
+
+/// Held while the data in memory changes as a whole (a workspace switch or move, an import, a
+/// restore) and while a save lands in it (`save_store`): a save racing a switch still goes to the
+/// workspace it came from, and one sent before an import or a restore doesn't undo it.
+static SWITCHING: Mutex<()> = Mutex::new(());
 
 #[derive(serde::Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase")]
@@ -392,6 +410,7 @@ fn workspace(app: State<App>, op: WorkspaceOp) -> Res<Workspaces> {
 
 /// What `workspace` does; automation (automation.rs) switches workspaces with it too.
 fn workspace_op(app: &App, op: WorkspaceOp) -> Res<Workspaces> {
+    let _switching = SWITCHING.lock().unwrap();
     let ws = config::workspace();
     let taken = |n: &str| app.workspaces().iter().any(|w| w == n);
     let valid = |n: &str| -> Res<String> {
@@ -496,6 +515,7 @@ fn move_to_workspace(app: State<App>, to: String, sessions: Vec<usize>, folders:
 
 /// What `move_to_workspace` does; automation (automation.rs) moves sessions with it too.
 fn move_op(app: &App, to: &str, sessions: &[usize], folders: &[String]) -> Res<Workspaces> {
+    let _switching = SWITCHING.lock().unwrap();
     if to == config::workspace() {
         return Err("They're in that workspace already.".into());
     }
@@ -708,6 +728,7 @@ fn serial_ports() -> Vec<String> {
 
 /// Adds what an import brought that isn't there yet.
 fn merge(app: &App, mut incoming: Store, skipped: usize) -> Res<(Store, String)> {
+    let _switching = SWITCHING.lock().unwrap();
     incoming.sanitize();
     incoming.workspaces.clear();
     let (s, t) = app.store.lock().unwrap().merge(incoming);
@@ -861,11 +882,13 @@ async fn backup_restore(handle: AppHandle, window: tauri::Window, data: Vec<u8>,
 fn replace_all(app: State<App>, window: tauri::Window, text: &str) -> Res<()> {
     let (mut store, settings, known) = unbackup(text).map_err(fail)?;
     let mut settings = settings.ok_or("This file holds sessions only, not a full backup: import it with Import sessions.")?;
+    let switching = SWITCHING.lock().unwrap();
     app.snapshot("before-restore")?;
     keep_device(&mut settings, &app.settings.lock().unwrap());
     store.sanitize();
     app.set_all(store);
     app.save_store()?;
+    drop(switching);
     if let Some(k) = known {
         config::Known::with(|cur| *cur = k).map_err(fail)?;
     }
@@ -1238,6 +1261,7 @@ async fn fetch(url: &str, max: usize, insecure: bool) -> Res<(reqwest::Url, Vec<
         return Err("Use an http(s) link.".into());
     }
     let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .user_agent(concat!("xtermium/", env!("CARGO_PKG_VERSION"))) // GitHub's API wants one
         .tls_danger_accept_invalid_certs(insecure)
