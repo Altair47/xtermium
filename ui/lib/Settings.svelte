@@ -141,6 +141,10 @@
       N_("Create an account"),
       N_("Sign out"),
       N_("Show the account button in the sidebar"),
+      N_("What syncs"),
+      N_("Settings (look and defaults)"),
+      N_("Backgrounds"),
+      N_("Saved logins and passwords"),
       N_("Sync now"),
       N_("Delete the cloud copy"),
     ],
@@ -939,7 +943,7 @@ xtermium close 3`}</pre>
       <input type="checkbox" checked={s.account_button || !!s.sync_token} disabled={!!s.sync_token} onchange={(e) => (s.account_button = (e.target as HTMLInputElement).checked)} />{_("Show the account button in the sidebar")}
     </label>
     <p class="weak">
-      {_("Your data is encrypted on this computer before it leaves it, so the sync server stores data it can't read. Settings stay on each device. Syncing happens when xtermium starts and when you click Sync now; if both sides changed, you choose which copy to keep.")}
+      {_("Your data is encrypted on this computer before it leaves it, so the sync server stores data it can't read. Syncing happens when xtermium starts and when you click Sync now; if both sides changed, you choose which copy to keep.")}
     </p>
     {#if s.sync_token}
       <div class="form">
@@ -977,6 +981,11 @@ xtermium close 3`}</pre>
         <button onclick={deleteCloud}>{confirmDelete ? _("Click again to delete it") : _("Delete the cloud copy")}</button>
       </div>
     {/if}
+    <h3>{_("What syncs")}</h3>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_settings} />{_("Settings (look and defaults)")}</label>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_backgrounds} />{_("Backgrounds")}</label>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_logins} />{_("Saved logins and passwords")}</label>
+    <p class="weak">{_("Sessions, folders, workspaces, shared logins, tunnels, snippets, layouts and trusted host keys always sync.")}</p>
   {:else if page === "appearance"}
     <div class="form">
       <span>{_("Theme")}</span>

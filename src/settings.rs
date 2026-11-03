@@ -126,6 +126,11 @@ pub struct Settings {
     pub sync: bool,
     pub sync_token: String,
     pub sync_email: String,
+    /// What else syncs, each only when ticked (Settings › Account and sync): this file's own copy
+    /// (look and defaults, `for_cloud`), the three background files, and the saved logins.
+    pub sync_settings: bool,
+    pub sync_backgrounds: bool,
+    pub sync_logins: bool,
     /// The account button at the bottom of the sidebar; always shown while signed in.
     pub account_button: bool,
     /// Ask before closing a tab whose connection is still up.
@@ -314,6 +319,9 @@ impl Default for Settings {
             sync: false,
             sync_token: String::new(),
             sync_email: String::new(),
+            sync_settings: false,
+            sync_backgrounds: false,
+            sync_logins: false,
             account_button: false,
             confirm_close: true,
             auto_reconnect: true,
@@ -377,6 +385,48 @@ impl Settings {
         key(self) != key(old)
             || self.custom_schemes != old.custom_schemes
             || (self.highlight, &self.highlights) != (old.highlight, &old.highlights)
+    }
+
+    /// Copies the fields that belong to this device from `from`: the account and what it syncs,
+    /// automation, start at login and priority (a synced copy must not open a listener or change
+    /// the OS here), the default SSH password (passwords travel only with the saved logins), the
+    /// window's layout, the kept custom.css, and what each background is (its own file).
+    fn take_device_fields(&mut self, from: &Settings) {
+        self.sync = from.sync;
+        self.sync_token = from.sync_token.clone();
+        self.sync_email = from.sync_email.clone();
+        (self.sync_settings, self.sync_backgrounds, self.sync_logins) = (from.sync_settings, from.sync_backgrounds, from.sync_logins);
+        self.automation = from.automation;
+        self.automation_port = from.automation_port;
+        self.automation_network = from.automation_network;
+        self.automation_token = from.automation_token.clone();
+        self.workspace = from.workspace.clone();
+        self.start_at_login = from.start_at_login;
+        self.high_priority = from.high_priority;
+        self.ssh_password = from.ssh_password.clone();
+        self.custom_css = from.custom_css.clone();
+        self.open_folders = from.open_folders.clone();
+        self.sidebar_width = from.sidebar_width;
+        self.sidebar_collapsed = from.sidebar_collapsed;
+        for (b, f) in [(&mut self.background, &from.background), (&mut self.sidebar_background, &from.sidebar_background), (&mut self.bar_background, &from.bar_background)] {
+            (b.kind, b.name, b.stamp) = (f.kind.clone(), f.name.clone(), f.stamp);
+        }
+    }
+
+    /// The copy of the settings that goes to the cloud when "Settings" is ticked: this device's
+    /// own fields (`take_device_fields`) at their defaults, so it reads the same from any device.
+    pub fn for_cloud(&self) -> Settings {
+        let mut s = self.clone();
+        s.take_device_fields(&Settings::default());
+        s
+    }
+
+    /// A copy from the cloud (`for_cloud` of another device) as it applies here: this device's
+    /// fields stay as `mine` has them. `for_cloud` of the result is the copy it came from, so
+    /// pulling never looks like a change of this device's own.
+    pub fn applied_over(mut self, mine: &Settings) -> Settings {
+        self.take_device_fields(mine);
+        self
     }
 
     pub fn transparent(&self) -> bool {

@@ -858,6 +858,12 @@ pub fn read(name: &str, plain: &[&str], convert: impl FnOnce(Vec<String>) -> Res
     Ok(text)
 }
 
+/// The decrypted contents of `<name>.xtm`, or None when there is no such file (sync sends only
+/// the files that exist).
+pub fn read_if(name: &str) -> Option<String> {
+    path(name).exists().then(|| read(name, &[], |_| Ok(String::new())).ok()).flatten()
+}
+
 impl Store {
     pub fn load() -> Result<Self> {
         Ok(toml::from_str(&read("sessions", &["sessions.toml"], |t| Ok(t.concat()))?)?)
@@ -1284,6 +1290,12 @@ pub fn restore_logins(text: &str) -> Result<()> {
         logins(|l| *l = one_each(list))?;
     }
     Ok(())
+}
+
+/// Replaces the saved logins with another device's `logins.xtm` text (sync), deletions included.
+pub fn replace_logins(text: &str) -> Result<()> {
+    let list = one_each(toml::from_str::<Logins>(text)?.list);
+    logins(|l| *l = list)
 }
 
 /// Runs `f` on the saved logins (loaded on first use); saves if `f` changed them.
