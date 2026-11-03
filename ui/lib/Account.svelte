@@ -72,12 +72,12 @@
         <Quota />
       </div>
       <button disabled={app.sync.busy} onclick={() => syncNow()}><Icon name="refresh" />{_("Sync now")}</button>
+      <button onclick={() => openUrl(ACCOUNT).catch((e) => (app.status = String(e)))}><Icon name="user-circle" />{_("Manage account")}</button>
       {#if getPro}
         <button onclick={() => openUrl(CHECKOUT).catch((e) => (app.status = String(e)))}><Icon name="world" />{_("Get Pro")}</button>
       {:else if app.sync.account?.pro.active}
-        <button onclick={() => openPortal().catch((e) => (app.status = String(e)))}><Icon name="world" />{_("Manage the subscription")}</button>
+        <button onclick={() => openPortal().catch((e) => (app.status = String(e)))}><Icon name="world" />{_("Manage subscription")}</button>
       {/if}
-      <button onclick={() => openUrl(ACCOUNT).catch((e) => (app.status = String(e)))}><Icon name="user-circle" />{_("Manage account")}</button>
       <button onclick={onsettings}><Icon name="cog" />{_("Account and sync settings")}</button>
       <button onclick={() => signOut()}><Icon name="log-out" />{_("Sign out")}</button>
       <button onclick={() => signOut(true)}>{_("Sign out everywhere")}</button>
