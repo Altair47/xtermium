@@ -19,7 +19,7 @@
 use crate::config::Kind;
 use crate::{App, Tab, rdp, sync, term, web};
 use iroh::endpoint::{Connection, Incoming, RecvStream, SendStream, presets};
-use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, TransportAddr};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, TransportAddr};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
@@ -336,10 +336,17 @@ fn relay_of(named: Option<String>) -> Res<RelayMode> {
     Ok(RelayMode::custom([url]))
 }
 
-/// An endpoint with a key of its own for this ring, no discovery of any kind, and `mode` for relays.
-/// Only the owner listens; a viewer refuses everything that dials it.
-async fn bind(mode: RelayMode, listen: bool) -> Res<Endpoint> {
-    let mut b = Endpoint::builder(presets::Minimal).relay_mode(mode);
+/// Tells the server the key this ring will use, before it is bound: the relay lets an endpoint in
+/// only once the server knows it as a Pro account's (`POST /v1/coop/node`, docs/sync.md).
+async fn register(handle: &AppHandle, key: &SecretKey) -> Res<()> {
+    let body = serde_json::json!({ "id": key.public().to_string() });
+    call(handle, reqwest::Method::POST, "/v1/coop/node", Some(body)).await.map(|_| ()).map_err(|e| said(&e))
+}
+
+/// An endpoint with `key`, a key of its own for this ring, no discovery of any kind, and `mode`
+/// for relays. Only the owner listens; a viewer refuses everything that dials it.
+async fn bind(key: SecretKey, mode: RelayMode, listen: bool) -> Res<Endpoint> {
+    let mut b = Endpoint::builder(presets::Minimal).secret_key(key).relay_mode(mode);
     if listen {
         b = b.alpns(vec![ALPN.to_vec()]);
     }
@@ -1415,7 +1422,9 @@ pub async fn coop_create(handle: AppHandle) -> Res<Payload> {
     let t = token(&handle)?;
     let account = sync::account("", &t).await.map_err(crate::fail)?;
     needs_pro(&account.pro)?;
-    let ep = bind(relay()?, true).await?;
+    let key = SecretKey::generate();
+    register(&handle, &key).await?;
+    let ep = bind(key, relay()?, true).await?;
     let made = async {
         let node = node_of(&ep).await;
         let v = call(&handle, reqwest::Method::POST, "/v1/coop/rings", Some(serde_json::json!({ "node": node })))
@@ -1589,8 +1598,9 @@ pub async fn coop_join(handle: AppHandle, passcode: String) -> Res<Payload> {
     if current().is_some() {
         return Err(IN_RING.into());
     }
-    token(&handle)?;
-    let ep = bind(relay()?, false).await?;
+    let key = SecretKey::generate();
+    register(&handle, &key).await?;
+    let ep = bind(key, relay()?, false).await?;
     let asked = async {
         let node = node_of(&ep).await;
         let body = serde_json::json!({ "passcode": code, "node": node });
@@ -1854,6 +1864,23 @@ mod tests {
         assert_eq!(Node::of(&b).addr().unwrap(), b);
     }
 
+    /// Against a running relay that asks the server (deploy/iroh-relay.toml `access.http`): a key
+    /// the server doesn't know stays out; once registered for a Pro account it gets in. Run it twice
+    /// with `XTERMIUM_COOP_RELAY` set, before and after `POST /v1/coop/node` with the printed id,
+    /// with `XTERMIUM_COOP_ONLINE=0` and then `=1`.
+    #[test]
+    #[ignore = "needs a relay and the server at XTERMIUM_COOP_RELAY"]
+    fn the_relay_lets_only_a_registered_key_in() {
+        tauri::async_runtime::block_on(async {
+            let key = SecretKey::from_bytes(&[7; 32]);
+            println!("endpoint id {}", key.public());
+            let ep = bind(key, relay().unwrap(), false).await.unwrap();
+            let online = tokio::time::timeout(Duration::from_secs(8), ep.online()).await.is_ok();
+            ep.close().await;
+            assert_eq!(online, std::env::var("XTERMIUM_COOP_ONLINE").as_deref() == Ok("1"));
+        });
+    }
+
     /// Our relay and no other: nothing of n0's.
     #[test]
     fn exactly_one_relay_of_ours() {
@@ -1896,9 +1923,9 @@ mod tests {
     #[ignore = "opens sockets on this computer"]
     fn loopback_streams_a_frame_end_to_end() {
         tauri::async_runtime::block_on(async {
-            let owner = bind(RelayMode::Disabled, true).await.unwrap();
-            let viewer = bind(RelayMode::Disabled, false).await.unwrap();
-            let stranger = bind(RelayMode::Disabled, false).await.unwrap();
+            let owner = bind(SecretKey::generate(), RelayMode::Disabled, true).await.unwrap();
+            let viewer = bind(SecretKey::generate(), RelayMode::Disabled, false).await.unwrap();
+            let stranger = bind(SecretKey::generate(), RelayMode::Disabled, false).await.unwrap();
             let on_loopback = |ep: &Endpoint| {
                 let port = ep.bound_sockets().into_iter().find(|s| s.is_ipv4()).expect("an IPv4 socket").port();
                 EndpointAddr::new(ep.id()).with_ip_addr(SocketAddr::from(([127, 0, 0, 1], port)))
@@ -1998,7 +2025,7 @@ mod tests {
             // A development setup without our relay running (nothing answers at the address) still
             // connects over the direct addresses the server hands out.
             let dead = || relay_of(Some("http://127.0.0.1:9".into())).unwrap();
-            let (a, b) = (bind(dead(), true).await.unwrap(), bind(dead(), false).await.unwrap());
+            let (a, b) = (bind(SecretKey::generate(), dead(), true).await.unwrap(), bind(SecretKey::generate(), dead(), false).await.unwrap());
             let to = on_loopback(&a);
             let accepted = {
                 let a = a.clone();
