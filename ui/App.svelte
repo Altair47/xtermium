@@ -1959,7 +1959,7 @@
     flex: none;
   }
   /* the connector: a line on top in the tab's mark (its own, its session's or folder's), else
-     the cable colour of its kind */
+     the cable colour of its kind: dim on every tab, half on a tiled one, full on the focused one */
   .tab::before {
     content: "";
     position: absolute;
@@ -1968,7 +1968,7 @@
     top: 0;
     height: 2px;
     background: var(--tint, var(--kind));
-    opacity: 0;
+    opacity: 0.3;
   }
   .tab.visible {
     color: var(--fg);
