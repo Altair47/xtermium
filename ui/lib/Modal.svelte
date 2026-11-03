@@ -107,7 +107,7 @@
     z-index: 20;
     display: grid;
     place-items: center;
-    background: rgba(8, 10, 12, 0.4);
+    background: rgba(5, 5, 6, 0.4);
     animation: fade-in 0.16s ease-out;
   }
   .window {

@@ -1,10 +1,11 @@
 ---
 name: xtermium
-description: A terminal and session manager for sysadmins, in titanium chrome with one gold accent and an anodized hue per kind of connection.
+description: A terminal and session manager for sysadmins, in the brand's near-black chrome with one phosphor amber accent and a cable colour per kind of connection.
 colors:
-  gold: "#d8a84e"
-  gold-ink: "#1d1608"
-  gold-soft: "rgba(216, 168, 78, 0.16)"
+  gold: "#ffb000"
+  gold-ink: "#050506"
+  gold-soft: "rgba(255, 176, 0, 0.14)"
+  mark: "#f2f2f2"
   k-ssh: "#5c8df0"
   k-shell: "#33b8a6"
   k-serial: "#b5c14a"
@@ -20,31 +21,37 @@ colors:
   warn: "#e0b04a"
   error: "#ec6a6a"
   error-ink: "#200a0a"
-  window: "#101215"
-  deep: "#15181c"
-  bg: "#1c2025"
-  panel: "#22262c"
-  raised: "#2b3037"
-  hover: "#353b44"
-  line: "#353b43"
-  fg: "#e3e6ea"
-  weak: "#959da8"
+  window: "#050506"
+  deep: "#08080a"
+  bg: "#0b0b0d"
+  panel: "#111114"
+  raised: "#1d1d22"
+  hover: "#26262c"
+  line: "#2c2c33"
+  fg: "#e6e6e1"
+  weak: "#9d9da6"
 typography:
-  display:
-    fontFamily: "Recursive Variable, Cascadia Mono, Consolas, monospace"
-    fontSize: "clamp(13px, 1.9vw, 21px)"
-    fontWeight: 700
-    lineHeight: 1.12
-    fontVariation: "'MONO' 1, 'CASL' 0"
-  headline:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Ubuntu, sans-serif"
-    fontSize: "16.5px"
+  prompt:
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
+    fontSize: "13px"
     fontWeight: 400
+    lineHeight: 1.4
+  headline:
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
+    fontSize: "16.5px"
+    fontWeight: 600
     lineHeight: 1.618
+    letterSpacing: "-0.025em"
   title:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Ubuntu, sans-serif"
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
     fontSize: "14.5px"
     fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: "-0.01em"
+  short:
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
+    fontSize: "13px"
+    fontWeight: 400
     lineHeight: 1.4
   body:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Ubuntu, sans-serif"
@@ -61,11 +68,15 @@ typography:
     fontSize: "11.5px"
     fontWeight: 400
     lineHeight: 1.4
+  label-short:
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
+    fontSize: "11.5px"
+    fontWeight: 400
+    lineHeight: 1.4
   mono:
-    fontFamily: "Recursive Variable, Cascadia Mono, Consolas, monospace"
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
     fontSize: "0.92em"
     fontWeight: 400
-    fontVariation: "'MONO' 1, 'CASL' 0"
 rounded:
   control: "3px"
   menu: "5px"
@@ -88,7 +99,7 @@ components:
   button:
     backgroundColor: "{colors.raised}"
     textColor: "{colors.fg}"
-    typography: "{typography.body}"
+    typography: "{typography.short}"
     rounded: "{rounded.control}"
     padding: "3px 8px"
     height: "{spacing.control}"
@@ -101,7 +112,7 @@ components:
     padding: "3px 8px"
     height: "{spacing.control}"
   button-primary-hover:
-    backgroundColor: "color-mix(in srgb, #d8a84e 86%, white)"
+    backgroundColor: "color-mix(in srgb, #ffb000 86%, white)"
   button-danger:
     backgroundColor: "{colors.error}"
     textColor: "{colors.error-ink}"
@@ -167,13 +178,13 @@ components:
   status-bar:
     backgroundColor: "{colors.panel}"
     textColor: "{colors.weak}"
-    typography: "{typography.label}"
+    typography: "{typography.label-short}"
     padding: "0 8px"
     height: "{spacing.row}"
   tag:
     backgroundColor: "{colors.gold-soft}"
     textColor: "{colors.gold}"
-    typography: "{typography.label}"
+    typography: "{typography.label-short}"
     rounded: "{rounded.control}"
     padding: "0 5px"
   toast:
@@ -192,20 +203,25 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Anodized Rack"**
+**Creative North Star: "The Operator's Rack"**
 
-xtermium is a rack of live connections. The chrome is cool titanium, a stack of blue-grey
-metals that get lighter the nearer they sit to the hand. Each kind of connection gets the colour
-titanium turns when anodized, the way cables on a patch panel are colour-coded: SSH is cobalt,
-RDP violet, serial chartreuse. One brushed-gold accent marks where you are and what you picked.
-Nothing else is coloured, so a glance at the rack tells you which kind of session each row and
-tab is, and a glance at the gold tells you where the keyboard is.
+xtermium is a rack of live connections, in the brand's world: the operator's terminal of the
+website (xtermium.com) and the brand kit, carried into the app. The chrome is the website's
+near-black ground and surfaces, neutral and a hair apart, getting lighter the nearer they sit to
+the hand. Each kind of connection has its own hue, the way cables on a patch panel are
+colour-coded: SSH is cobalt, RDP violet, serial chartreuse. One phosphor amber accent marks where
+you are and what you picked. Nothing else is coloured, so a glance at the rack tells you which
+kind of session each row and tab is, and a glance at the amber tells you where the keyboard is.
+The start screen waits at the website's prompt, `~/xtermium $` and a blinking amber block cursor,
+over the brand kit's logo.
 
-The feel is machined and quiet, as dense as a modern code editor: 13px system text, 26px
-controls, 21px rows, small precise corners. The sidebar (the session rack), the tab area with its
-panes, and the file panel are rounded panels floating a few pixels apart on a darker window. They
-are flat at rest and are told apart by tone, not by shadow. Only things that float above the work
-cast a shadow: menus, dialogs, the command palette, toasts.
+The feel is quiet and exact, as dense as a modern code editor: 13px text, 26px controls, 21px
+rows, small precise corners. JetBrains Mono, the brand's face, says everything short (titles,
+buttons, tags, the status bar, code); the system face says everything long (text, menus and
+lists), so the app still reads as a native tool. The sidebar (the session rack), the tab area
+with its panes, and the file panel are rounded panels floating a few pixels apart on a darker
+window. They are flat at rest and are told apart by tone and hairline, not by shadow. Only things
+that float above the work cast a shadow: menus, dialogs, the command palette, toasts.
 
 Every proportion comes from the golden ratio (φ ≈ 1.618). Spacing steps along the Fibonacci
 scale, padding pairs go 1 : φ from vertical to horizontal, type steps by a quarter of φ, and
@@ -213,9 +229,13 @@ dialogs are 377, 610 or 987px wide. Settings is a golden rectangle, 987 × 610. 
 enforces the spacing and type scales in `npm test`, so they are rules, not guidelines.
 
 **Key Characteristics:**
-- Titanium neutrals in six tonal steps, a dark theme by default and a full light theme.
-- One accent, Brushed Gold, which the user can change. It is never decoration.
-- Ten anodized hues, one per kind of connection, used only to say "this is an SSH/RDP/… thing".
+- Near-black neutrals in six tonal steps (the website's ground, surfaces and hairlines), a dark
+  theme by default and a full light theme.
+- One accent, Phosphor Amber, which the user can change. It is never decoration.
+- Ten cable colours, one per kind of connection, used only to say "this is an SSH/RDP/… thing".
+- JetBrains Mono for short text, the system face for long text and lists.
+- The brand kit's horizontal logo on the start screen and in Settings › About; its own amber and
+  white stay inside it.
 - Fibonacci spacing (1 2 3 5 8 13 21 34px) and five type sizes, both enforced by a test.
 - Rounded panels on a darker window. Flat at rest; shadows only on floating layers.
 - Icon-only tool buttons with tooltips. Boxicons SVGs, animated only on session rows and tabs.
@@ -223,27 +243,32 @@ enforces the spacing and type scales in `npm test`, so they are rules, not guide
 
 ## Colors
 
-Cool blue-grey titanium, one warm gold, and a set of anodized hues that act as cable colours.
+Near-black neutral greys, one phosphor amber, and a set of connection hues that act as cable
+colours.
 
 ### Primary
-- **Brushed Gold** (`gold`): the accent and the only one. It marks focus (`:focus-visible`
-  outline, field borders), toggles that are on and options that are picked (with `gold-soft`
-  behind gold text), links that go to another place, drop targets, the focused pane's outline,
-  the active Settings page's edge, and fill on the single primary button of a dialog. Users can
-  change it: the presets are metals, apart from every kind hue and the error red (Platinum
-  `#c3ccd8`, Bronze `#a99a78`, Rose gold `#e2a395`), each with a darker light-theme value
-  (`ACCENTS` in `api.ts`); any other colour is darkened toward the text on the light theme, as
-  the gold is. The app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink` and
+- **Phosphor Amber** (`gold`): the accent and the only one, the website's phosphor (`#ffb000`;
+  `#754b00` on the light theme). The token keeps its earlier name, `--gold`. It marks focus
+  (`:focus-visible` outline, field borders), toggles that are on and options that are picked
+  (with `gold-soft` behind amber text), links that go to another place, drop targets, the focused
+  pane's outline, the active Settings page's edge, the start screen's prompt sigil and block
+  cursor, and fill on the single primary button of a dialog. Users can change it (Settings ›
+  Appearance shows the default as "Amber (default)"): the presets are Brushed gold `#d8a84e` (the
+  app's accent before the brand's), then Platinum `#c3ccd8`, Bronze `#a99a78` and Rose gold
+  `#e2a395`, metals apart from every kind hue and the error red, each with a darker light-theme
+  value (`ACCENTS` in `api.ts`); any other colour is darkened toward the text on the light theme,
+  as the amber is. The app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink` and
   `gold-soft` from it at runtime, so never hard-code its hex in a component; use `var(--gold)`.
-- **Gold Ink** (`gold-ink`): text on a solid gold fill (the primary button).
-- **Gold Wash** (`gold-soft`): the translucent tint behind picked rows, search hits, a setting a
-  search points at, tags and drop zones.
+- **Amber Ink** (`gold-ink`): text on a solid amber fill (the primary button): the ground,
+  `#050506`, on dark; white on light.
+- **Amber Wash** (`gold-soft`): the translucent tint (14%) behind picked rows, search hits, a
+  setting a search points at, tags and drop zones.
 
 The broadcast marker in a status bar reads the accent through `--broadcast`, an alias of `--gold`
 (as `--fwd` and `--back` alias kind hues for tunnels).
 
 ### Secondary
-The anodized connection hues, one per kind of session (`--k-*`), keyed like cable colours:
+The connection hues, one per kind of session (`--k-*`), keyed like cable colours:
 - **Cobalt** (`k-ssh`): SSH. Also forward tunnels (`--fwd`).
 - **Teal** (`k-shell`): local shells. Also reverse tunnels (`--back`).
 - **Chartreuse** (`k-serial`): serial lines.
@@ -261,7 +286,7 @@ carries a mark), and the tile behind a kind glyph (15% of the hue). Components r
 a local `--kind`.
 
 **Marks.** A person can mark a session, a folder or a tab with a colour (`COLORS` in `api.ts`:
-nine swatches, no gold, plus any colour). A mark never takes a kind hue's place: it tints the
+nine swatches, no amber, plus any colour). A mark never takes a kind hue's place: it tints the
 session's or folder's name (`.tinted`, its OKLCH lightness held to at least 0.72 on dark and at
 most 0.48 on light, so every swatch reads at 4.8:1 or better while keeping its hue) and the tab's
 connector line. A folder has no kind, so its icon wears its mark too. A folder's mark carries
@@ -276,29 +301,42 @@ Status, kept apart from the kind hues:
 - **Red Ink** (`error-ink`): text on a solid red fill (a danger button).
 
 ### Neutral
-From the back of the window to the hand:
-- **Gunmetal** (`window`): the window itself, showing in the gaps between panels and split panes.
+From the back of the window to the hand, the website's near-black, with no blue in it:
+- **Ground** (`window`): the window itself, showing in the gaps between panels and split panes.
 - **Inset Well** (`deep`): wells set into a panel: text fields, `kbd`, segmented controls, the
   sidebar's status pill, code snippets. In the light theme it is white, the lightest step.
-- **Slate** (`bg`): the content area under the tabs, and the active tab that joins it.
-- **Titanium Panel** (`panel`): the sidebar, the tab strip, the file panel, the status bar, and
-  every floating layer (menus, dialogs, palette, toasts at 98% opacity).
+- **Base** (`bg`): the content area under the tabs, and the active tab that joins it.
+- **Surface** (`panel`): the sidebar, the tab strip, the file panel, the status bar, and every
+  floating layer (menus, dialogs, palette, toasts at 98% opacity).
 - **Raised** (`raised`): button faces, menu-item hover, the current Settings page, scrollbar
   thumbs.
-- **Polished** (`hover`): a button under the pointer.
+- **Lit** (`hover`): a button under the pointer.
 - **Hairline** (`line`): every 1px border and divider.
-- **Cold White** (`fg`): primary text.
-- **Brushed Steel** (`weak`): secondary text, form labels, idle tabs and tool buttons, counts.
+- **Ink** (`fg`): primary text.
+- **Muted** (`weak`): secondary text, form labels, idle tabs and tool buttons, counts, the
+  start screen's prompt.
+- **Mark** (`mark`): the logo's three large tiles and its wordmark, `#f2f2f2` on dark and the
+  brand's charcoal `#141414` on light, as the brand kit draws them. Nothing else.
 
 The light theme (`:root[data-theme="light"]` in `ui/app.css`) redefines every token above with
-the same roles. Gold deepens to bronze, and the kind hues darken to hold contrast on light metal.
-The light values are also kept in `.impeccable/design.json` (`colorMeta.*.light`).
+the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`.
+The amber deepens to `#754b00` (white ink, a 14% wash), dark enough to hold 4.5:1 on every light
+surface, a button under the pointer included, and the kind hues darken to hold contrast on the
+light greys. The light values are also kept in `.impeccable/design.json`
+(`colorMeta.*.light`).
 
 ### Named Rules
-**The One Accent Rule.** Gold says "you are here" or "you picked this", and nothing else. Two
+**The One Accent Rule.** Amber says "you are here" or "you picked this", and nothing else. Two
 exceptions: the fill of a dialog's single primary button, and a folder's tag (`.tag`, `prod`,
 `lab`…), which is a fact about where you are and shows on the folder's row and under a pane. No
-gold headings, icons or decorative strokes.
+amber headings, icons or decorative strokes. The start screen's prompt sigil and block cursor are
+the website's: they say where you type.
+
+**The Logo Colours Rule.** The logo's own amber, `#FFC20E`, and its white (`--mark`) live only in
+the logo. The brand amber is not the accent and is never UI state, as the website's One Phosphor
+Rule says; the accent is the phosphor `--gold`. `ui/lib/Logo.svelte` swaps the artwork's
+`#F2F2F2` fills for `currentColor`, which is `--mark`, so one file serves both themes; the small
+amber tile is never recoloured.
 
 **The Cable Colour Rule.** A kind hue identifies a kind of connection and nothing else, and
 nothing else takes its place: a session's icon is always in its kind's hue, whatever it is marked
@@ -310,30 +348,39 @@ hex. `--chrome-alpha` drops below 1 while a window effect is on, and the desktop
 
 ## Typography
 
-**Interface Font:** Segoe UI Variable Text (with Segoe UI, system-ui, -apple-system, Ubuntu)
-**Mono Font:** Recursive Variable, mono axis on and casual off (with Cascadia Mono, Consolas)
+**Short Font:** JetBrains Mono Variable, the brand's face (with Cascadia Mono, Consolas), bundled
+from `@fontsource-variable/jetbrains-mono`
+**Long Font:** Segoe UI Variable Text (with Segoe UI, system-ui, -apple-system, Ubuntu)
 
-**Character:** the operating system's own text for the interface, so it reads as a native tool.
-Recursive, in its strict monospace cut, is reserved for code, keys and the ASCII banner. The
-terminal's own font is the user's setting and is not part of this system.
+**Character:** the website's split. JetBrains Mono, the face the logo's wordmark is drawn in
+(Bold, as outlines in the artwork), says everything short: titles, buttons, tags, the pane's
+status bar, the start screen's lead, and code and keys. The operating system's own face says
+everything long: body text, prose, field labels, menus and lists, so the app still reads as a
+native tool. `--short` names the short face (`var(--mono)`), `--ui` the long one. The terminal's
+own font is the user's setting and is not part of this system.
 
 ### Hierarchy
-- **Display** (700, `clamp(13px, 1.9vw, 21px)`, 1.12): the ASCII banner on the start screen,
-  in Recursive, filled with the spectrum gradient. Nowhere else.
-- **Headline** (400, 16.5px `--t-xl`, φ): the lead sentence under the banner.
-- **Title** (600, 14.5px `--t-l`, 1.4): dialog and page titles (`h2`). Section heads inside a
-  page (`h3`) are 600 at body size.
-- **Body** (400, 13px `--t`, 1.4): everything by default: buttons, fields, rows, menus.
+- **Prompt** (mono 400, 13px `--t`, 1.4, in `weak`): the start screen's `~/xtermium $`, with the
+  `$` at 500 in amber and a blinking amber block cursor after it; decorative, hidden from
+  assistive tech. Nowhere else.
+- **Headline** (mono 600, 16.5px `--t-xl`, 1.4, -0.025em, the website's title tracking): the
+  lead sentence under the logo.
+- **Title** (mono 600, 14.5px `--t-l`, 1.4, -0.01em): dialog and page titles (`h2`). Section
+  heads inside a page (`h3`) are mono 600 at body size.
+- **Short** (mono 400, 13px `--t`, 1.4): buttons.
+- **Body** (400, 13px `--t`, 1.4, system face): everything else by default: fields, field
+  labels, rows, menus.
 - **Prose** (400, 13px, line-height φ = 21px): paragraphs and text areas, so a line of text is
   as tall as a list row. Measure is capped at 62–70ch.
-- **Label** (400, 11.5px `--t-s`): status bar, counts, tags, `kbd`, hints and secondary lines.
-  Counts use `tabular-nums`.
-- **Mono** (0.92em, Recursive `MONO 1, CASL 0`): `code`, `kbd`, `pre`. It always runs left to
-  right, even in Arabic.
+- **Label** (400, 11.5px `--t-s`): counts, hints and secondary lines in the system face; the
+  status bar, tags and `kbd` at the same size in the mono. Counts use `tabular-nums`.
+- **Mono** (0.92em, JetBrains Mono): `code`, `kbd`, `pre`, and tunnel addresses (`.addr` in the
+  tunnel drawing). It always runs left to right, even in Arabic.
 
 `--t-xxl` (18.5px) is used twice: the status centred over an RDP desktop while it connects or
-after it closes, and the sign-in code a person approves in the browser (in Recursive, letters
-0.1em apart). 21px (13 × φ) is the top of the scale, reached only by the banner.
+after it closes, and the sign-in code a person approves in the browser (in the mono, letters
+0.1em apart). The logo is drawn, not set: it takes its size from its width (`min(377px, 100%)` on
+the start screen, 233px in Settings › About).
 
 ### Named Rules
 **The Five Sizes Rule.** Every `font-size` is a type token (`var(--t-s)` … `var(--t-xxl)`),
@@ -342,13 +389,22 @@ after it closes, and the sign-in code a person approves in the browser (in Recur
 **The Golden Line Rule.** Prose and text areas set `line-height: var(--phi)`. Dense UI text
 stays at 1.4.
 
+**The Short-in-Mono Rule.** As on the website: if it is a title, a button, a tag, a key, a status
+line or code, it is JetBrains Mono (`var(--short)`, or `var(--mono)` for code). If it is read as
+text or down a list, it is the system face (`var(--ui)`). Lists are long even when each entry is
+short, so these stay in the system face: menu items (`.menu button`), the rows of the session
+rack and the palette (`button.item`), the Settings page list (`.pages button`) and the session
+editor's kind picker (`.kinds button`, five to a row, where the narrower face keeps the names
+whole). In Arabic, Hindi, Japanese and Chinese (`lang` ar, hi, ja, zh) `--short` falls back to
+`--ui`, since JetBrains Mono has no letters for those scripts.
+
 ## Layout
 
 The window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
 the session rack (resizable; it collapses to a 38px rail), the center (a 34px tab strip over
 the panes), and the file panel (340px). The splitter between rack and center is the gap itself.
 Split panes are each their own panel (5px corners, 1px hairline) with the window's dark showing
-between them. Pane sizers are 6px hit areas centred on that gap, gold-tinted on hover.
+between them. Pane sizers are 6px hit areas centred on that gap, amber-tinted on hover.
 
 Spacing is the Fibonacci scale only: 1 2 3 5 8 13 21 34px (55 and 89 are allowed but unused).
 Padding pairs go 1 : φ, vertical to horizontal: `3px 8px` for controls, `5px 8px` for compact
@@ -358,8 +414,14 @@ menu items), `--bar` 34px (the tab strip). Dialogs are 377, 610 or 987px wide an
 the window's edge.
 
 The start screen sits on the golden section: the room above the welcome and below it go 1 : φ,
-in a column at most 610px wide. Forms are a two-column grid (labels in `weak`, minimum 120px, gaps
-`8px 13px`), and a label beside a multi-line field aligns to its first baseline.
+in a column at most 610px wide, 13px between its parts. The welcome starts at the website's
+prompt (`~/xtermium $` and a blinking amber block cursor), then the brand kit's horizontal logo
+(the mark beside the "XTermium" wordmark, `assets/logo-horizontal.svg` through
+`ui/lib/Logo.svelte`) at `min(377px, 100%)` wide, arriving with `float-in`, then the lead
+sentence and the ways to start. Settings › About shows the same logo at 233px.
+
+Forms are a two-column grid (labels in `weak`, minimum 120px, gaps `8px 13px`), and a label
+beside a multi-line field aligns to its first baseline.
 
 This is a desktop app with no breakpoints: things shrink, ellipsize and scroll rather than
 reflow. Long names truncate with an ellipsis; Settings page names wrap to two lines instead.
@@ -376,11 +438,11 @@ derived: `calc(8px + 16px + 5px)` is a field's text start past its icon, and
 
 ## Elevation & Depth
 
-Depth is tonal first. The window is the darkest metal and each layer nearer the hand is a step
+Depth is tonal first. The window is the darkest tone and each layer nearer the hand is a step
 lighter (window → bg → panel → raised → hover). Text fields are set *into* the surface as darker
 wells (`deep`). Resting panels have a 1px hairline and no shadow. Shadows are reserved for
 layers that float above the work and close again, and they are soft and dark, never coloured.
-Hairline edges inside chrome (the tab strip's bottom, the current Settings page's gold edge,
+Hairline edges inside chrome (the tab strip's bottom, the current Settings page's amber edge,
 drag-insertion bars) are drawn as inset `box-shadow` lines so they take no room.
 
 ### Shadow Vocabulary
@@ -391,7 +453,7 @@ Three tokens on `:root` in `ui/app.css`, from lowest to highest:
   and toasts.
 - **Dialog** (`--shadow-dialog`: `0 8px 28px rgba(0, 0, 0, 0.4)`): modal dialogs and the command
   palette.
-- **Scrim**: `rgba(8, 10, 12, 0.4)` behind a dialog, `0.32` behind the palette.
+- **Scrim**: `rgba(5, 5, 6, 0.4)` (the ground) behind a dialog, `0.32` behind the palette.
 
 ### Named Rules
 **The Float-Only Shadow Rule.** A surface casts a shadow only if it floats over the work and goes
@@ -403,7 +465,7 @@ Three corners, all small: 3px (`--r-control`) for controls, fields, tags and pan
 (`--r-menu`) for menus, toasts, the palette, split panes and cards; 8px (`--r-window`) for the
 floating panels and dialogs. Status dots (7px), colour swatches (16–18px) and the dot on a live
 session's icon are circles. Borders are a 1px hairline everywhere. Dashed hairlines mean "empty
-or droppable" (an empty pane, a drop zone). A 2px gold border means "picked" (a colour scheme
+or droppable" (an empty pane, a drop zone). A 2px amber border means "picked" (a colour scheme
 card).
 
 ### Named Rules
@@ -414,27 +476,29 @@ the outer one less the room between them, written as `calc()` (a menu item is
 ## Components
 
 ### Buttons
-Machined and quiet: small, flat faces that brighten a step under the pointer.
-- **Shape:** gently squared (3px), 26px tall, `3px 8px` padding, 5px between icon and text.
+Quiet and exact: small, flat faces that brighten a step under the pointer.
+- **Shape:** gently squared (3px), 26px tall, `3px 8px` padding, 5px between icon and text; the
+  label is in the mono (`--short`); menu items (`.menu button`) and list rows (`button.item`)
+  keep the system face.
 - **Default:** a `raised` face with no visible border (a transparent 1px keeps sizes equal when a
   state adds one). Hover moves to `hover`. Disabled is 45% opacity.
-- **Primary:** gold fill with `gold-ink` text; hover mixes in 14% white. One per dialog, on its
+- **Primary:** amber fill with `gold-ink` text; hover mixes in 14% white. One per dialog, on its
   main action.
 - **Danger:** the primary of a question whose yes ends or deletes something (close a running
   tab, delete a folder, replace everything from a backup, replace the MCP token): red
   fill with `error-ink` (`button.primary.danger`). Something that can be put back is not asked
   about at all: it happens, and a toast offers Undo.
-- **On / selected:** gold wash, gold text, and a 55% gold border, for toggles and picked options.
+- **On / selected:** amber wash, amber text, and a 55% amber border, for toggles and picked options.
 - **Flat:** transparent at rest, `raised` on hover. Tool buttons in bars are flat, icon-only
-  (`3px 5px`), in `weak`, turning gold when on, and always carry a tooltip.
-- **Link:** text that names another place is a borderless gold `button.link` (underline on
-  hover). A whole sentence that links is `.quiet`: body colour, dotted underline, gold on hover.
-- **Focus:** a 1px gold outline drawn inside the edge (`outline-offset: -1px`).
+  (`3px 5px`), in `weak`, turning amber when on, and always carry a tooltip.
+- **Link:** text that names another place is a borderless amber `button.link` (underline on
+  hover). A whole sentence that links is `.quiet`: body colour, dotted underline, amber on hover.
+- **Focus:** a 1px amber outline drawn inside the edge (`outline-offset: -1px`).
 
 ### Inputs / Fields
 - **Style:** an inset well (`deep`) with a 1px hairline, 3px corners, 26px tall, `3px 8px`
   padding. Selects use the app's own chevron, set in 8px from the edge.
-- **Focus:** the border turns gold; no glow.
+- **Focus:** the border turns amber; no glow.
 - **Placeholder:** an example, in `weak` (never the engine's default grey, which fails contrast
   on the wells). Labels stay outside the field.
 - **With an icon:** search fields put a 16px icon at 8px in and start text at
@@ -459,11 +523,11 @@ Machined and quiet: small, flat faces that brighten a step under the pointer.
   active tab takes the content's `bg` and drops its bottom line so it joins its pane. A 2px
   connector sits on top of each tab, in its mark (the tab's own, else its session's or folder's)
   or else its kind hue: hidden when idle, at 50% when the tab is visible in a split, and full on
-  the active one. The tab's icon is always in its kind hue. A drag shows a 2px gold insertion bar.
+  the active one. The tab's icon is always in its kind hue. A drag shows a 2px amber insertion bar.
 - **Session rack:** 21px rows, folders with a rotating caret (0.12s) and a hairline guide under
   each level. Leaves indent past the caret so icons in one level line up. A session with an open
   tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Search hits
-  and chosen rows take the gold wash. A marked session's or folder's name is in its mark. Its
+  and chosen rows take the amber wash. A marked session's or folder's name is in its mark. Its
   search opens out of the magnifier; Enter closes it and puts the keyboard on the hit's row in
   the tree, its folders opened (a second Enter opens the session); Escape gives the tree back the
   keyboard.
@@ -472,22 +536,23 @@ Machined and quiet: small, flat faces that brighten a step under the pointer.
   in, it shows an 18px round avatar with the first letter of the name, ringed 2px in `error` when
   sync fails or the quota is full and in `warn` when it is nearly full. Its menu opens upwards,
   led by a `.head` block (name, address, last sync, the quota bar) under a hairline.
-- **Focus ring:** one 2px gold ring around the focused pane, outside it in the gap (5px corners
+- **Focus ring:** one 2px amber ring around the focused pane, outside it in the gap (5px corners
   in a split). When the focus moves it glides to the next pane (0.2s, `--ease-out`; Static in
   Settings › Appearance makes it jump), so you see which way it went. While a pane edge is
   dragged it follows the edge with no delay.
-- **Settings pages:** a 183px column. The current page is `raised` with a 2px gold edge on its
+- **Settings pages:** a 183px column. The current page is `raised` with a 2px amber edge on its
   leading side. Its search replaces the pages with hits; while it's open the page follows the
-  best hit and lights that setting (`.lit`: its label and field in the gold wash, ringed 3px in
+  best hit and lights that setting (`.lit`: its label and field in the amber wash, ringed 3px in
   it), and the hit is lit in the list too. Enter closes the search and puts the keyboard on the
   setting's control, whose light then fades over 2.6s (`.found`). Pages: General, Appearance,
   Shortcuts, Security (encryption, recovery passphrase, the lock), Sync, MCP (sub-sections "AI
   assistants (MCP)" and "Command line", whose commands and configuration sit in `.snippet`
-  wells: `deep`, `8px 13px`, 3px corners, in Recursive) and About.
-- **Status bar:** a 21px panel strip under a tab's view, label size in `weak`, items 13px apart.
+  wells: `deep`, `8px 13px`, 3px corners, in the mono) and About.
+- **Status bar:** a 21px panel strip under a tab's view, label size in the mono, in `weak`, items
+  13px apart.
   It leads with where the keyboard goes: `user@host`, then the session's folder with the folder's
-  tags as gold chips (`Production/Web · prod`), so a production box says so under its pane. Then a
-  state dot (green / amber / red / grey) and, at the end, the gold broadcast marker.
+  tags as amber chips (`Production/Web · prod`), so a production box says so under its pane. Then a
+  state dot (green / amber / red / grey) and, at the end, the amber broadcast marker.
 - **Tab-strip tools** come as the tabs do: Saved layouts always (it opens sessions), File
   Browser and Snippets once a tab is open, Broadcast and the layout segment with two or more.
 
@@ -504,12 +569,12 @@ Machined and quiet: small, flat faces that brighten a step under the pointer.
   draw over everything wherever they're opened from (they move to the end of the page while open).
 - **Sign in:** a 377 dialog. Sync needs an account and nothing else does; the browser opens on
   the sign-in page (Google, GitHub or Discord) and the dialog shows the code to approve there,
-  centred, in Recursive at `--t-xxl`, with a flat copy button beside it and a gold spinner while
+  centred, in the mono at `--t-xxl`, with a flat copy button beside it and an amber spinner while
   it waits. Cancel is flat; after a failure, Try again is the primary.
 - **Lock screen:** not a dialog but a whole opaque window (`rgb(var(--window-rgb))`, over
   everything, dialogs included) that fades in over 0.16s. A centred 377px column, 13px between
-  parts: a 34px lock icon in gold, a 600 title at `--t-xl`, a password or PIN well with the
-  primary Unlock beside it (Password / PIN switch as flat buttons, the picked one gold), then
+  parts: a 34px lock icon in amber, a 600 title at `--t-xl`, a password or PIN well with the
+  primary Unlock beside it (Password / PIN switch as flat buttons, the picked one amber), then
   passkey and Windows Hello as plain buttons, and "Your sessions keep running." in `weak`.
 - **Session editor:** 610 wide whatever it holds. The types in two even rows of five (a name
   that doesn't fit ends in `…`, the whole one in its tooltip), then where it connects (one
@@ -521,25 +586,25 @@ Machined and quiet: small, flat faces that brighten a step under the pointer.
   hanging from the top (the palette, the find bar). The scrim behind a dialog fades in
   (`fade-in`) over the same 0.16s.
 - **Palette:** 610px wide, 12vh from the top, at most 1/φ of the window tall, with 5px corners.
-  A search well over 26px rows; the picked row takes the gold wash, with its shortcut in a `kbd`
+  A search well over 26px rows; the picked row takes the amber wash, with its shortcut in a `kbd`
   at the end of the row. Empty, it lists the open tabs, then the saved sessions, then the actions:
   a machine before a verb. A typed word has to sit in one stretch of a row's text (an abbreviation
   like `prd` for `prod`), never letters scattered across it.
 
 ### Tags, Keys and Toasts
-- **Tag:** gold text on the gold wash, 3px corners, `0 5px`, label size, at most 80px wide.
+- **Tag:** amber text on the amber wash, 3px corners, `0 5px`, label size, at most 80px wide.
 - **Key cap (`kbd`):** an inset well with a hairline and a 2px bottom border so it reads as a
-  key, in Recursive at label size.
+  key, in the mono at label size.
 - **Toast:** panel, hairline, 5px corners, `5px 13px`, Menu shadow, 34px above the bottom edge.
   It arrives with `float-in` and leaves faster than it came, fading out in 0.1s. One with an
-  action (Undo after a delete, Reopen after Close other tabs) carries a gold link button,
+  action (Undo after a delete, Reopen after Close other tabs) carries an amber link button,
   takes the pointer, and stays 8s instead of 2.4s.
 - **Tooltip (`.tooltip`, `ui/lib/tooltip.ts`):** a tool button's title in the app's own panel at
   98%, hairline, 5px corners, `3px 8px`, label size on golden lines, Menu shadow, at most 377px
   wide; its shortcut follows in a `kbd` in `weak`. It hangs under what it explains (above when
   there is no room) and takes no pointer.
 - **Quota bar (`Quota.svelte`):** sync storage used, in the account menu and Settings › Sync. A
-  3px track in `line` with 2px corners, filled in gold; the fill turns `warn` when nearly full
+  3px track in `line` with 2px corners, filled in amber; the fill turns `warn` when nearly full
   and `error` when full, and a label-size line under it says how much. Not a native `progress`:
   the webview paints that flat grey whatever the accent.
 
@@ -547,7 +612,7 @@ Machined and quiet: small, flat faces that brighten a step under the pointer.
 A 21px tile with 3px corners, the kind's hue as the icon colour on 15% of the same hue (`.glyph`
 in `ui/app.css`). It sits beside each way to start on the start screen and makes a connection
 type recognisable before you read its name. The session editor's Type picker is a row of them:
-one button per kind, glyph and name, the picked one in the gold wash. The type comes first in
+one button per kind, glyph and name, the picked one in the amber wash. The type comes first in
 the editor because it decides every field below it; changing it keeps the host typed so far.
 
 ### Broadcast Outline (signature)
@@ -586,7 +651,7 @@ session's row or tab, never on the interface's own buttons, and never under redu
 - **Do** set every text size from the type tokens (`--t-s --t --t-l --t-xl --t-xxl`).
 - **Do** size things with `--row` (21px), `--control` (26px) and `--bar` (34px), and write any
   derived value as `calc(…)`.
-- **Do** keep gold for focus, selection, toggles that are on, links, drop targets and the one
+- **Do** keep amber for focus, selection, toggles that are on, links, drop targets and the one
   primary action. Read it as `var(--gold)`, since the user can change it.
 - **Do** colour a session by its kind hue (icon, tab connector, glyph tile) through `--kind`.
 - **Do** paint chrome as `rgba(var(--…-rgb), var(--chrome-alpha))` so window effects show through.
@@ -601,13 +666,17 @@ session's row or tab, never on the interface's own buttons, and never under redu
   layer through `float-in`, exits faster than entrances. CSS motion stops under
   `prefers-reduced-motion` through `ui/app.css`; a Svelte transition must check it itself.
 - **Do** use logical properties (`inset-inline-*`, `margin-inline-*`) so right-to-left mirrors.
+- **Do** set short text (titles, buttons, tags, status lines) in `var(--short)` and anything read
+  as text or down a list (menus, rows, the Settings pages, the kind picker) in `var(--ui)`.
+- **Do** show the logo through `Logo.svelte`, so its tiles and wordmark follow the theme through
+  `--mark`.
 
 ### Don't:
 - **Don't** use off-scale spacing (4px, 6px, 10px, 12px, 16px) or a raw `font-size` in px; the
   scale test fails on them.
 - **Don't** put a shadow on a resting panel, tab, row or button, or write a new shadow value for
   a floating layer: use `--shadow-float`, `--shadow-menu` or `--shadow-dialog`.
-- **Don't** use gold for headings, icons, illustration or large fills other than the primary
+- **Don't** use amber for headings, icons, illustration or large fills other than the primary
   button.
 - **Don't** use a kind hue to show state, or a status colour to mean a kind of connection.
 - **Don't** let a user's colour recolour a session's icon: marks go on names (`.tinted`) and tab
@@ -616,4 +685,7 @@ session's row or tab, never on the interface's own buttons, and never under redu
 - **Don't** animate the interface's own icons. Only session and folder icons move, and only on
   hover.
 - **Don't** add big padding or wide gaps. The densest comfortable layout is the house style.
-- **Don't** use the spectrum gradient anywhere but the start screen's banner, where it plays once.
+- **Don't** set a list, a menu or a five-to-a-row grid in the mono: the names stop fitting and it
+  no longer reads down.
+- **Don't** use the logo's amber `#FFC20E` or `--mark` outside the logo, or recolour, stretch,
+  rotate or add effects to the logo.

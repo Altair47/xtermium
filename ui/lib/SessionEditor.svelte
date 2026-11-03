@@ -366,6 +366,8 @@
     justify-content: start;
     padding: 1px;
     padding-inline-end: 5px;
+    /* five to a row: the narrower system face keeps the names whole */
+    font-family: var(--ui);
   }
   .kinds .name {
     overflow: hidden;

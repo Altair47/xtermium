@@ -104,6 +104,7 @@
     height: var(--row);
     gap: 13px;
     padding: 0 8px;
+    font-family: var(--short);
     font-size: var(--t-s);
     color: var(--weak);
     border-top: 1px solid var(--line);

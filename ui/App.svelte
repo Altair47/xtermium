@@ -6,8 +6,9 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Sizes } from "./lib/actions";
-  import { ACCENTS, addressSession, BANNER, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
+  import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
+  import Logo from "./lib/Logo.svelte";
   import Account from "./lib/Account.svelte";
   import Coop from "./lib/Coop.svelte";
   import Export from "./lib/Export.svelte";
@@ -149,7 +150,7 @@
     if (!c) return;
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
     const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
-    const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #1d2127)`;
+    const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #141414)`;
     root.setProperty("--gold", `light-dark(${onLight}, ${c})`);
     root.setProperty("--gold-ink", `light-dark(#fff, ${light ? "#111" : "#fff"})`);
     root.setProperty("--gold-soft", "color-mix(in srgb, var(--gold) 16%, transparent)");
@@ -1386,7 +1387,8 @@
         {#if !strip.length}
           <div class="dashboard">
             <div class="intro">
-              <pre class="banner" aria-label="xtermium">{BANNER}</pre>
+              <p class="prompt" aria-hidden="true">~/xtermium <b>$</b> <i class="cursor"></i></p>
+              <div class="logo"><Logo /></div>
               <p class="lead">{_("Terminals, SSH, SFTP, RDP and tunnels in one window.")}</p>
               <p class="weak">
                 {#if app.store.session.length}
@@ -2286,30 +2288,38 @@
     max-width: 62ch;
     text-wrap: pretty; /* no last line of one word */
   }
-  .banner {
-    margin: 0 0 5px;
-    font-size: clamp(13px, 1.9vw, 21px);
-    line-height: 1.12;
-    font-weight: 700;
-    background: var(--spectrum) 0 0 / 100% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: anodize 1.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+  /* the website's prompt, waiting for you: the amber sigil and a block cursor */
+  .prompt {
+    font-family: var(--mono);
+    color: var(--weak);
   }
-  /* once, on arrival: the colours run across the metal like an anodizing pass */
-  @keyframes anodize {
-    from {
-      background-size: 320% 100%;
-      opacity: 0.4;
+  .prompt b {
+    font-weight: 500;
+    color: var(--gold);
+  }
+  .cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.2em;
+    vertical-align: text-bottom;
+    background: var(--gold);
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
     }
-    to {
-      background-size: 100% 100%;
-      opacity: 1;
-    }
+  }
+  .logo {
+    width: min(377px, 100%);
+    margin-block-end: 8px;
+    animation: float-in 0.4s var(--ease-out) both;
   }
   .lead {
+    font-family: var(--short);
     font-size: var(--t-xl);
+    font-weight: 600;
+    letter-spacing: -0.025em;
   }
   /* the ways to start, side by side */
   .starts {

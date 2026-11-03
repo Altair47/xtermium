@@ -1,7 +1,8 @@
 <script lang="ts">
   import { _ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { BANNER, GITHUB, HOMEPAGE, openUrl, type Update } from "./api";
+  import { GITHUB, HOMEPAGE, openUrl, type Update } from "./api";
+  import Logo from "./Logo.svelte";
   import Icon from "./Icon.svelte";
   import { app } from "./state.svelte";
   // Settings › About: the version, build and kind of build, and the latest release on GitHub.
@@ -31,7 +32,7 @@
 </script>
 
 <div class="about">
-  <pre class="banner">{BANNER}</pre>
+  <div class="logo"><Logo /></div>
   <div class="version">
     {_("version {version}", { version: app.version })}
     {#if about}<span class="weak">{about.build ? _("build {build}", { build: about.build }) : ""} ({KINDS[about.kind]})</span>{/if}
@@ -66,7 +67,7 @@
   </div>
 
   <strong>{_("Built with")}</strong>
-  <div class="weak">Tauri, Svelte, wezterm-term, russh, russh-sftp, IronRDP, portable-pty, serialport.<br />{_("Icons from Boxicons, type set in Recursive.")}</div>
+  <div class="weak">Tauri, Svelte, wezterm-term, russh, russh-sftp, IronRDP, portable-pty, serialport.<br />{_("Icons from Boxicons, type set in JetBrains Mono.")}</div>
   <div class="weak">Apache License 2.0 · <button class="link" onclick={notices}>{_("Third-party notices")}</button></div>
   {#if noticesError}<span class="row error"><Icon name="x-circle" />{noticesError}</span>{/if}
 </div>
@@ -79,12 +80,9 @@
     gap: 8px;
     text-align: center;
   }
-  .banner {
-    margin: 0;
-    font-size: var(--t);
-    line-height: 1.2;
-    color: var(--gold);
-    text-align: start;
+  .logo {
+    width: 233px;
+    margin-block: 8px;
   }
   .version {
     font-size: var(--t-l);
