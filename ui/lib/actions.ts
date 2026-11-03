@@ -50,6 +50,8 @@ export const ACTIONS: Action[] = [
   { id: "font-bigger", label: "Larger terminal font", keys: "Ctrl+=" },
   { id: "font-smaller", label: "Smaller terminal font", keys: "Ctrl+-" },
   { id: "font-reset", label: "Default terminal font size", keys: "Ctrl+0" },
+  { id: "wheel-zoom-tab", label: "Zoom the tab's text with the mouse wheel", keys: "Ctrl+Wheel" },
+  { id: "wheel-zoom-all", label: "Zoom every terminal's text with the mouse wheel", keys: "" },
   { id: "theme", label: "Switch between light and dark", keys: "" },
   { id: "fullscreen", label: "Full screen", keys: "F11" },
   { id: "lock", label: "Lock xtermium", keys: "Ctrl+Shift+K" },
@@ -79,8 +81,33 @@ export function chord(e: KeyboardEvent): string {
         : e.key.length === 1
           ? e.key.toUpperCase()
           : e.key;
-  return [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Meta", key].filter(Boolean).join("+");
+  return [...modifiers(e), key].filter(Boolean).join("+");
 }
+
+/** The modifiers held during an event, in the order chords name them. */
+const modifiers = (e: KeyboardEvent | WheelEvent) => [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Meta"].filter(Boolean) as string[];
+
+/** The chord a turn of the mouse wheel makes, like "Ctrl+Shift+Wheel"; "" without a modifier, so a
+ *  plain wheel (which scrolls) can never be bound. */
+export function wheelChord(e: WheelEvent): string {
+  const held = modifiers(e);
+  return held.length ? [...held, "Wheel"].join("+") : "";
+}
+
+/** The actions the mouse wheel runs: their chord ends in "Wheel", not in a key, so no key press
+ *  runs them (not in `bindings()`, not in the command palette). */
+export const isWheel = (id: string) => id.startsWith("wheel-");
+
+/** Which font zoom a wheel turn asks for, by the chords of the two wheel actions with the user's
+ *  changes applied: this tab's text, every terminal's, or neither (the wheel scrolls). */
+export function wheelAction(e: WheelEvent, overrides: Record<string, string>): "tab" | "all" | null {
+  const c = wheelChord(e);
+  if (!c) return null;
+  return c === keysOf("wheel-zoom-tab", overrides) ? "tab" : c === keysOf("wheel-zoom-all", overrides) ? "all" : null;
+}
+
+/** A tab's font zoom `by` points further (0: back to none), within the limits of Ctrl+= and Ctrl+-. */
+export const zoomed = (zoom: number, by: number) => (by ? Math.max(-8, Math.min(24, zoom + by)) : 0);
 
 /** The chord bound to an action, with the user's changes applied. */
 /** Whether the interface may run here: xtermium's own windows (main.rs: `main`, detached tabs' `tab-<id>`), never framed. */
@@ -93,7 +120,7 @@ export function bindings(overrides: Record<string, string>): Map<string, string>
   const m = new Map<string, string>();
   for (const a of ACTIONS) {
     const k = keysOf(a.id, overrides);
-    if (k && !m.has(k)) m.set(k, a.id);
+    if (k && !m.has(k) && !isWheel(a.id)) m.set(k, a.id);
   }
   return m;
 }

@@ -5,6 +5,7 @@
   import { _ } from "./i18n.svelte";
   import { onDestroy, onMount, tick as nextTick, untrack } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
+  import { wheelAction } from "./actions";
   import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
   import { close, decode, frameAt, type Pic } from "./images";
   import { glRenderer, type Renderer, type Run } from "./glyphs";
@@ -27,6 +28,7 @@
     onmeta,
     onfocus,
     onexit,
+    onzoom,
     zoom = 0,
     attach = 0,
   }: {
@@ -43,6 +45,8 @@
     onfocus: () => void;
     /** The session ended by itself (`ended`: once, as it ends), or Return was pressed after it stopped. */
     onexit: (ended: boolean) => void;
+    /** The wheel was turned with the keys of a wheel zoom (Settings › Shortcuts): `by` steps for this tab's text or every terminal's. */
+    onzoom: (scope: "tab" | "all", by: number) => void;
   } = $props();
 
   let box: HTMLDivElement;
@@ -89,6 +93,8 @@
 
   let queued = false;
   let wheel = 0;
+  /** Pixels turned for a wheel zoom and not yet taken as a step (a notch is 100). */
+  let zoomPx = 0;
   let move: PointerEvent | null = null;
   /** Next repaint for an animated image. */
   let tick = 0;
@@ -559,6 +565,17 @@
 
   function onwheel(e: WheelEvent) {
     e.preventDefault();
+    const scope = wheelAction(e, app.settings?.shortcuts ?? {});
+    if (scope) {
+      // One step per notch; a trackpad's many small turns add up to steps instead of one each.
+      // Shift moves the wheel's turn to deltaX in some webviews.
+      const d = e.deltaY || e.deltaX;
+      zoomPx += e.deltaMode === 0 ? d : e.deltaMode === 1 ? (d * 100) / 3 : Math.sign(d) * 100;
+      const n = Math.trunc(zoomPx / 100);
+      zoomPx -= n * 100;
+      if (n) onzoom(scope, -n);
+      return;
+    }
     // One notch ≈ 100 px in Chromium ≈ 3 lines.
     wheel += e.deltaMode === 1 ? -e.deltaY : e.deltaMode === 2 ? -e.deltaY * grid.rows : -e.deltaY / 33.3;
     const n = Math.trunc(wheel);

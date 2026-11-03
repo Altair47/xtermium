@@ -6,7 +6,7 @@
   import { emitTo, listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { bindings, chord } from "./actions";
+  import { bindings, chord, zoomed } from "./actions";
   import type { Boot, Session, Settings } from "./api";
   import { _, setLanguage } from "./i18n.svelte";
   import Icon from "./Icon.svelte";
@@ -69,7 +69,7 @@
     if (by === undefined) return;
     e.preventDefault();
     e.stopPropagation();
-    zoom = by ? Math.max(-8, Math.min(24, zoom + by)) : 0;
+    zoom = zoomed(zoom, by);
   }
 
   /** The right button opens the menu instead of reaching the terminal (no right-click paste here);
@@ -101,6 +101,7 @@
         onmeta={(m) => getCurrentWindow().setTitle(m.title || tab.title).catch(() => {})}
         onfocus={() => {}}
         onexit={close}
+        onzoom={(scope, by) => (scope === "tab" ? (zoom = zoomed(zoom, by)) : emitTo("main", "font-step", by))}
       />
     {/if}
     {#if hint}<div class="hint" role="status">{_("Ctrl+right-click for xtermium's menu: put back, paste, close")}</div>{/if}
