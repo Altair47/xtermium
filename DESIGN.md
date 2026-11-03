@@ -248,7 +248,7 @@ colours.
 
 ### Primary
 - **Phosphor Amber** (`gold`): the accent and the only one, the website's phosphor (`#ffb000`;
-  `#8f5c00` on the light theme). The token keeps its earlier name, `--gold`. It marks focus
+  `#754b00` on the light theme). The token keeps its earlier name, `--gold`. It marks focus
   (`:focus-visible` outline, field borders), toggles that are on and options that are picked
   (with `gold-soft` behind amber text), links that go to another place, drop targets, the focused
   pane's outline, the active Settings page's edge, the start screen's prompt sigil and block
@@ -320,8 +320,9 @@ From the back of the window to the hand, the website's near-black, with no blue 
 
 The light theme (`:root[data-theme="light"]` in `ui/app.css`) redefines every token above with
 the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`.
-The amber deepens to `#8f5c00` (white ink, a 14% wash), and the kind hues darken to hold contrast
-on the light greys. The light values are also kept in `.impeccable/design.json`
+The amber deepens to `#754b00` (white ink, a 14% wash), dark enough to hold 4.5:1 on every light
+surface, a button under the pointer included, and the kind hues darken to hold contrast on the
+light greys. The light values are also kept in `.impeccable/design.json`
 (`colorMeta.*.light`).
 
 ### Named Rules

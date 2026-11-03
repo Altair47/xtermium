@@ -476,7 +476,7 @@ pub const SCHEMES: &[Scheme] = &[
         name: Cow::Borrowed("xtermium Light"),
         bg: 0xfafafa,
         fg: 0x141414,
-        cursor: 0x8f5c00,
+        cursor: 0x754b00,
         selection: 0xf6e3b4,
         ansi: [
             0x2b2b2e, 0xd1343f, 0x2f8f3e, 0xa66a00, 0x1f62c6, 0x8e3fb0, 0x0f7f8c, 0x9d9da6, //

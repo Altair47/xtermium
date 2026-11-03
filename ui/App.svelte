@@ -150,7 +150,7 @@
     if (!c) return;
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
     const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
-    const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #1d2127)`;
+    const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #141414)`;
     root.setProperty("--gold", `light-dark(${onLight}, ${c})`);
     root.setProperty("--gold-ink", `light-dark(#fff, ${light ? "#111" : "#fff"})`);
     root.setProperty("--gold-soft", "color-mix(in srgb, var(--gold) 16%, transparent)");

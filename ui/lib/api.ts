@@ -205,7 +205,7 @@ export type Settings = {
   broadcast_outline_color: string;
   /** The focused pane's ring glides to the next pane; false: it jumps. */
   focus_animated: boolean;
-  /** The interface's accent colour, `#rrggbb`; "" = the built-in gold. */
+  /** The interface's accent colour, `#rrggbb`; "" = the built-in amber. */
   accent: string;
   /** Imported terminal colour schemes (Settings > Appearance). */
   custom_schemes: Scheme[];
@@ -355,7 +355,7 @@ export const KIND_ICON: Record<KindName, string> = {
   coop: "group",
 };
 
-/** Anodized-titanium colour per connection type (app.css). */
+/** Cable colour per connection type (app.css). */
 export const KIND_COLOR: Record<KindName, string> = {
   ssh: "var(--k-ssh)",
   shell: "var(--k-shell)",
@@ -446,10 +446,10 @@ export const ICONS = [
 ];
 
 /** Swatches for marking a session, folder or tab (its name and tab line; the icon keeps its kind's
- *  colour), and for the broadcast outline. No gold: gold text means picked, or a link. */
+ *  colour), and for the broadcast outline. No amber: amber text means picked, or a link. */
 export const COLORS = ["#5c8df0", "#33b8a6", "#b5c14a", "#9c70e6", "#dd6b9c", "#4fb86a", "#ec6a6a", "#e08a3c", "#8a96a3"];
 
-/** Accents offered besides the built-in gold: metals, apart from the kinds' colours, each with
+/** Accents offered besides the default amber: metals, apart from the kinds' colours, each with
  *  its dark-theme value (the one stored) and a darker one that reads on the light theme. */
 export const ACCENTS: [name: string, dark: string, light: string][] = [
   [N_("Brushed gold"), "#d8a84e", "#85590a"],

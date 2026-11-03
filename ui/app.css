@@ -71,7 +71,7 @@
   --error-ink: #200a0a;
   --ok: #4fc08d;
   --warn: #e0b04a;
-  /* anodized titanium, one per kind of connection */
+  /* cable colours, one per kind of connection */
   --k-ssh: #5c8df0;
   --k-shell: #33b8a6;
   --k-serial: #b5c14a;
@@ -101,10 +101,10 @@
   --line: #c9c9ce;
   --fg: #141414;
   --weak: #5c5c63;
-  /* amber, error and ok are 13px text (links, tags, states), so each holds 4.5:1 on the panel */
-  --gold: #8f5c00;
+  /* amber, error and ok are 13px text (links, tags, states), so each holds 4.5:1 on every surface, a button under the pointer included */
+  --gold: #754b00;
   --gold-ink: #ffffff;
-  --gold-soft: rgba(143, 92, 0, 0.14);
+  --gold-soft: rgba(117, 75, 0, 0.14);
   --error: #b42a33;
   --error-ink: #ffffff;
   --tint-lo: 0;
@@ -380,6 +380,11 @@ button.primary.danger:hover:not(:disabled) {
 :focus-visible {
   outline: 1px solid var(--gold);
   outline-offset: -1px;
+}
+
+/* Selected text in fields and prose takes the accent too, instead of the webview's blue. */
+::selection {
+  background: color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 input[type="checkbox"],

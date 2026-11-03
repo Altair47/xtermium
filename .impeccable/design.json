@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-31T18:41:49.786Z",
+  "generatedAt": "2026-11-03T17:21:40.000Z",
   "title": "Design System: xtermium",
   "extensions": {
     "colorMeta": {
@@ -18,7 +18,7 @@
           "oklch(83% 0.170 76.4)",
           "oklch(95% 0.170 76.4)"
         ],
-        "light": "#8f5c00"
+        "light": "#754b00"
       },
       "gold-ink": {
         "role": "primary",
@@ -40,7 +40,7 @@
         "role": "primary",
         "displayName": "Amber Wash",
         "canonical": "rgba(255, 176, 0, 0.14)",
-        "light": "rgba(143, 92, 0, 0.14)"
+        "light": "rgba(117, 75, 0, 0.14)"
       },
       "k-ssh": {
         "role": "secondary",

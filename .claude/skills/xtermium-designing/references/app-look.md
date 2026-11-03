@@ -43,7 +43,7 @@ Kind hues (`--k-*`), read through a local `--kind`:
 - Accent presets: Brushed gold `#d8a84e` (the accent before the brand's), then the metals Platinum `#c3ccd8`, Bronze `#a99a78`, Rose gold `#e2a395`, each with a light-theme value (`ACCENTS` in `ui/lib/api.ts`); presets stay off the kind hues and the error red.
 - User marks (`COLORS` in `api.ts`: nine swatches, no amber) tint names (`.tinted`) and tab connector lines, never a session's icon.
 - The logo's own amber `#FFC20E` and `--mark` live only in the logo (`ui/lib/Logo.svelte`); the brand amber is never UI state.
-- The light theme (`:root[data-theme="light"]`) redefines every token with the same roles: neutral greys (window `#d8d8db`, panel `#e8e8ea`, line `#c9c9ce`), text in charcoal `#141414`, the accent `#8f5c00`, `--mark` `#141414`; values also in `.impeccable/design.json` (`colorMeta.*.light`).
+- The light theme (`:root[data-theme="light"]`) redefines every token with the same roles: neutral greys (window `#d8d8db`, panel `#e8e8ea`, line `#c9c9ce`), text in charcoal `#141414`, the accent `#754b00`, `--mark` `#141414`; values also in `.impeccable/design.json` (`colorMeta.*.light`).
 
 ## Type
 

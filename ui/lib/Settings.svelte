@@ -1015,7 +1015,7 @@ xtermium close 3`}</pre>
       <span>{_("Accent")}</span>
       <div class="row wrap">
         <!-- each swatch shows the value the theme in use gets -->
-        <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="light-dark(#8f5c00, #ffb000)" onclick={() => (s.accent = "")}></button>
+        <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="light-dark(#754b00, #ffb000)" onclick={() => (s.accent = "")}></button>
         {#each ACCENTS as [name, dark, light] (dark)}
           <button class="swatch" class:selected={s.accent === dark} title={_(name)} aria-label={_("Accent {c}", { c: _(name) })} style:--c="light-dark({light}, {dark})" onclick={() => (s.accent = dark)}></button>
         {/each}

@@ -29,7 +29,7 @@ The app's look is "The Operator's Rack": the brand's world (the website's operat
 | Gap | `--gap` 5 px |
 | Dialog widths | 377, 610, 987 px; Settings is 987 × 610 |
 | Shadows | `--shadow-float`, `--shadow-menu`, `--shadow-dialog`, on floating layers only |
-| Accent | `var(--gold)`, phosphor amber (`#ffb000` dark, `#8f5c00` light, by default; the token keeps its old name; never hard-code it) |
+| Accent | `var(--gold)`, phosphor amber (`#ffb000` dark, `#754b00` light, by default; the token keeps its old name; never hard-code it) |
 | Long face (`--ui`) | Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Ubuntu; 13px; body text, prose, field labels, menus and lists |
 | Short face (`--short`, `--mono`) | JetBrains Mono Variable (`@fontsource-variable/jetbrains-mono`): titles, buttons, tags, the status bar, the start screen's lead, code and keys; `--short` falls back to `--ui` for ar, hi, ja, zh |
 | Logo | `ui/lib/Logo.svelte` (`assets/logo-horizontal.svg`); its tiles and wordmark in `--mark` |
@@ -59,7 +59,7 @@ The app's look is "The Operator's Rack": the brand's world (the website's operat
 - **Motion**: 0.1–0.2 s, arrivals on `--ease-out`, exits faster than entrances; CSS motion stops under `prefers-reduced-motion` through `ui/app.css`; a Svelte transition must check it itself (`duration: 0`).
 - **Right to left**: logical properties throughout (`inset-inline-*`, `margin-inline-*`), so Arabic mirrors for free.
 - **Short in mono.** Titles, buttons, tags, keys, the status bar and code are in `var(--short)` (JetBrains Mono); body text, prose, field labels, menus (`.menu button`), list rows (`button.item`), the Settings page list and the session editor's five-to-a-row kind picker stay in `var(--ui)`.
-- **Light theme** (`:root[data-theme="light"]`) redefines every token with the same roles, in neutral greys with charcoal `#141414` text; the amber deepens to `#8f5c00`.
+- **Light theme** (`:root[data-theme="light"]`) redefines every token with the same roles, in neutral greys with charcoal `#141414` text; the amber deepens to `#754b00`.
 - **The logo and the prompt.** The start screen shows the website's prompt (`~/xtermium $`, an amber `$` and a blinking amber block cursor, hidden from assistive tech) above the brand kit's horizontal logo through `Logo.svelte`; Settings › About shows the logo at 233px. There is no gradient and no ASCII art.
 
 Tokens, kind hues, type roles and components condensed: `references/app-look.md`.
