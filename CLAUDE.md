@@ -115,7 +115,7 @@ README.md lists the features for users; this file is how it's built and how the 
   `--r-window` 8, nested ones `calc(outer - padding)`; `--gap` 5; dialogs 377 / 610 / 987 wide.
   A value derived from others is written as `calc(…)` so it reads as derived.
   `ui/lib/scale.test.ts` (in `npm test`) fails on off-scale spacing or a raw font size. Colours
-  `--fg --weak --line --raised --gold` (the accent; user-changeable), per-kind hues `--k-*`.
+  `--fg --weak --line --raised --gold` (the accent, phosphor amber; user-changeable), per-kind hues `--k-*`.
   Rounded floating panels on a darker window, icon-only tool buttons with tooltips. Only layers
   floating over the work cast a shadow, from `--shadow-float/-menu/-dialog`, and they arrive with
   `float-in` (menus excepted; app.css). Svelte transitions don't obey app.css's reduced-motion
@@ -130,7 +130,7 @@ README.md lists the features for users; this file is how it's built and how the 
   background) can't put them under the panes. Terminals and RDP refuse keys while any dialog/palette is open
   (`dialogTakesKeys`), and give the keyboard back only after it's gone (`refocus` waits a tick).
 - Text that names another place links to it: `openSettings(page)` from `Settings.svelte`;
-  `button.link` (gold) or `button.link.quiet` (a whole sentence, dotted underline). Status messages
+  `button.link` (amber) or `button.link.quiet` (a whole sentence, dotted underline). Status messages
   naming a page use `tell(text, page)`. A moment's confirmation is a toast (`toast(text)`; `copyText` copies and says so).
 - Every field passes `cleanInput` / `clampNumber` (App.svelte); the backend cleans again.
 - Enter does the obvious thing: in a filter field it acts on the first hit (runs the snippet, adds

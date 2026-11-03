@@ -460,25 +460,27 @@ pub fn rgb(c: u32) -> [u8; 3] {
 
 pub const SCHEMES: &[Scheme] = &[
     Scheme {
+        // The brand's: the website's ink on its near-black, a phosphor-amber block cursor and
+        // selection; the greys are neutral, the colours as before.
         name: Cow::Borrowed("xtermium Dark"),
-        bg: 0x101114,
-        fg: 0xd4d7dd,
-        cursor: 0x5fa8f5,
-        selection: 0x2d4a6e,
+        bg: 0x0b0b0d,
+        fg: 0xe6e6e1,
+        cursor: 0xffb000,
+        selection: 0x4a3608,
         ansi: [
-            0x1d1f24, 0xef5f6b, 0x7fd88f, 0xe6c472, 0x5fa8f5, 0xc792ea, 0x56c8d8, 0xc8ccd4, //
-            0x4b505a, 0xff7a85, 0x98e6a6, 0xf2d48f, 0x82bdff, 0xd8a8f5, 0x79dbe8, 0xffffff,
+            0x1d1d22, 0xef5f6b, 0x7fd88f, 0xe6c472, 0x5fa8f5, 0xc792ea, 0x56c8d8, 0xc9c9c4, //
+            0x50505a, 0xff7a85, 0x98e6a6, 0xf2d48f, 0x82bdff, 0xd8a8f5, 0x79dbe8, 0xffffff,
         ],
     },
     Scheme {
         name: Cow::Borrowed("xtermium Light"),
         bg: 0xfafafa,
-        fg: 0x2b2f36,
-        cursor: 0x1f62c6,
-        selection: 0xc7dbf7,
+        fg: 0x141414,
+        cursor: 0x8f5c00,
+        selection: 0xf6e3b4,
         ansi: [
-            0x2b2f36, 0xd1343f, 0x2f8f3e, 0xa66a00, 0x1f62c6, 0x8e3fb0, 0x0f7f8c, 0x9aa0a8, //
-            0x6b7280, 0xe5484d, 0x3aa655, 0xb88600, 0x3b7be0, 0xa35bc4, 0x1495a3, 0x4b5563,
+            0x2b2b2e, 0xd1343f, 0x2f8f3e, 0xa66a00, 0x1f62c6, 0x8e3fb0, 0x0f7f8c, 0x9d9da6, //
+            0x6e6e76, 0xe5484d, 0x3aa655, 0xb88600, 0x3b7be0, 0xa35bc4, 0x1495a3, 0x4f4f57,
         ],
     },
     Scheme {

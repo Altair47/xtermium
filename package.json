@@ -14,7 +14,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fontsource-variable/recursive": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@tauri-apps/api": "^2.12.3"
   },
   "devDependencies": {

@@ -1015,11 +1015,11 @@ xtermium close 3`}</pre>
       <span>{_("Accent")}</span>
       <div class="row wrap">
         <!-- each swatch shows the value the theme in use gets -->
-        <button class="swatch" class:selected={!s.accent} title={_("Gold (default)")} aria-label={_("Default accent")} style:--c="light-dark(#85590a, #d8a84e)" onclick={() => (s.accent = "")}></button>
+        <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="light-dark(#8f5c00, #ffb000)" onclick={() => (s.accent = "")}></button>
         {#each ACCENTS as [name, dark, light] (dark)}
           <button class="swatch" class:selected={s.accent === dark} title={_(name)} aria-label={_("Accent {c}", { c: _(name) })} style:--c="light-dark({light}, {dark})" onclick={() => (s.accent = dark)}></button>
         {/each}
-        <input type="color" title={_("Any colour")} value={s.accent || "#d8a84e"} oninput={(e) => (s.accent = (e.target as HTMLInputElement).value)} />
+        <input type="color" title={_("Any colour")} value={s.accent || "#ffb000"} oninput={(e) => (s.accent = (e.target as HTMLInputElement).value)} />
       </div>
     </div>
     <h3>{_("Terminal colours")}</h3>
@@ -1661,6 +1661,8 @@ xtermium close 3`}</pre>
     justify-content: flex-start;
     color: var(--weak);
     border: 0;
+    /* a list of places, read down like the rows: the system face */
+    font-family: var(--ui);
     /* a long name (some languages') takes two lines rather than running out of the list */
     white-space: normal;
     text-align: start;

@@ -295,12 +295,6 @@ export type TunnelStats = {
 export const HOMEPAGE = "https://xtermium.com";
 export const GITHUB = "https://github.com/xtermium/xtermium";
 
-export const BANNER = String.raw`      _                      _
-__  _| |_ ___ _ __ _ __ ___ (_)_   _ _ __ ___
-\ \/ / __/ _ \ '__| '_ ${"`"} _ \| | | | | '_ ${"`"} _ \
- >  <| ||  __/ |  | | | | | | | |_| | | | | | |
-/_/\_\\__\___|_|  |_| |_| |_|_|\__,_|_| |_| |_|`;
-
 export const DEFAULT_MONO = `ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", Menlo, monospace`;
 
 /** CSS font stack for a family name; empty = the default monospace. */
@@ -458,6 +452,7 @@ export const COLORS = ["#5c8df0", "#33b8a6", "#b5c14a", "#9c70e6", "#dd6b9c", "#
 /** Accents offered besides the built-in gold: metals, apart from the kinds' colours, each with
  *  its dark-theme value (the one stored) and a darker one that reads on the light theme. */
 export const ACCENTS: [name: string, dark: string, light: string][] = [
+  [N_("Brushed gold"), "#d8a84e", "#85590a"],
   [N_("Platinum"), "#c3ccd8", "#4b5868"],
   [N_("Bronze"), "#a99a78", "#6f6440"],
   [N_("Rose gold"), "#e2a395", "#8f4d40"],

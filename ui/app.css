@@ -1,10 +1,11 @@
 /*
-  xtermium: "titanium". Cool metal greys for the chrome, one gold accent, and the colours
-  titanium takes when anodized, one per connection type (like cable colours on a patch panel).
-  One type family, Recursive: sans for the interface, its mono axis for the ASCII banner and
-  code. Dense like a modern code editor: 13px system text, 26px controls, small rounded
-  corners. The sidebar, the tabs and the file panel float as rounded panels on a darker
-  window, a few pixels apart.
+  xtermium: "the operator's terminal", in the brand's world (xtermium.com and the brand kit).
+  Near-black neutral chrome, one phosphor amber accent, and a colour per connection type (like
+  cable colours on a patch panel). JetBrains Mono, the brand's face, says everything short
+  (titles, buttons, tags, keys, status lines, code); the system face says everything long.
+  Dense like a modern code editor: 13px text, 26px controls, small rounded corners. The
+  sidebar, the tabs and the file panel float as rounded panels on a darker window, a few
+  pixels apart.
 
   Proportions follow the golden ratio, φ ≈ 1.618:
   - spacing is on the Fibonacci scale, 1 2 3 5 8 13 21 34 px, each step about φ times the
@@ -16,11 +17,14 @@
     radius is the outer one less the room between them;
   - dialogs are 377, 610 or 987px wide; Settings is a golden rectangle, 987 × 610.
 */
-@import "@fontsource-variable/recursive/full.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
 
 :root {
   --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Ubuntu", sans-serif;
-  --mono: "Recursive Variable", "Cascadia Mono", Consolas, monospace;
+  --mono: "JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace;
+  /* Short text (titles, buttons, tags, keys, status lines) is in the mono, as on the website;
+     scripts it has no letters for keep the system face (below). */
+  --short: var(--mono);
   --phi: 1.618;
   --r-window: 8px;
   --r-menu: 5px;
@@ -49,18 +53,20 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   color-scheme: dark;
-  --window-rgb: 16, 18, 21;
-  --deep-rgb: 21, 24, 28;
-  --bg-rgb: 28, 32, 37;
-  --panel-rgb: 34, 38, 44;
-  --raised: #2b3037;
-  --hover: #353b44;
-  --line: #353b43;
-  --fg: #e3e6ea;
-  --weak: #959da8;
-  --gold: #d8a84e;
-  --gold-ink: #1d1608;
-  --gold-soft: rgba(216, 168, 78, 0.16);
+  /* the site's ground and surfaces, a hair apart, near-black and neutral */
+  --window-rgb: 5, 5, 6;
+  --deep-rgb: 8, 8, 10;
+  --bg-rgb: 11, 11, 13;
+  --panel-rgb: 17, 17, 20;
+  --raised: #1d1d22;
+  --hover: #26262c;
+  --line: #2c2c33;
+  --fg: #e6e6e1;
+  --weak: #9d9da6;
+  /* phosphor amber, the site's; the logo's own amber (#ffc20e) stays inside the logo */
+  --gold: #ffb000;
+  --gold-ink: #050506;
+  --gold-soft: rgba(255, 176, 0, 0.14);
   --error: #ec6a6a;
   --error-ink: #200a0a;
   --ok: #4fc08d;
@@ -80,24 +86,25 @@
   --fwd: var(--k-ssh);
   --back: var(--k-shell);
   --broadcast: var(--gold);
-  --spectrum: linear-gradient(100deg, #c98a45 0%, #d8a84e 16%, #dd6b9c 38%, #9c70e6 58%, #5c8df0 78%, #33b8a6 100%);
+  /* the logo's three large tiles; its small tile is always the brand amber */
+  --mark: #f2f2f2;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --window-rgb: 216, 220, 226;
+  --window-rgb: 216, 216, 219;
   --deep-rgb: 255, 255, 255;
-  --bg-rgb: 238, 240, 243;
-  --panel-rgb: 229, 232, 236;
-  --raised: #d9dde3;
-  --hover: #cdd2d9;
-  --line: #c9ced6;
-  --fg: #1d2127;
-  --weak: #5d6571;
-  /* gold, error and ok are 13px text (links, tags, states), so each holds 4.5:1 on the panel */
-  --gold: #85590a;
+  --bg-rgb: 241, 241, 242;
+  --panel-rgb: 232, 232, 234;
+  --raised: #dcdcdf;
+  --hover: #cfcfd3;
+  --line: #c9c9ce;
+  --fg: #141414;
+  --weak: #5c5c63;
+  /* amber, error and ok are 13px text (links, tags, states), so each holds 4.5:1 on the panel */
+  --gold: #8f5c00;
   --gold-ink: #ffffff;
-  --gold-soft: rgba(133, 89, 10, 0.14);
+  --gold-soft: rgba(143, 92, 0, 0.14);
   --error: #b42a33;
   --error-ink: #ffffff;
   --tint-lo: 0;
@@ -115,7 +122,11 @@
   --k-kvm: #4f6378;
   --k-agent: #b8443a;
   --k-coop: #7b6a45;
-  --spectrum: linear-gradient(100deg, #9a5f1f 0%, #946410 16%, #b83f75 38%, #7444c8 58%, #2f62d0 78%, #138a7b 100%);
+  --mark: #141414;
+}
+
+:root:is([lang|="ar"], [lang|="hi"], [lang|="ja"], [lang|="zh"]) {
+  --short: var(--ui);
 }
 
 * {
@@ -151,7 +162,6 @@ code,
 kbd,
 pre {
   font-family: var(--mono);
-  font-variation-settings: "MONO" 1, "CASL" 0;
 }
 
 kbd {
@@ -178,6 +188,7 @@ code {
   text-overflow: ellipsis;
   padding: 0 5px;
   border-radius: 3px;
+  font-family: var(--short);
   font-size: var(--t-s);
   line-height: 16px;
   color: var(--gold);
@@ -289,6 +300,7 @@ button {
   border: 1px solid transparent;
   border-radius: var(--r-control);
   background: var(--raised);
+  font-family: var(--short);
   font-weight: 400;
   cursor: pointer;
   white-space: nowrap;
@@ -317,6 +329,11 @@ button.flat {
 
 button.flat:hover:not(:disabled) {
   background: var(--raised);
+}
+
+/* a row of a list (the session rack, the palette) is read down like a menu: the system face */
+button.item {
+  font-family: var(--ui);
 }
 
 button.icon-only {
@@ -417,12 +434,15 @@ label.check {
 }
 
 h2 {
+  font-family: var(--short);
   font-size: var(--t-l);
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 h3 {
+  font-family: var(--short);
   font-size: var(--t);
   font-weight: 600;
   margin: 5px 0 0;
@@ -509,6 +529,8 @@ kbd {
   /* the menu's curve, less its padding */
   border-radius: calc(var(--r-menu) - 3px);
   background: transparent;
+  /* a menu is a list to read down, like the rows (button.item): the system face */
+  font-family: var(--ui);
   justify-content: flex-start;
 }
 

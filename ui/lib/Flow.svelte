@@ -219,7 +219,7 @@
   .addr {
     font-size: var(--t);
     fill: var(--weak);
-    font-variation-settings: "MONO" 1;
+    font-family: var(--mono);
   }
   .lane {
     stroke-width: 2;

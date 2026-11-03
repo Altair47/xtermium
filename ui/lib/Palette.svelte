@@ -129,7 +129,7 @@
     justify-content: center;
     align-items: flex-start;
     padding-top: 12vh;
-    background: rgba(8, 10, 12, 0.32);
+    background: rgba(5, 5, 6, 0.32);
     animation: fade-in 0.16s ease-out;
   }
   .palette {
