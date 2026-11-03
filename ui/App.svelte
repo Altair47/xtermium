@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { fade } from "svelte/transition";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, type Sizes } from "./lib/actions";
-  import { ACCENTS, addressSession, BANNER, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
+  import { ACCENTS, addressSession, BANNER, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
   import Account from "./lib/Account.svelte";
+  import Coop from "./lib/Coop.svelte";
   import Export from "./lib/Export.svelte";
   import Icon, { iconFile } from "./lib/Icon.svelte";
   import Import from "./lib/Import.svelte";
@@ -170,7 +171,7 @@
   $effect(() => {
     if (!ready) return;
     // A tab's colour goes with its session; the name it was given beside it.
-    const kept = app.settings?.restore_tabs ? tabs : [];
+    const kept = app.settings?.restore_tabs ? tabs.filter((t) => !coopTab(t)) : [];
     const list = kept.map((t) => {
       return { ...$state.snapshot(t.session), color: t.color ?? t.session.color };
     });
@@ -197,7 +198,7 @@
   const count = (l: Layout) => (l === "tiles" ? Math.max(1, strip.length) : GRID[l][0] * GRID[l][1]);
   const activeTab = $derived(tabs.find((t) => t.key === panes[focus]));
   /** Saved sessions with a tab, by `sessionKey`: true while one of those tabs is up (the sidebar marks them). */
-  const live = $derived(tabs.reduce((m, t) => m.set(sessionKey(t.session), !!m.get(sessionKey(t.session)) || t.alive), new Map<string, boolean>()));
+  const live = $derived(tabs.filter((t) => !coopTab(t)).reduce((m, t) => m.set(sessionKey(t.session), !!m.get(sessionKey(t.session)) || t.alive), new Map<string, boolean>()));
 
   /** Opens a tab and returns its key; undefined if the session opened outside xtermium. */
   function open(session: Session): number | undefined {
@@ -210,6 +211,58 @@
     tabs.push({ key, session, id: 0, title: session.name, alive: true, broadcast: true });
     toPane(key);
     return key;
+  }
+
+  // ---- Terminal Co-op (Coop.svelte): a tab for every tab the ring shares with you, opened and closed
+  // as the `coop` event's list changes ----
+  /** The number at its owner of the shared tab a tab shows; 0 for any other tab. */
+  const coopTab = (t: Tab) => (t.session.kind.type === "coop" ? t.session.kind.tab : 0);
+  const remoteName = (r: CoopRemote) => (r.owner_name ? `${r.owner_name}: ${r.title}` : r.title);
+  /** Ring tabs closed by hand: they stay closed until their owner stops sharing them. */
+  const hidden = new Set<number>();
+  $effect(() => {
+    const list = app.coop.remote;
+    untrack(() => syncRemote(list));
+  });
+
+  function syncRemote(list: CoopRemote[]) {
+    const ids = new Set(list.map((r) => r.id));
+    for (const id of hidden) if (!ids.has(id)) hidden.delete(id);
+    for (const t of tabs.filter((t) => coopTab(t) && !ids.has(coopTab(t)))) {
+      close(t.key, true);
+      hidden.delete(coopTab(t));
+    }
+    for (const r of list) {
+      const t = tabs.find((t) => coopTab(t) === r.id);
+      if (t) {
+        t.title = r.title;
+        t.session.name = remoteName(r);
+      } else if (!hidden.has(r.id)) openRemote(r);
+    }
+  }
+
+  /** Opens a tab shared with you. It takes an empty pane if there is one, but never the keyboard: what
+   *  you are typing must not land in someone else's terminal. */
+  function openRemote(r: CoopRemote) {
+    const key = nextKey++;
+    const session = newSession("coop", "", remoteName(r));
+    session.kind = { type: "coop", tab: r.id, picture: String(r.kind).toLowerCase() === "picture", owner: r.owner_name ?? "" };
+    tabs.push({ key, session, id: 0, title: r.title, alive: true, broadcast: false });
+    const free = panes.indexOf(null);
+    if (layout !== "tiles" && free >= 0) panes[free] = key;
+    toast(_("{name} shared {title}.", { name: r.owner_name || _("Someone"), title: r.title }), panes.includes(key) ? undefined : { label: _("Show"), run: () => show(key) });
+  }
+
+  /** The ring's owner puts a tab of theirs in front of everyone in it, or takes it back. */
+  function share(t: Tab, on: boolean) {
+    invoke("coop_share", { tab: t.id, on }).catch((e) => (app.status = String(e)));
+  }
+  /** Why a tab can't be shared, for the menu's tooltip; "" when it can. */
+  function unshareable(t: Tab) {
+    const k = t.session.kind.type;
+    if (k === "agent") return _("AI agent tabs can't be shared.");
+    if (k === "browser" && app.os !== "windows") return _("Website tabs can be shared on Windows only.");
+    return "";
   }
 
   /** A tab coming on screen: tiled, it gets a pane of its own; else an empty pane, if there is
@@ -250,7 +303,7 @@
   /** A terminal's meta: the tab's state. A connection that dropped becomes a desktop notification
    *  (Settings › General). */
   function metaOf(t: Tab, m: Meta) {
-    if (m.lost && t.alive) notify(_("Connection lost"), titleOf(t));
+    if (m.lost && t.alive && !coopTab(t)) notify(_("Connection lost"), titleOf(t));
     update(t.key, { alive: m.alive, title: m.title, cwd: m.cwd });
   }
 
@@ -347,9 +400,10 @@
   /** Close a tab; one still connected asks first (Settings > General), unless `force`. */
   function close(key: number, force = false) {
     const t = tabs.find((t) => t.key === key);
-    if (!force && t?.alive && app.settings?.confirm_close) return void (closing = t);
+    if (!force && t?.alive && app.settings?.confirm_close && !coopTab(t)) return void (closing = t);
     // Its view isn't here to end it: this does, and closes its window.
     if (t?.detached) invoke("close_tab", { id: t.id });
+    if (t && coopTab(t)) hidden.add(coopTab(t));
     tabs = tabs.filter((t) => t.key !== key);
     unpane(key);
   }
@@ -396,7 +450,7 @@
   }
 
   /** Terminals and RDP desktops move to a window of their own; VNC, websites and consoles don't. */
-  const detachable = (k: Session["kind"]) => k.type === "rdp" || !(isDesktop(k) || k.type === "browser" || k.type === "kvm");
+  const detachable = (k: Session["kind"]) => k.type === "rdp" || !(isDesktop(k) || k.type === "browser" || k.type === "kvm" || k.type === "coop");
 
   // ---- detached tabs: a terminal in a window of its own (Detached.svelte), its connection kept.
   // Closing that window, its menu's "Reattach", or Tasks here bring it back.
@@ -456,7 +510,7 @@
   /** The name a layout is being saved under, while asking for it. */
   let naming = $state<string | null>(null);
   /** The tabs on screen, in tab-strip order: what a layout saves. */
-  const onScreen = $derived(strip.filter((t) => panes.includes(t.key)));
+  const onScreen = $derived(strip.filter((t) => panes.includes(t.key) && !coopTab(t)));
 
   /** Saves the tabs on screen: their sessions in strip order, the pane each is in, the names
    *  they were given, and the panes' sizes. */
@@ -786,7 +840,7 @@
   // ---- keyboard shortcuts and the command palette (actions.ts) ----
   const keymap = $derived(bindings(app.settings?.shortcuts ?? {}));
 
-  const DIALOGS = new Set(["palette", "settings", "snippets", "tunnels", "credentials"]);
+  const DIALOGS = new Set(["palette", "settings", "snippets", "tunnels", "credentials", "coop"]);
 
   // A website with the keyboard hands xtermium's shortcuts back (src/web.rs, Windows).
   $effect(() => void (app.settings && invoke("web_shortcuts", { chords: [...keymap.keys()] })));
@@ -934,10 +988,10 @@
         if (t) close(t.key);
         break;
       case "reconnect":
-        if (t) reconnect(t.key);
+        if (t && !coopTab(t)) reconnect(t.key);
         break;
       case "duplicate-tab":
-        if (t) open(t.session);
+        if (t && !coopTab(t)) open(t.session);
         break;
       case "detach-tab":
         if (t) detach(t.key);
@@ -976,6 +1030,9 @@
         break;
       case "credentials":
         app.showCredentials = !app.showCredentials;
+        break;
+      case "coop":
+        app.showCoop = !app.showCoop;
         break;
       case "import":
         showImport = true;
@@ -1121,6 +1178,9 @@
   {#if lock.info && (lock.info.password || lock.info.pin || lock.info.passkey || lock.info.biometrics)}
     <button class="flat icon-only" onclick={() => run("lock")} title={tip(_("Lock xtermium"), "lock")} aria-label={_("Lock xtermium")}><Icon name="lock-alt" size={16} /></button>
   {/if}
+  {#if app.settings?.sync_token || app.coop.ring}
+    <button class="flat icon-only" class:on={!!app.coop.ring} onclick={() => run("coop")} title={tip(_("Terminal Co-op"), "coop")} aria-label={_("Terminal Co-op")}><Icon name="group" size={16} /></button>
+  {/if}
   <Account onsettings={() => openSettings("sync")} />
 {/snippet}
 
@@ -1243,6 +1303,7 @@
                 >
                   {#if t.alive}<SessionIcon icon={look.icon} size={15} still={look.still} />{:else}<Icon name="error" size={15} />{/if}
                   <span class="title">{titleOf(t)}</span>
+                  {#if t.id && app.coop.shared.includes(t.id)}<span class="shared" role="img" title={_("Shared with the ring")} aria-label={_("Shared with the ring")}></span>{/if}
                 </button>
               {/if}
               <button class="flat icon-only close" title={tip(_("Close"), "close-tab")} onclick={() => close(t.key)}><Icon name="x" size={15} /></button>
@@ -1379,11 +1440,43 @@
               style={pane >= 0 ? place(pane) : "display: none"}
             >
               <div class="body">
-              {#if isDesktop(t.session.kind)}
+              <!-- A tab of the ring's: someone else's, on the frames the ring sends, with no session of ours behind it (`onid` never comes). -->
+              {#if t.session.kind.type === "coop"}
+                {@const k = t.session.kind}
+                {@const r = app.coop.remote.find((r) => r.id === k.tab)}
+                {#if k.picture}
+                  <Rdp
+                    bind:this={desks[t.key]}
+                    session={t.session}
+                    remote={k.tab}
+                    active={pane === focus}
+                    onid={() => {}}
+                    onmeta={(m: Meta) => update(t.key, { alive: m.alive })}
+                    onconnected={(connected) => update(t.key, { connected })}
+                    onfocus={() => (focus = pane)}
+                    onexit={() => close(t.key, true)}
+                  />
+                {:else}
+                  <Terminal
+                    bind:this={views[t.key]}
+                    session={t.session}
+                    remote={k.tab}
+                    size={r ? [r.cols, r.rows] : undefined}
+                    zoom={t.zoom}
+                    active={pane === focus}
+                    visible={pane >= 0}
+                    onid={() => {}}
+                    onmeta={(m) => metaOf(t, m)}
+                    onfocus={() => (focus = pane)}
+                    onexit={() => close(t.key, true)}
+                  />
+                {/if}
+              {:else if isDesktop(t.session.kind)}
                 <Rdp
                   bind:this={desks[t.key]}
                   session={t.session}
                   attach={t.attach}
+                  shared={t.id && app.coop.shared.includes(t.id) ? t.id : 0}
                   active={pane === focus}
                   onid={(id) => started(t.key, id)}
                   onmeta={(m: Meta) => update(t.key, { alive: m.alive })}
@@ -1406,6 +1499,7 @@
                   session={t.session}
                   zoom={t.zoom}
                   attach={t.attach}
+                  shared={t.id && app.coop.shared.includes(t.id) ? t.id : 0}
                   active={pane === focus}
                   visible={pane >= 0}
                   onid={(id) => started(t.key, id)}
@@ -1501,9 +1595,15 @@
           <button class="swatch" class:selected={t?.color === c} title={c} aria-label={_("Colour {c}", { c })} style:--c={c} onclick={() => t && (t.color = c)}></button>
         {/each}
       </div>
-      <button onclick={() => reconnect(k)}><Icon name="refresh" />{_("Reconnect tab")}{@render keys("reconnect")}</button>
-      <button onclick={() => t && open(t.session)}><Icon name="copy" />{_("Duplicate tab")}{@render keys("duplicate-tab")}</button>
+      <button disabled={!t || !!coopTab(t)} onclick={() => reconnect(k)}><Icon name="refresh" />{_("Reconnect tab")}{@render keys("reconnect")}</button>
+      <button disabled={!t || !!coopTab(t)} onclick={() => t && open(t.session)}><Icon name="copy" />{_("Duplicate tab")}{@render keys("duplicate-tab")}</button>
       <button disabled={!t || !detachable(t.session.kind)} onclick={() => detach(k)}><Icon name="log-out" />{_("Move to a new window")}{@render keys("detach-tab")}</button>
+      <!-- Only the ring's owner shares: your own tabs, and not the kinds that can't be (the tooltip says why). -->
+      {#if t && app.coop.ring?.owner && !coopTab(t)}
+        {@const on = app.coop.shared.includes(t.id)}
+        {@const why = unshareable(t)}
+        <button disabled={!t.id || (!on && !!why)} title={why || null} onclick={() => share(t, !on)}><Icon name="group" />{on ? _("Stop sharing") : _("Share with the ring")}</button>
+      {/if}
       {#if t && inCode(t.session.kind)}
         <button
           disabled={!t.id}
@@ -1634,6 +1734,7 @@
   {/if}
   {#if app.signIn}<SignIn />{/if}
   {#if app.showCredentials}<Credentials onclose={() => (app.showCredentials = false)} />{/if}
+  {#if app.showCoop}<Coop onclose={() => ((app.showCoop = false), refocus())} />{/if}
   {#if asking}
     {@const a = asking}
     {@const names = Object.keys(a.values)}
@@ -1892,6 +1993,14 @@
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* a tab shared with the ring wears a small ring after its name */
+  .tab .shared {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border: 2px solid var(--ok);
+    border-radius: 50%;
   }
   .tab.lifted {
     opacity: 0.5;
