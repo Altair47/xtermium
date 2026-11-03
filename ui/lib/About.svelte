@@ -37,6 +37,7 @@
     {#if about}<span class="weak">{about.build ? _("build {build}", { build: about.build }) : ""} ({KINDS[about.kind]})</span>{/if}
   </div>
   <em>{_("co-created with Claude by Sotirios Roussis")}</em>
+  <div class="weak">{_("Logo, logo animations, colours and design system by")} <button class="link" onclick={() => openUrl("https://github.com/dehawk202")}>dehawk</button></div>
   <div class="row">
     <button onclick={() => openUrl(HOMEPAGE)}><Icon name="world" />xtermium.com</button>
     <button onclick={() => openUrl(GITHUB)}><Icon name="github" />GitHub</button>
