@@ -59,6 +59,15 @@
   ];
   const pageName = (id: string) => _(PAGES.find((p) => p[0] === id)![2]);
 
+  /** Holds a looping preview still while it's scrolled out of the page: the ring, march and rainbow
+   *  outlines turn a custom property, which restyles the page every frame (165 times a second, about
+   *  8% of a core, measured over CDP) even where nobody sees it. */
+  function offscreenStill(el: HTMLElement) {
+    const io = new IntersectionObserver(([e]) => el.classList.toggle("still", !e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }
+
   // ---- search: what each page shows, as it reads there ----
   const FINDS: Record<string, string[]> = {
     general: [
@@ -794,8 +803,9 @@
     <div class="col">
       <label class="check"><input type="checkbox" bind:checked={s.confirm_close} />{_("Ask before closing a tab that is still connected")}</label>
       <label class="check"><input type="checkbox" bind:checked={s.keep_running} />{_("Keep running in the tray when the window is closed, so tabs and background tasks go on")}</label>
-      <label class="check"><input type="checkbox" bind:checked={s.restore_tabs} />{_("Reopen the tabs that were open when xtermium closed")}</label>
       <label class="check"><input type="checkbox" bind:checked={s.status_bar} />{_("Show a status bar under each pane: connection, uptime, encryption and response time")}</label>
+      <!-- last, so the note under the list is read with it -->
+      <label class="check"><input type="checkbox" bind:checked={s.restore_tabs} />{_("Reopen the tabs that were open when xtermium closed")}</label>
     </div>
     <p class="weak">{_("Reopened tabs start new connections; what ran in them before is gone.")}</p>
     <h3>{_("This computer")}</h3>
@@ -1134,7 +1144,7 @@ xtermium close 3`}</pre>
         <input type="color" title={_("Any colour")} value={s.broadcast_outline_color} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
       </div>
       <span>{_("Preview")}</span>
-      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color}>$ uptime</div>
+      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color} {@attach offscreenStill}>$ uptime</div>
     </div>
     <div class="foot"><button onclick={reset}>{_("Reset appearance and terminal settings")}</button></div>
   {:else if page === "terminal"}
@@ -1931,5 +1941,9 @@ xtermium close 3`}</pre>
     font: 13px var(--mono);
     border-radius: 3px;
     background: rgba(var(--deep-rgb), 1);
+  }
+  /* `still` is set by offscreenStill, out of Svelte's sight */
+  .preview:global(.still)::after {
+    animation-play-state: paused;
   }
 </style>

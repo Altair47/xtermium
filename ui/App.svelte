@@ -620,9 +620,19 @@
     if (s && s.rows.length === shape.length && s.cols.every((c, r) => c.length === shape[r])) sizes[shape.join()] = s;
   }
 
+  /** Deletes a saved layout at once (one click on its bin), with Undo for a while, as a session's delete. */
   function deleteLayout(name: string) {
-    app.store.layout = app.store.layout.filter((l) => l.name !== name);
+    const at = app.store.layout.findIndex((l) => l.name === name);
+    if (at < 0) return;
+    const [gone] = app.store.layout.splice(at, 1);
     saveStore();
+    toast(_("Deleted {name}.", { name }), {
+      label: _("Undo"),
+      run: () => {
+        app.store.layout.splice(Math.min(at, app.store.layout.length), 0, gone);
+        saveStore();
+      },
+    });
   }
 
   // ---- workspaces: each with its own sessions, logins and tunnels (Settings > Workspaces) ----
@@ -1355,7 +1365,7 @@
                   aria-label={_("Tab name")}
                   {@attach (el) => (el.focus(), el.select())}
                   onkeydown={(e) => {
-                    if (e.key === "Enter") rename(t, e.currentTarget.value);
+                    if (e.key === "Enter") (e.preventDefault(), rename(t, e.currentTarget.value));
                     if (e.key === "Escape") (e.stopPropagation(), (renaming = null), tick().then(refocus));
                   }}
                   onblur={(e) => rename(t, e.currentTarget.value)}
@@ -1724,7 +1734,7 @@
         placeholder={_("e.g. Prod web tier")}
         aria-label={_("Layout name")}
         {@attach (el) => el.focus()}
-        onkeydown={(e) => e.key === "Enter" && saveLayout(naming ?? "")}
+        onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), saveLayout(naming ?? ""))}
       />
       <datalist id="layout-names">{#each app.store.layout as l (l.name)}<option value={l.name}></option>{/each}</datalist>
       {#if app.store.layout.some((l) => l.name === naming?.trim())}<p class="weak">{_("Saving replaces the layout with this name.")}</p>{/if}
@@ -1818,13 +1828,15 @@
     {@const a = asking}
     {@const names = Object.keys(a.values)}
     <Modal title={_("Run {name}", { name: a.snippet.name })} width={377} onclose={() => ((asking = null), refocus())}>
+      <!-- Each Enter here and in the dialogs below stops at its field: the keyboard is back in the
+           terminal before the key's keypress, which would land there (and run a snippet that isn't meant to). -->
       <div class="form">
         {#each names as n, i (n)}
           <span>{n}</span>
           <input
             bind:value={a.values[n]}
             {@attach (el) => void (i === 0 && el.focus())}
-            onkeydown={(e) => e.key === "Enter" && i === names.length - 1 && runSnippet(a.snippet, $state.snapshot(a.values))}
+            onkeydown={(e) => e.key === "Enter" && i === names.length - 1 && (e.preventDefault(), runSnippet(a.snippet, $state.snapshot(a.values)))}
           />
         {/each}
       </div>
@@ -1872,7 +1884,7 @@
     <Modal title={_(p.title)} width={377} onclose={() => answer(false)}>
       <div class="prompt">{p.text}</div>
       {#if p.input !== null}
-        <input type={p.input ? "password" : "text"} bind:value={p.answer} {@attach (el) => el.focus()} onkeydown={(e) => e.key === "Enter" && answer(true)} />
+        <input type={p.input ? "password" : "text"} bind:value={p.answer} {@attach (el) => el.focus()} onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), answer(true))} />
         {#if p.input && p.title === "Password"}
           <label class="check"><input type="checkbox" bind:checked={p.remember} />{_("Remember the password")}</label>
         {/if}
@@ -1948,6 +1960,8 @@
     background: rgba(var(--deep-rgb), 1);
     font-size: var(--t-s);
     color: var(--weak);
+    /* a message arriving at the foot of the sidebar: noticed, without a jolt */
+    animation: fade-in 0.16s var(--ease-out);
   }
   .status :is(span, .link) {
     display: block;
@@ -2356,12 +2370,13 @@
     max-width: 62ch;
     text-wrap: pretty; /* no last line of one word */
   }
-  /* the website's prompt, waiting for you: the amber sigil and a block cursor */
-  .prompt {
+  /* the website's prompt, waiting for you: the amber sigil and a block cursor (only the start
+     screen's: a host-key question is a `.prompt` too, and must read as text, not as muted mono) */
+  .intro .prompt {
     font-family: var(--mono);
     color: var(--weak);
   }
-  .prompt b {
+  .intro .prompt b {
     font-weight: 500;
     color: var(--gold);
   }
@@ -2381,7 +2396,7 @@
   .logo {
     width: min(377px, 100%);
     margin-block-end: 8px;
-    animation: float-in 0.4s var(--ease-out) both;
+    animation: float-in 0.2s var(--ease-out) both;
   }
   .lead {
     font-family: var(--short);
@@ -2433,8 +2448,13 @@
     text-align: start;
   }
 
-  .note {
+  /* A dialog's paragraphs are blocks of its body, set apart by its 8px gap as in every other
+     dialog; the browser's own 13px margins doubled the room around them. */
+  p {
     margin: 0;
+  }
+  .tasks-list .none {
+    margin: 5px 8px;
   }
   .sides {
     display: grid;
@@ -2462,7 +2482,7 @@
     margin: 0;
     overflow-wrap: anywhere;
   }
-  .prompt {
+  div.prompt {
     white-space: pre-line;
     user-select: text;
     word-break: break-word;

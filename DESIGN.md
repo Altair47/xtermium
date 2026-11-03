@@ -541,7 +541,8 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   search opens out of the magnifier; Enter closes it and puts the keyboard on the hit's row in
   the tree, its folders opened (a second Enter opens the session); Escape gives the tree back the
   keyboard.
-- **Sidebar foot:** the status pill (an inset well, label size in `weak`), then Settings and
+- **Sidebar foot:** the status pill (an inset well, label size in `weak`, fading in over 0.16s
+  when a message arrives), then Settings and
   the account, in that order, at the foot's trailing end. The account is a flat icon button; signed
   in, it shows an 18px round avatar with the first letter of the name, ringed 2px in `error` when
   sync fails or the quota is full and in `warn` when it is nearly full. Its menu opens upwards,
@@ -630,7 +631,8 @@ Every terminal that receives broadcast keystrokes gets a 2px inset outline in a 
 (`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
 ring, march, rainbow, off). While broadcast is on, the focus ring around the pane you type in
 turns to a 2px dashed ring in the text colour (`fg`) and steps 2px further out, so it never reads
-as one band with an outline in the same colour. All animated styles stop under reduced motion.
+as one band with an outline in the same colour. All animated styles stop under reduced motion, and
+the preview in Settings › Appearance holds still while it is scrolled out of view.
 
 ### Co-op Ring and Pointers
 A tab shared in a Terminal Co-op ring wears a small ring (8px, 2px stroke in `ok`) after its name;

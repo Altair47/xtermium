@@ -140,8 +140,8 @@
             <strong>{c.name}</strong>
             <span class="weak">{c.user || _("no user")}{c.password ? ` · ${_("password")}` : ""}{c.key ? ` · ${_("key")}` : ""}{c.gateway ? ` · ${_("via {host}", { host: c.gateway.host })}` : ""} · {_("used by {n} sessions", { n })}</span>
           </div>
-          <button class="flat icon-only" title={_("Edit")} onclick={() => ((showPassword = false), (editing = { index: i, c: $state.snapshot(c) }))}><Icon name="edit" /></button>
-          <button class="flat icon-only" title={n ? _("Delete (sessions using it go back to their own username and password)") : _("Delete")} onclick={() => remove(i)}><Icon name="trash" /></button>
+          <button class="flat icon-only" title={_("Edit")} aria-label={_("Edit {name}", { name: c.name })} onclick={() => ((showPassword = false), (editing = { index: i, c: $state.snapshot(c) }))}><Icon name="edit" /></button>
+          <button class="flat icon-only" title={n ? _("Delete (sessions using it go back to their own username and password)") : _("Delete")} aria-label={_("Delete {name}", { name: c.name })} onclick={() => remove(i)}><Icon name="trash" /></button>
         </div>
       {:else}
         <p class="weak">{app.store.credential.length ? _("No login matches.") : _("No shared logins yet.")}</p>
