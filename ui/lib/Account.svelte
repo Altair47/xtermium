@@ -18,6 +18,10 @@
   /** The storage's state wears the avatar's ring: a warning when nearly full, an error when full. */
   const room = $derived(level(app.sync.quota));
   let menu = $state<{ x: number; bottom: number } | null>(null);
+  /** The account's picture, so the avatar is there from the start; its first letter when it has none or it doesn't load. */
+  $effect(() => void (signedIn && loadAccount()));
+  let failed = $state("");
+  const image = $derived(app.sync.account?.image || "");
 
   function toggle(e: MouseEvent) {
     e.stopPropagation();
@@ -39,7 +43,13 @@
 {#if signedIn || s.account_button}
   <button class="flat icon-only account" class:on={!!menu} title={signedIn ? _("Signed in as {who}", { who }) : _("Account: not signed in")} aria-label={_("Account")} onclick={toggle}>
     {#if signedIn}
-      <span class="avatar" class:error={!!app.sync.error || room === "full"} class:warn={room === "nearly"}>{(who || "?")[0].toUpperCase()}</span>
+      <span class="avatar" class:error={!!app.sync.error || room === "full"} class:warn={room === "nearly"}>
+        {#if image && image !== failed}
+          <img src={image} alt="" onerror={() => (failed = image)} />
+        {:else}
+          {(who || "?")[0].toUpperCase()}
+        {/if}
+      </span>
     {:else}
       <Icon name="user-circle" size={16} />
     {/if}
@@ -88,10 +98,16 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
+    overflow: hidden;
     font-size: var(--t-s);
     font-weight: 700;
     background: var(--gold);
     color: var(--gold-ink);
+  }
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .avatar.error {
     box-shadow: 0 0 0 2px var(--error);
