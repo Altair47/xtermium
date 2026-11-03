@@ -143,6 +143,8 @@ type SyncReply = { join: boolean; conflict: { local: SyncSide; remote: SyncSide 
 
 /** Where Pro is bought: the page signs the person in first, so the purchase lands on the account. */
 export const CHECKOUT = "https://account.xtermium.com/checkout/monthly";
+/** The account page: name, picture, linked sign-ins, devices. */
+export const ACCOUNT = "https://account.xtermium.com/account";
 
 /** A sync the server put off (`later`): tried again on its own, waiting twice as long each time
  *  from 30 s up to 30 min, for a day. "Sync now" or a success starts over. */
@@ -208,11 +210,15 @@ function troubled(t: Trouble) {
   }
 }
 
-/** Asks the server who is signed in and whether the account has Pro; keeps what it last said on a failure. */
+/** Asks the server who is signed in and whether the account has Pro; keeps what it last said on a
+ *  failure. Pro is also remembered in the settings, so it holds at start-up and offline. */
 export async function loadAccount() {
   const token = app.settings?.sync_token;
   if (!token) return;
-  app.sync.account = await invoke<Account>("account_info", { token }).catch(() => app.sync.account);
+  const account = await invoke<Account>("account_info", { token }).catch(() => null);
+  if (!account) return;
+  app.sync.account = account;
+  app.settings!.sync_pro = !!account.pro.active;
 }
 
 /** Opens the subscription's portal (cancel, change the card, invoices) in the browser. */
@@ -226,7 +232,7 @@ export async function openPortal() {
 export function signOut(everywhere = false) {
   const s = app.settings!;
   const token = s.sync_token;
-  Object.assign(s, { sync: false, sync_token: "", sync_email: "" });
+  Object.assign(s, { sync: false, sync_token: "", sync_email: "", sync_pro: false });
   Object.assign(app.sync, { last: null, error: "", join: false, conflict: null, pass: "", quota: null, account: null, needsPro: false });
   clearTimeout(retry.timer);
   // The server forgets the token too, if it can be reached; here it's gone either way.

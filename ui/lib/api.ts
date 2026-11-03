@@ -163,12 +163,16 @@ export type Settings = {
   sync: boolean;
   sync_token: string;
   sync_email: string;
+  /** The account had Pro when the server last answered (`loadAccount`); kept so it holds offline. */
+  sync_pro: boolean;
   /** What else syncs, each only when ticked (Settings › Account and sync): the settings, the three background files, the saved logins. */
   sync_settings: boolean;
   sync_backgrounds: boolean;
   sync_logins: boolean;
   /** The account button in the sidebar; always shown while signed in. */
   account_button: boolean;
+  /** The Terminal Co-op button in the sidebar; always shown with Pro or while a ring is on. */
+  coop_button: boolean;
   confirm_close: boolean;
   auto_reconnect: boolean;
   restore_tabs: boolean;

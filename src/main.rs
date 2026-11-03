@@ -832,6 +832,7 @@ fn keep_device(to: &mut Settings, from: &Settings) {
     to.sync = from.sync;
     to.sync_token = from.sync_token.clone();
     to.sync_email = from.sync_email.clone();
+    to.sync_pro = from.sync_pro;
     (to.sync_settings, to.sync_backgrounds, to.sync_logins) = (from.sync_settings, from.sync_backgrounds, from.sync_logins);
     to.automation_token = from.automation_token.clone();
 }

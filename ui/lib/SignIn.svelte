@@ -43,7 +43,7 @@
   async function signedIn(token: string) {
     const s = app.settings!;
     const account = await invoke<Account>("account_info", { token });
-    Object.assign(s, { sync: true, sync_token: token, sync_email: account.email, account_button: true });
+    Object.assign(s, { sync: true, sync_token: token, sync_email: account.email, sync_pro: !!account.pro.active, account_button: true });
     app.sync.account = account;
     // The backend syncs with the settings it has: hand them over before the first sync.
     await invoke("save_settings", { settings: $state.snapshot(s) });

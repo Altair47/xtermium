@@ -126,6 +126,9 @@ pub struct Settings {
     pub sync: bool,
     pub sync_token: String,
     pub sync_email: String,
+    /// Whether the account had Pro the last time the server answered, so what depends on Pro
+    /// (the Co-op button staying in the sidebar) holds at start-up and offline.
+    pub sync_pro: bool,
     /// What else syncs, each only when ticked (Settings › Account and sync): this file's own copy
     /// (look and defaults, `for_cloud`), the three background files, and the saved logins.
     pub sync_settings: bool,
@@ -133,6 +136,8 @@ pub struct Settings {
     pub sync_logins: bool,
     /// The account button at the bottom of the sidebar; always shown while signed in.
     pub account_button: bool,
+    /// The Terminal Co-op button at the bottom of the sidebar; always shown with Pro or while a ring is on.
+    pub coop_button: bool,
     /// Ask before closing a tab whose connection is still up.
     pub confirm_close: bool,
     /// Reconnect SSH tabs whose connection dropped, a few times with growing waits.
@@ -319,10 +324,12 @@ impl Default for Settings {
             sync: false,
             sync_token: String::new(),
             sync_email: String::new(),
+            sync_pro: false,
             sync_settings: false,
             sync_backgrounds: false,
             sync_logins: false,
-            account_button: false,
+            account_button: true,
+            coop_button: true,
             confirm_close: true,
             auto_reconnect: true,
             restore_tabs: false,
@@ -395,6 +402,7 @@ impl Settings {
         self.sync = from.sync;
         self.sync_token = from.sync_token.clone();
         self.sync_email = from.sync_email.clone();
+        self.sync_pro = from.sync_pro;
         (self.sync_settings, self.sync_backgrounds, self.sync_logins) = (from.sync_settings, from.sync_backgrounds, from.sync_logins);
         self.automation = from.automation;
         self.automation_port = from.automation_port;
