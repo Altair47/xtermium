@@ -32,7 +32,7 @@
   import Quota from "./Quota.svelte";
   import { CATALOGUE, CATALOGUE_RAW, catalogueName, parseScheme } from "./schemes";
   import { _, LOCALES, N_, nativeName, pick } from "./i18n.svelte";
-  import { boot, confirmIt, copyText, loadLock, lock, shortcut, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
+  import { ACCOUNT, boot, confirmIt, copyText, loadLock, lock, shortcut, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
   import { passkeyMake, passkeysWork } from "./passkey";
 
   /** `onrun`: runs a command in a new local shell (the MCP page's Run buttons; App.svelte). */
@@ -50,7 +50,6 @@
     ["workspaces", "cluster", N_("Workspaces")],
     ["logins", "log-in", N_("Saved logins")],
     ["keys", "key", N_("SSH keys")],
-    ["browser", "globe", N_("Browser")],
     ["backup", "backup", N_("Import and export")],
     ["sync", "user-circle", N_("Account and sync")],
     ["security", "lock-alt", N_("Security")],
@@ -77,6 +76,10 @@
       N_("Sessions"),
       N_("Open a session with one click (instead of a double-click)"),
       N_("Remember which folders are open in the sidebar"),
+      N_("Browser"),
+      N_("Open Browser sessions"),
+      N_("External: in your default web browser"),
+      N_("Embedded: inside an xtermium tab"),
     ],
     appearance: [
       N_("Theme"),
@@ -133,14 +136,15 @@
     workspaces: [N_("Default workspace"), N_("New workspace"), N_("Sync")],
     logins: [N_("Shared logins")],
     keys: [N_("New key"), N_("Create key"), N_("Public key")],
-    browser: [N_("Open Browser sessions"), N_("External: in your default web browser"), N_("Embedded: inside an xtermium tab")],
     backup: [N_("Import sessions…"), N_("Export sessions…"), N_("MobaXterm"), N_("Restore points"), N_("Take a restore point"), N_("Back up everything"), N_("Restore everything")],
     sync: [
       N_("Account"),
       N_("Sign in"),
       N_("Create an account"),
       N_("Sign out"),
+      N_("Manage account"),
       N_("Show the account button in the sidebar"),
+      N_("Show the Terminal Co-op button in the sidebar"),
       N_("What syncs"),
       N_("Settings (look and defaults)"),
       N_("Backgrounds"),
@@ -621,11 +625,29 @@
   }
 
   // ---- SSH keys: the key pairs in ~/.ssh (src/sshkeys.rs) ----
+  /** SSH key pairs and trusted keys read five to a page. */
+  const PER_PAGE = 5;
   type SshKey = { name: string; kind: string; comment: string; fingerprint: string; public: string; encrypted: boolean };
   let sshKeys = $state<{ dir: string; keys: SshKey[]; comment: string } | null>(null);
   let newKey = $state({ kind: "ed25519", name: "", comment: "", pass: "", show: false, busy: false, error: "" });
   let keyDeleting = $state<string | null>(null);
   const loadKeys = () => invoke<typeof sshKeys>("ssh_keys").then((k) => (sshKeys = k), (e) => (newKey.error = String(e)));
+  /** Fuzzy search over name, comment and fingerprint, five to a page. */
+  let sshQuery = $state("");
+  let sshPage = $state(0);
+  const sshRows = $derived.by(() => {
+    const all = sshKeys?.keys ?? [];
+    if (!sshQuery.trim()) return all;
+    return all
+      .map((k) => [k, score(sshQuery, `${k.name} ${k.comment} ${k.fingerprint}`)] as const)
+      .filter(([, sc]) => sc >= 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => k);
+  });
+  const sshPages = $derived(Math.max(1, Math.ceil(sshRows.length / PER_PAGE)));
+  $effect(() => {
+    if (sshPage >= sshPages) sshPage = sshPages - 1; // the last key of the last page was deleted
+  });
   $effect(() => {
     if (page === "keys") loadKeys();
   });
@@ -690,7 +712,6 @@
     known = await invoke<Known>("known_keys");
   }
   /** Trusted keys: fuzzy search over host and key, five to a page. */
-  const PER_PAGE = 5;
   let keyQuery = $state("");
   let keyPage = $state(0);
   const keyRows = $derived.by(() => {
@@ -791,6 +812,19 @@
       {/if}
     </div>
     {#if explorerMenu}<p class="weak">{_("On Windows 11 it is under Show more options. It starts this copy of xtermium.")}</p>{/if}
+    <h3>{_("Browser")}</h3>
+    <div class="form">
+      <span>{_("Open Browser sessions")}</span>
+      <div class="col">
+        <label class="check"><input type="radio" bind:group={s.web} value="External" />{_("External: in your default web browser")}</label>
+        <label class="check"><input type="radio" bind:group={s.web} value="Embedded" />{_("Embedded: inside an xtermium tab")}</label>
+        <span class="weak">
+          {_("Tabs use your system's browser engine ({engine}). Each website session keeps its own cookies and sign-ins, even after a restart; BMC consoles keep nothing once closed. xtermium keeps open pages from timing out, and websites can't reach xtermium itself.", {
+            engine: app.os === "windows" ? "Edge WebView2" : app.os === "macos" ? "WebKit" : "WebKitGTK",
+          })}
+        </span>
+      </div>
+    </div>
     {#if s.quiet_hints.length}
       <div><button onclick={() => (s.quiet_hints = [])}>{_("Show the tips I turned off again ({n})", { n: s.quiet_hints.length })}</button></div>
     {/if}
@@ -930,6 +964,7 @@ xtermium close 3`}</pre>
     {#if s.sync_token}
       <p class="row">
         <Icon name="check-circle" color="var(--ok)" /><span class="grow">{_("Signed in as {who}. Sync is on.", { who: s.sync_email || _("your account") })}</span>
+        <button onclick={() => openUrl(ACCOUNT).catch((e) => (app.status = String(e)))}><Icon name="user-circle" />{_("Manage account")}</button>
         <button onclick={() => signOut()}><Icon name="log-out" />{_("Sign out")}</button>
       </p>
       <p class="weak">{_("Signing out turns sync off. This device keeps its sessions.")}</p>
@@ -942,6 +977,11 @@ xtermium close 3`}</pre>
     <label class="check" title={s.sync_token ? _("Always shown while signed in") : ""}>
       <input type="checkbox" checked={s.account_button || !!s.sync_token} disabled={!!s.sync_token} onchange={(e) => (s.account_button = (e.target as HTMLInputElement).checked)} />{_("Show the account button in the sidebar")}
     </label>
+    {#if s.sync_token}
+      <label class="check" title={s.sync_pro ? _("Always shown with Pro") : ""}>
+        <input type="checkbox" checked={s.coop_button || s.sync_pro} disabled={s.sync_pro} onchange={(e) => (s.coop_button = (e.target as HTMLInputElement).checked)} />{_("Show the Terminal Co-op button in the sidebar")}
+      </label>
+    {/if}
     <p class="weak">
       {_("Your data is encrypted on this computer before it leaves it, so the sync server stores data it can't read. Syncing happens when xtermium starts and when you click Sync now; if both sides changed, you choose which copy to keep.")}
     </p>
@@ -1303,8 +1343,10 @@ xtermium close 3`}</pre>
     {:else if !sshKeys.keys.length}
       <p class="weak">{_("None yet.")}</p>
     {:else}
+      <input type="search" placeholder={_("Search keys by name, comment or fingerprint")} aria-label={_("Search keys")} bind:value={sshQuery} oninput={() => (sshPage = 0)} />
+      {#if !sshRows.length}<p class="weak">{_("No key matches.")}</p>{/if}
       <div class="keys">
-        {#each sshKeys.keys as k (k.name)}
+        {#each sshRows.slice(sshPage * PER_PAGE, (sshPage + 1) * PER_PAGE) as k (k.name)}
           <div class="key ssh-key">
             <div class="row">
               <Icon name="key" />
@@ -1319,6 +1361,13 @@ xtermium close 3`}</pre>
           </div>
         {/each}
       </div>
+      {#if sshPages > 1}
+        <div class="row pager">
+          <button class="flat" disabled={sshPage === 0} onclick={() => sshPage--}>{_("Previous")}</button>
+          <span class="weak">{_("Page {n} of {total} · {keys} keys", { n: sshPage + 1, total: sshPages, keys: sshRows.length })}</span>
+          <button class="flat" disabled={sshPage >= sshPages - 1} onclick={() => sshPage++}>{_("Next")}</button>
+        </div>
+      {/if}
     {/if}
     <h3>{_("New key")}</h3>
     <div class="form">
@@ -1344,19 +1393,6 @@ xtermium close 3`}</pre>
     {#if newKey.error}<p class="error">{newKey.error}</p>{/if}
     <div class="row">
       <button class="primary" disabled={newKey.busy} onclick={createKey}>{#if newKey.busy}<Icon name="loader-alt" spin />{:else}<Icon name="plus" />{/if}{_("Create key")}</button>
-    </div>
-  {:else if page === "browser"}
-    <div class="form">
-      <span>{_("Open Browser sessions")}</span>
-      <div class="col">
-        <label class="check"><input type="radio" bind:group={s.web} value="External" />{_("External: in your default web browser")}</label>
-        <label class="check"><input type="radio" bind:group={s.web} value="Embedded" />{_("Embedded: inside an xtermium tab")}</label>
-        <span class="weak">
-          {_("Tabs use your system's browser engine ({engine}). Each website session keeps its own cookies and sign-ins, even after a restart; BMC consoles keep nothing once closed. xtermium keeps open pages from timing out, and websites can't reach xtermium itself.", {
-            engine: app.os === "windows" ? "Edge WebView2" : app.os === "macos" ? "WebKit" : "WebKitGTK",
-          })}
-        </span>
-      </div>
     </div>
   {:else if page === "defaults"}
     <h3>{_("Local shell")}</h3>

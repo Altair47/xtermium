@@ -169,7 +169,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 - **Agents in a tab.** Save AI agents as sessions, pick each one's folder and how often it asks first. With the MCP server on, most get xtermium's tools without setup.
 - **What they never see:** passwords and agent tabs. While xtermium is locked, every tool answers that it's locked.
 
-![Claude Code in an xtermium tab answering that web-01 is using the CPU and db-01 is idle, with a table of the processes; beside it, web-01's terminal shows the ps command it ran](https://xtermium.com/assets/shots/agent.webp)
+![Claude Code in an xtermium tab answering that web-01 is using the CPU and db-01 is idle, with a table of the processes; beside it, web-01's terminal shows the output of the ps command it ran](https://xtermium.com/assets/shots/agent.webp)
 
 <details>
 <summary>Automation details</summary>

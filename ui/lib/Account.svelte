@@ -6,7 +6,7 @@
   import { menu as menuKeys } from "./menu";
   import Quota, { level } from "./Quota.svelte";
   import { openUrl } from "./api";
-  import { app, CHECKOUT, loadAccount, openPortal, signOut, syncNow, tell } from "./state.svelte";
+  import { ACCOUNT, app, CHECKOUT, loadAccount, openPortal, signOut, syncNow, tell } from "./state.svelte";
 
   let { onsettings }: { onsettings: () => void } = $props();
 
@@ -77,6 +77,7 @@
       {:else if app.sync.account?.pro.active}
         <button onclick={() => openPortal().catch((e) => (app.status = String(e)))}><Icon name="world" />{_("Manage the subscription")}</button>
       {/if}
+      <button onclick={() => openUrl(ACCOUNT).catch((e) => (app.status = String(e)))}><Icon name="user-circle" />{_("Manage account")}</button>
       <button onclick={onsettings}><Icon name="cog" />{_("Account and sync settings")}</button>
       <button onclick={() => signOut()}><Icon name="log-out" />{_("Sign out")}</button>
       <button onclick={() => signOut(true)}>{_("Sign out everywhere")}</button>

@@ -1186,7 +1186,7 @@
   {#if lock.info && (lock.info.password || lock.info.pin || lock.info.passkey || lock.info.biometrics)}
     <button class="flat icon-only" onclick={() => run("lock")} title={tip(_("Lock xtermium"), "lock")} aria-label={_("Lock xtermium")}><Icon name="lock-alt" size={16} /></button>
   {/if}
-  {#if app.settings?.sync_token || app.coop.ring}
+  {#if app.coop.ring || (app.settings?.sync_token && (app.settings.coop_button || app.settings.sync_pro))}
     <button class="flat icon-only" class:on={!!app.coop.ring} onclick={() => run("coop")} title={tip(_("Terminal Co-op"), "coop")} aria-label={_("Terminal Co-op")}><Icon name="group" size={16} /></button>
   {/if}
   <Account onsettings={() => openSettings("sync")} />
