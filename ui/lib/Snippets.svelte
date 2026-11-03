@@ -6,7 +6,7 @@
   import type { Snippet } from "./api";
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
-  import { app, saveStore } from "./state.svelte";
+  import { app, saveStore, toast } from "./state.svelte";
 
   let {
     target,
@@ -48,9 +48,17 @@
     editing = null;
   }
 
+  /** Deletes a snippet at once, with Undo for a while, as a session's delete. */
   function remove(i: number) {
-    app.store.snippet.splice(i, 1);
+    const [gone] = app.store.snippet.splice(i, 1);
     saveStore();
+    toast(_("Deleted {name}.", { name: gone.name || gone.text.split("\n")[0] }), {
+      label: _("Undo"),
+      run: () => {
+        app.store.snippet.splice(Math.min(i, app.store.snippet.length), 0, gone);
+        saveStore();
+      },
+    });
   }
 </script>
 
@@ -99,8 +107,8 @@
           <button class="primary" disabled={!target} title={placeholders(s.text).length ? _("Asks for its values, then runs") : _("Type it into the terminal")} onclick={() => onrun(s)}>
             <Icon name="play" />{_("Run")}
           </button>
-          <button class="flat icon-only" title={_("Edit")} onclick={() => (editing = { index: i, s: $state.snapshot(s) })}><Icon name="edit" /></button>
-          <button class="flat icon-only" title={_("Delete")} onclick={() => remove(i)}><Icon name="trash" /></button>
+          <button class="flat icon-only" title={_("Edit")} aria-label={_("Edit {name}", { name: s.name || s.text })} onclick={() => (editing = { index: i, s: $state.snapshot(s) })}><Icon name="edit" /></button>
+          <button class="flat icon-only" title={_("Delete")} aria-label={_("Delete {name}", { name: s.name || s.text })} onclick={() => remove(i)}><Icon name="trash" /></button>
         </div>
       {:else}
         <p class="weak none">{app.store.snippet.length ? _("Nothing matches.") : _("No snippets yet. Save the commands you type often.")}</p>

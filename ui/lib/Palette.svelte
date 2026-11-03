@@ -89,6 +89,9 @@
       sel = Math.max(0, Math.min(shown.length - 1, sel + (e.key === "ArrowDown" ? 1 : -1)));
       requestAnimationFrame(() => list.querySelector(".on")?.scrollIntoView({ block: "nearest" }));
     } else if (e.key === "Enter") {
+      // The keyboard goes back to the terminal before this key's keypress: without this, an Enter
+      // would follow a snippet that isn't meant to run (or any command typed there).
+      e.preventDefault();
       pick(shown[sel]);
     } else if (e.key === "Escape") {
       onclose();

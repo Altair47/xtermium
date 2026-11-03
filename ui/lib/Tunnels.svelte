@@ -7,7 +7,7 @@
   import Flow from "./Flow.svelte";
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
-  import { app, saveStore } from "./state.svelte";
+  import { app, saveStore, toast } from "./state.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -70,9 +70,17 @@
     [draft, editing] = [blank(), null];
   }
 
+  /** Deletes a stopped tunnel at once, with Undo for a while, as a session's delete. */
   function remove(i: number) {
-    app.store.tunnel.splice(i, 1);
+    const [gone] = app.store.tunnel.splice(i, 1);
     saveStore();
+    toast(_("Deleted {name}.", { name: gone.name }), {
+      label: _("Undo"),
+      run: () => {
+        app.store.tunnel.splice(Math.min(i, app.store.tunnel.length), 0, gone);
+        saveStore();
+      },
+    });
   }
 </script>
 
@@ -97,9 +105,9 @@
         {:else}
           <button onclick={() => start(t.name)}><Icon name="play" />{_("Start")}</button>
         {/if}
-        <button class="flat icon-only" title={s?.live ? _("Stop the tunnel to edit it") : _("Edit")} onclick={() => edit(i)}><Icon name="edit" /></button>
+        <button class="flat icon-only" title={s?.live ? _("Stop the tunnel to edit it") : _("Edit")} aria-label={_("Edit {name}", { name: t.name })} onclick={() => edit(i)}><Icon name="edit" /></button>
         {#if !s?.live}
-          <button class="flat icon-only" title={_("Delete")} onclick={() => remove(i)}><Icon name="trash" /></button>
+          <button class="flat icon-only" title={_("Delete")} aria-label={_("Delete {name}", { name: t.name })} onclick={() => remove(i)}><Icon name="trash" /></button>
         {/if}
       </div>
       <Flow {t} stats={s} />
@@ -108,7 +116,8 @@
 
   <details bind:open={formOpen}>
     <summary><strong>{editing === null ? _("New tunnel") : _("Edit {name}", { name: app.store.tunnel[editing]?.name ?? "" })}</strong></summary>
-    <div class="preview"><Flow t={draft} demo /></div>
+    <!-- Only while the form is open: the preview animates every frame, and a closed <details> still mounts it. -->
+    {#if formOpen}<div class="preview"><Flow t={draft} demo /></div>{/if}
     <div class="form">
       <span>{_("Name")}</span><input bind:value={draft.name} />
       <span>{_("Type")}</span>
