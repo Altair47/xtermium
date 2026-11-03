@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACTIONS, bindings, cell, chord, even, fill, neighbour, nudge, ownWindow, placeholders, quickConnect, resize, score, tile } from "./actions.ts";
+import { ACTIONS, bindings, cell, chord, even, fill, neighbour, nudge, ownWindow, placeholders, quickConnect, resize, score, tile, wheelAction, wheelChord } from "./actions.ts";
 
 const key = (code: string, key: string, mods: Partial<KeyboardEvent> = {}) =>
   chord({ code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods } as KeyboardEvent);
@@ -13,6 +13,20 @@ test("chords name keys by position, modifiers in a fixed order", () => {
   assert.equal(key("Comma", ",", { ctrlKey: true }), "Ctrl+,");
   assert.equal(key("Tab", "Tab", { ctrlKey: true }), "Ctrl+Tab");
   assert.equal(key("ShiftLeft", "Shift", { shiftKey: true }), "");
+});
+
+const wheel = (mods: Partial<WheelEvent> = {}) => ({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods }) as WheelEvent;
+
+test("a wheel turn needs a modifier to be a chord, and Ctrl+wheel zooms the tab by default", () => {
+  assert.equal(wheelChord(wheel()), "", "a plain wheel scrolls and never binds");
+  assert.equal(wheelChord(wheel({ ctrlKey: true })), "Ctrl+Wheel");
+  assert.equal(wheelChord(wheel({ metaKey: true, shiftKey: true, ctrlKey: true, altKey: true })), "Ctrl+Alt+Shift+Meta+Wheel", "modifiers in chord()'s order");
+  assert.equal(wheelAction(wheel({ ctrlKey: true }), {}), "tab");
+  assert.equal(wheelAction(wheel({ ctrlKey: true, shiftKey: true }), {}), null, "every terminal's zoom is off until bound");
+  assert.equal(wheelAction(wheel({ ctrlKey: true, shiftKey: true }), { "wheel-zoom-all": "Ctrl+Shift+Wheel" }), "all");
+  assert.equal(wheelAction(wheel({ ctrlKey: true }), { "wheel-zoom-tab": "" }), null, "cleared");
+  assert.equal(wheelAction(wheel(), { "wheel-zoom-tab": "Wheel" }), null, "a bare wheel stays the terminal's");
+  assert.equal(bindings({}).get("Ctrl+Wheel"), undefined, "no key press runs a wheel action");
 });
 
 test("default shortcuts don't collide, and overrides apply", () => {
