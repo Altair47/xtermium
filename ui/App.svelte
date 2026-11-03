@@ -1102,6 +1102,10 @@
       case "coop":
         app.showCoop = !app.showCoop;
         break;
+      case "sync":
+        if (app.settings?.sync_token) syncNow().catch((e) => (app.status = _("Sync: {error}", { error: String(e) })));
+        else tell(_("Sign in first: Settings › Account and sync."), "sync");
+        break;
       case "import":
         showImport = true;
         break;

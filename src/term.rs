@@ -1337,6 +1337,8 @@ impl Inner {
         let pal = self.term.palette();
         let default_bg = rgb32(pal.background);
         let sel = sel_range(self.sel, self.block);
+        let sel_fg = rgb32(if pal.selection_fg.3 == 0.0 { pal.foreground } else { pal.selection_fg });
+        let sel_bg = rgb32(pal.selection_bg);
         let screen = self.term.screen();
         // Find-bar matches on these rows, and whether each is the current one.
         let (first, last) = (screen.phys_to_stable_row_index(start), screen.phys_to_stable_row_index(total.max(1) - 1));
@@ -1442,6 +1444,15 @@ impl Inner {
                     continue;
                 }
                 runs.push(Run(x as u16, w as u16, t.to_string(), fg, bg, flags));
+            }
+            // A selected row is lit to its right edge, past the last cell the program wrote (the
+            // blanks and the line break are part of what is selected), not only under its text.
+            if let Some(s) = sel {
+                let from = runs.last().map_or(0, |r| (r.0 + r.1) as usize).max(s.row_start(stable));
+                let to = s.row_end(stable, cols);
+                if to > from {
+                    runs.push(Run(from as u16, (to - from) as u16, " ".repeat(to - from), sel_fg, Some(sel_bg), 0));
+                }
             }
             lines.push(runs);
         }
@@ -1687,6 +1698,23 @@ impl SelRange {
             row >= self.a.0 && row <= self.b.0 && col >= self.a.1 && col <= self.b.1
         } else {
             (row, col) >= self.a && (row, col) <= self.b
+        }
+    }
+
+    /// The first selected column of `row` (0 when the row is wholly inside, or not selected).
+    fn row_start(&self, row: StableRowIndex) -> usize {
+        if self.block || row == self.a.0 { self.a.1 } else { 0 }
+    }
+
+    /// One past the last selected column of `row` on a `cols`-wide screen: the right edge for a
+    /// row inside the selection, the end cell on its last row, 0 for a row outside it.
+    fn row_end(&self, row: StableRowIndex, cols: usize) -> usize {
+        if row < self.a.0 || row > self.b.0 {
+            0
+        } else if self.block || row == self.b.0 {
+            (self.b.1 + 1).min(cols)
+        } else {
+            cols
         }
     }
 }
@@ -2551,6 +2579,23 @@ mod tests {
         let (url, span) = link_at(&i.term, (r2, 2)).unwrap();
         assert_eq!((url.as_str(), span), ("https://osc.example/", ((r2, 0), (r2, 7))));
         assert!(link_at(&i.term, (r2, 9)).is_none());
+    }
+
+    /// A selected row is lit to the right edge, and the last row up to the end cell.
+    #[test]
+    fn selection_fills_rows_to_the_edge() {
+        let mut i = inner(20, 4, None);
+        i.term.advance_bytes("ab\r\ncdef\r\n");
+        let (r0, r1) = (i.term.screen().phys_to_stable_row_index(0), i.term.screen().phys_to_stable_row_index(1));
+        i.sel = Some(((r0, 1), (r1, 2)));
+        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        let (fg, bg) = (rgb32(i.term.palette().foreground), rgb32(i.term.palette().selection_bg));
+        assert!(f.contains(&format!("[2,18,\"{}\",{fg},{bg},0]", " ".repeat(18))), "the first row's blanks past the text: {f}");
+        assert!(!f.contains("[3,17,"), "the last row stops at the end cell: {f}");
+        assert!(f.contains(&format!("[0,3,\"cde\",{fg},{bg},0]")) && f.contains("[3,1,"), "the last row's selected text, then the rest: {f}");
+        i.sel = Some(((r0, 5), (r1, 0)));
+        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        assert!(f.contains(&format!("[5,15,\"{}\",{fg},{bg},0]", " ".repeat(15))), "a selection that starts past the text: {f}");
     }
 
     /// Double click takes a word (paths and hosts whole, wide characters included), triple click
