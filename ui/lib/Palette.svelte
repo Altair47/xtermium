@@ -3,7 +3,7 @@
   // ("me@host:2222", "rdp 192.0.2.19") offers to connect to it directly.
   import { _ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { ACTIONS, keysOf, quickConnect, score } from "./actions";
+  import { ACTIONS, isWheel, keysOf, quickConnect, score } from "./actions";
   import { addressSession, host, KIND_COLOR, KIND_ICON, type SavedLayout, type Session, type Snippet, type TunnelStats } from "./api";
   import Icon from "./Icon.svelte";
   import SessionIcon from "./SessionIcon.svelte";
@@ -50,8 +50,8 @@
         ...lookOf(s),
         run: () => onopen(s),
       })),
-      // every action but opening the palette, which is open
-      ...ACTIONS.filter((a) => a.id !== "palette").map((a) => ({ label: _(a.label), hint: "", icon: "play", color: "var(--weak)", keys: keysOf(a.id, shortcuts), run: () => onaction(a.id) })),
+      // every action but opening the palette, which is open, and the ones only the mouse wheel runs
+      ...ACTIONS.filter((a) => a.id !== "palette" && !isWheel(a.id)).map((a) => ({ label: _(a.label), hint: "", icon: "play", color: "var(--weak)", keys: keysOf(a.id, shortcuts), run: () => onaction(a.id) })),
       ...app.store.layout.map((l) => ({ label: _("Open layout: {name}", { name: l.name }), hint: l.pane.map((s) => s.name).join(", "), icon: "grid-alt", color: "var(--gold)", run: () => onlayout(l) })),
       ...app.store.snippet.map((s) => ({ label: _("Run snippet: {name}", { name: s.name }), hint: s.text.split("\n")[0], icon: "play", color: "var(--gold)", run: () => onsnippet(s) })),
       ...app.store.tunnel.map((t) => {
