@@ -1,3 +1,9 @@
+<script lang="ts" module>
+  /** Keys that type nothing by themselves: the terminal never sends them (nor does the start
+   *  screen's quick shell, App.svelte). */
+  export const IGNORED = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph", "NumLock", "ScrollLock", "Dead", "Unidentified", "Process", "OS"]);
+</script>
+
 <script lang="ts">
   // A terminal tab. The Rust side runs the VT engine and sends frames with the rows that
   // changed; this keeps the full screen model and paints it: on the GPU with a glyph cache
@@ -417,8 +423,6 @@
   }
 
   // ---- keyboard: specials and Ctrl/Alt chords go as keys, everything else as text ----
-
-  const IGNORED = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph", "NumLock", "ScrollLock", "Dead", "Unidentified", "Process", "OS"]);
 
   function keydown(e: KeyboardEvent) {
     // A dialog is open over the window: what's typed is its, never the server's.

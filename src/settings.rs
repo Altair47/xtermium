@@ -148,6 +148,8 @@ pub struct Settings {
     pub status_bar: bool,
     /// Open sessions in the sidebar with one click instead of two.
     pub single_click_open: bool,
+    /// With no tabs open, typing on the start screen opens a local shell and hands it the keys.
+    pub quick_shell: bool,
     /// Reopen the sidebar's folders that were open last time; `open_folders` are those.
     pub remember_folders: bool,
     pub open_folders: Vec<String>,
@@ -335,6 +337,7 @@ impl Default for Settings {
             restore_tabs: false,
             status_bar: true,
             single_click_open: false,
+            quick_shell: true,
             remember_folders: true,
             open_folders: vec![],
             quiet_hints: vec![],

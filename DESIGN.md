@@ -418,7 +418,17 @@ in a column at most 610px wide, 13px between its parts. The welcome starts at th
 prompt (`~/xtermium $` and a blinking amber block cursor), then the brand kit's horizontal logo
 (the mark beside the "XTermium" wordmark, `assets/logo-horizontal.svg` through
 `ui/lib/Logo.svelte`) at `min(377px, 100%)` wide, arriving with `float-in`, then the lead
-sentence and the ways to start. Settings › About shows the same logo at 233px.
+sentence and the ways to start, and a `weak` line that says "Start typing to open a local
+shell." Settings › About shows the same logo at 233px.
+
+The prompt is real. A character typed there (outside any field, with no dialog, palette or menu
+open) opens a local shell, and every key typed is held until the shell can take it, then handed
+over in order, the first included (Settings › General › Sessions turns this off, and the line with
+it). The tab shows in the strip at once, as the key's acknowledgement. The welcome leaves in
+0.12s, accelerating away (ease-in), starting at the key with no delay. The terminal stays unseen
+until the shell can take keys and the welcome has gone, then fades in over 0.2s on `--ease-out`:
+one after the other, never a crossfade of the logo over the shell's text. Under reduced motion
+it is a cut.
 
 Forms are a two-column grid (labels in `weak`, minimum 120px, gaps `8px 13px`), and a label
 beside a multi-line field aligns to its first baseline.
@@ -663,8 +673,10 @@ session's row or tab, never on the interface's own buttons, and never under redu
   irreversible thing; an ordinary yes (Close tab, which Reopen can undo) keeps the focus.
 - **Do** make tool buttons icon-only with a tooltip.
 - **Do** keep motion to state and continuity: 0.1–0.2s, arrivals on `--ease-out`, a new floating
-  layer through `float-in`, exits faster than entrances. CSS motion stops under
-  `prefers-reduced-motion` through `ui/app.css`; a Svelte transition must check it itself.
+  layer through `float-in`, exits faster than entrances. When one view replaces another (the
+  start screen giving way to the shell typed into it), the old one leaves first and the new one
+  arrives after it. CSS motion stops under `prefers-reduced-motion` through `ui/app.css`; a
+  Svelte transition must check it itself.
 - **Do** use logical properties (`inset-inline-*`, `margin-inline-*`) so right-to-left mirrors.
 - **Do** set short text (titles, buttons, tags, status lines) in `var(--short)` and anything read
   as text or down a list (menus, rows, the Settings pages, the kind picker) in `var(--ui)`.
