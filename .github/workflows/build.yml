@@ -1,0 +1,42 @@
+# Pull requests build the macOS app, the one platform no one can build locally (the maintainer's
+# PC is Windows) and that no release has shipped yet, so a change that breaks it shows before it
+# reaches main. It publishes nothing; the .dmg is kept a few days as the run's artifact. Windows
+# and Linux build in release.yml.
+name: build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      # The same build release.yml makes for macOS: both architectures in one app.
+      - run: npx tauri build --target universal-apple-darwin
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: xtermium-macos-dmg
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 7
+          if-no-files-found: error
