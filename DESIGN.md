@@ -15,6 +15,7 @@ colors:
   k-vnc: "#c46fd1"
   k-kvm: "#8fa3b8"
   k-agent: "#ec6a6a"
+  k-coop: "#c9b48a"
   ok: "#4fc08d"
   warn: "#e0b04a"
   error: "#ec6a6a"
@@ -253,6 +254,7 @@ The anodized connection hues, one per kind of session (`--k-*`), keyed like cabl
 - **Orchid** (`k-vnc`): VNC.
 - **Bare Titanium** (`k-kvm`): BMC consoles, deliberately the least coloured.
 - **Ember** (`k-agent`): AI-agent tabs. It shares its value with `error`.
+- **Champagne** (`k-coop`): tabs shared with you in a Terminal Co-op ring.
 
 They colour a session's icon (always), the 2px connector on top of its tab (unless the tab
 carries a mark), and the tile behind a kind glyph (15% of the hue). Components read them through
@@ -554,6 +556,14 @@ Every terminal that receives broadcast keystrokes gets a 2px inset outline in a 
 ring, march, rainbow, off). While broadcast is on, the focus ring around the pane you type in
 turns to a 2px dashed ring in the text colour (`fg`) and steps 2px further out, so it never reads
 as one band with an outline in the same colour. All animated styles stop under reduced motion.
+
+### Co-op Ring and Pointers
+A tab shared in a Terminal Co-op ring wears a small ring (8px, 2px stroke in `ok`) after its name;
+a tab shared with you is a `k-coop` tab. The ring's dialog is a 377px `Modal`: the passcode in
+`--t-xxl` mono, people as 21px round pictures (the first letter when there is none), and "End the
+ring" last, in `error`. Over a shared or remote pane, each other person's pointer is an 8px ring in
+a mark colour (`COLORS`, held per person) with their 13px picture beside it, the name on hover. It
+moves in 80ms and stands still under reduced motion.
 
 ### Backgrounds
 A picture or a GLSL shader behind the terminals, the sidebar or the tab bar (each its own),

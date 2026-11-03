@@ -57,7 +57,7 @@ Both scripts check each download against the sha256 GitHub publishes for it befo
 
 ## What you get
 
-Every feature is free. Sync, a hosted service, is the only paid part. Each group below says what you get in a line or two; open its details for the exact menus, formats and limits.
+Every feature is free except two that need **Pro**, a hosted service: sync and Terminal Co-op. Each group below says what you get in a line or two; open its details for the exact menus, formats and limits.
 
 ### Connections
 
@@ -115,6 +115,7 @@ Every feature is free. Sync, a hosted service, is the only paid part. Each group
 - **Open in VS Code** opens the folder you're in, on this computer or on the SSH host.
 - **Pictures in the terminal**: kitty, sixel and OSC 1337 images.
 - **The command palette** finds sessions, tabs, tunnels, snippets and layouts by name.
+- **Terminal Co-op** (Pro, Ctrl+Shift+G): share tabs with up to two other people, who type and click in them. Everything goes straight between your computers, end-to-end encrypted.
 
 ![htop on web-01 in one pane, a VNC desktop beside it](https://xtermium.com/assets/shots/split.webp)
 
@@ -133,6 +134,7 @@ Every feature is free. Sync, a hosted service, is the only paid part. Each group
 
 - **Status bar:** the focused tab's connection, how long it's been up, and for SSH the negotiated cipher and a live round trip; the terminal's size. Settings › General hides it.
 - **Tabs in their own window:** right-click a terminal or RDP tab › Move to a new window. The session goes on there, with nothing around it. Right-click in it (Ctrl+right-click on a remote desktop) or close the window to put it back. Ctrl+= / Ctrl+- zoom one tab's font.
+- **Terminal Co-op** (Pro; Ctrl+Shift+G, or Settings › Account and sync): start a ring, give its passcode to up to two other signed-in people, and say yes as they ask to join. Right-click one of your tabs › Share with the ring puts a terminal, a remote desktop (RDP or VNC) or, on Windows, a website in front of everyone in it; AI agent tabs can't be shared. A shared tab opens as a tab of its own for the others, shown at your size, and they can type and click in it. Everyone's pointer shows over a shared tab with their picture. You can take anyone out or end the ring at any time, and the passcode works for ten minutes before you need a new one. What you share goes straight between the computers, end-to-end encrypted; the sync server only introduces them and never sees a keystroke or a screen. A ring ends by itself if the owner's Pro does.
 - **Open in VS Code:** right-click an SSH, local shell or AI agent tab › Open the folder in VS Code (its `code` command has to be on your PATH). A local folder opens as it is; an SSH session's opens on its host through VS Code's Remote-SSH extension, as the session's user and port. VS Code signs in by itself (keys and agent, or it asks for the password); a jump host or key file has to be in `~/.ssh/config` for it. The folder is the shell's when the shell reports it (OSC 7, as for the SFTP panel), else your home folder on the host, or the tab's starting folder.
 - **Scroll bar** on terminals (Settings › Terminal), to see and drag where you are in the scrollback. Scrolled back, new output leaves what you're reading where it is, or brings you to the bottom if you turn on "Scroll to the bottom on output".
 - **Clipboard behaviour** and the Websites mode are in Settings too.
@@ -198,7 +200,7 @@ Every feature is free. Sync, a hosted service, is the only paid part. Each group
 
 ### Sync
 
-Sync is xtermium's one paid part: **Pro**, a hosted service. It isn't open yet. Until it is, a passphrase-protected `.xtermium` export moves sessions by hand.
+Sync is part of **Pro**, xtermium's one paid plan, a hosted service; [Terminal Co-op](#working-in-it) needs it too. It isn't open yet. Until it is, a passphrase-protected `.xtermium` export moves sessions by hand.
 
 - **What syncs:** your sessions, folders and workspaces, shared logins, tunnels, snippets, layouts and trusted host keys.
 - **What stays on each computer:** your settings and the passwords you chose to remember.

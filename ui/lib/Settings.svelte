@@ -32,7 +32,7 @@
   import Quota from "./Quota.svelte";
   import { CATALOGUE, CATALOGUE_RAW, catalogueName, parseScheme } from "./schemes";
   import { _, LOCALES, N_, nativeName, pick } from "./i18n.svelte";
-  import { boot, confirmIt, copyText, loadLock, lock, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
+  import { boot, confirmIt, copyText, loadLock, lock, shortcut, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
   import { passkeyMake, passkeysWork } from "./passkey";
 
   /** `onrun`: runs a command in a new local shell (the MCP page's Run buttons; App.svelte). */
@@ -964,6 +964,12 @@ xtermium close 3`}</pre>
         <button onclick={deleteCloud}>{confirmDelete ? _("Click again to delete it") : _("Delete the cloud copy")}</button>
       </div>
     {/if}
+    <h3>{_("Terminal Co-op")}</h3>
+    <p>
+      {_("Share tabs with up to two more people. It needs Pro.")}
+      <button class="link" onclick={() => (app.showCoop = true)}>{_("Open the Co-op dialog")}</button>
+      {#if shortcut("coop")}<kbd>{shortcut("coop")}</kbd>{/if}
+    </p>
   {:else if page === "appearance"}
     <div class="form">
       <span>{_("Theme")}</span>
