@@ -11,6 +11,7 @@ use std::io::{BufReader, BufWriter};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
+use tokio::sync::mpsc::UnboundedSender;
 
 /// Message types on an RDP tab's channel (first byte). Integers are little-endian.
 /// `[2][width: u16][height: u16]` the desktop size; `[3]` then changed areas back to back, each
@@ -114,6 +115,8 @@ pub struct RdpTab {
     out: Arc<Mutex<Channel>>,
     /// The last status message, sent again to a window the tab moves to.
     status: Arc<Mutex<Vec<u8>>>,
+    /// Terminal Co-op (coop.rs): a second place the messages go, while the tab is shared.
+    sink: Arc<Mutex<Option<UnboundedSender<Vec<u8>>>>>,
 }
 
 impl RdpTab {
@@ -140,13 +143,18 @@ impl RdpTab {
             win: Default::default(),
             out: Arc::new(Mutex::new(out)),
             status: Default::default(),
+            sink: Default::default(),
         };
         let config::Kind::Rdp { host, port, user, .. } = tab.session.kind.clone() else { unreachable!("not RDP") };
         let (stdin, child, login, picture) = (tab.stdin.clone(), tab.child.clone(), tab.login.clone(), tab.picture.clone());
-        let (out, last_status) = (tab.out.clone(), tab.status.clone());
+        let (out, last_status, sink) = (tab.out.clone(), tab.status.clone(), tab.sink.clone());
         std::thread::spawn(move || {
             // A window gone (the tab moving to another) misses messages until `attach` catches it up.
+            // A Co-op sink gets a copy of each message; without one nothing is copied.
             let ui = |m: Vec<u8>| {
+                if let Some(s) = sink.lock().unwrap().as_ref() {
+                    let _ = s.send(m.clone());
+                }
                 let _ = out.lock().unwrap().send(InvokeResponseBody::Raw(m));
             };
             let status = |s: &str, closed: bool| {
@@ -279,24 +287,28 @@ impl RdpTab {
     /// and the whole picture, then the changes as they come.
     pub fn attach(&self, out: Channel) {
         let p = self.picture.lock().unwrap();
-        let send = |m: Vec<u8>| {
+        for m in catch_up(&self.status.lock().unwrap(), &p) {
             let _ = out.send(InvokeResponseBody::Raw(m));
-        };
-        let status = self.status.lock().unwrap().clone();
-        if !status.is_empty() {
-            send(status);
-        }
-        if p.w > 0 {
-            send(size_msg(p.w as u16, p.h as u16));
-            let mut m = Vec::with_capacity(9 + p.px.len());
-            m.push(MSG_FRAME);
-            for v in [0, 0, p.w as u16, p.h as u16] {
-                m.extend_from_slice(&v.to_le_bytes());
-            }
-            m.extend_from_slice(&p.px);
-            send(m);
         }
         *self.out.lock().unwrap() = out;
+    }
+
+    /// Terminal Co-op: from now on the messages the window gets go to `sink` as well (None stops
+    /// it). The sink starts with the catch-up `attach` sends, and a viewer who joins later gets
+    /// another by calling this again. Done under the picture's lock, like `attach`, so a frame
+    /// is either in the picture sent or comes after it.
+    pub fn share(&self, sink: Option<UnboundedSender<Vec<u8>>>) {
+        let p = self.picture.lock().unwrap();
+        if let Some(s) = &sink {
+            catch_up(&self.status.lock().unwrap(), &p).into_iter().for_each(|m| _ = s.send(m));
+        }
+        *self.sink.lock().unwrap() = sink;
+    }
+
+    /// The desktop's size in pixels; (0, 0) before it's connected.
+    pub fn size(&self) -> (usize, usize) {
+        let p = self.picture.lock().unwrap();
+        (p.w, p.h)
     }
 
     /// What the desktop shows now; None before it's connected.
@@ -476,6 +488,26 @@ mod win_key {
     }
 }
 
+/// What a window that starts watching needs first: the last status, the desktop's size and the
+/// whole picture as one frame (nothing before it's connected).
+pub(crate) fn catch_up(status: &[u8], p: &Picture) -> Vec<Vec<u8>> {
+    let mut v = vec![];
+    if !status.is_empty() {
+        v.push(status.to_vec());
+    }
+    if p.w > 0 {
+        v.push(size_msg(p.w as u16, p.h as u16));
+        let mut m = Vec::with_capacity(9 + p.px.len());
+        m.push(MSG_FRAME);
+        for n in [0, 0, p.w as u16, p.h as u16] {
+            m.extend_from_slice(&n.to_le_bytes());
+        }
+        m.extend_from_slice(&p.px);
+        v.push(m);
+    }
+    v
+}
+
 fn size_msg(width: u16, height: u16) -> Vec<u8> {
     let mut m = vec![MSG_SIZE];
     m.extend_from_slice(&width.to_le_bytes());
@@ -630,6 +662,22 @@ mod tests {
         assert_eq!((at(0, 1), at(1, 1), at(2, 1), at(3, 1)), (0, 9, 9, 0));
         assert_eq!((at(3, 2), at(2, 2)), (7, 0));
         p.paint(&[1, 0, 0]); // a cut-off message changes nothing
+    }
+
+    /// A window or Co-op viewer that starts watching gets the status, the size, then the whole
+    /// picture as one frame; before the desktop is there it gets only the status.
+    #[test]
+    fn a_new_watcher_is_caught_up() {
+        let mut p = super::Picture::new(2, 1);
+        p.px[0..4].copy_from_slice(&[1, 2, 3, 4]);
+        let status = [super::MSG_STATUS, 0];
+        let m = super::catch_up(&status, &p);
+        assert_eq!(m[0], status);
+        assert_eq!(m[1], [super::MSG_SIZE, 2, 0, 1, 0]);
+        assert_eq!(m[2][..9], [super::MSG_FRAME, 0, 0, 0, 0, 2, 0, 1, 0]);
+        assert_eq!(m[2][9..13], [1, 2, 3, 4]);
+        assert_eq!(super::catch_up(&status, &super::Picture::default()), vec![status.to_vec()]);
+        assert!(super::catch_up(&[], &super::Picture::default()).is_empty());
     }
 
     #[test]

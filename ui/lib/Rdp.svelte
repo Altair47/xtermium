@@ -6,7 +6,9 @@
   import { onDestroy, onMount } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { bytes, type Meta, type Session } from "./api";
+  import { bytes, COOP_MSG_JPEG, type Meta, type Session } from "./api";
+  import { throttle } from "./coop";
+  import CoopCursors from "./CoopCursors.svelte";
   import Icon from "./Icon.svelte";
   import { dialogTakesKeys } from "./Modal.svelte";
   import { app } from "./state.svelte";
@@ -21,11 +23,18 @@
     onfocus,
     onexit,
     attach = 0,
+    remote: peer = 0,
+    shared = 0,
   }: {
     session: Session;
     active: boolean;
     /** An RDP tab that's already running (one moving between windows): shown, not opened. */
     attach?: number;
+    /** Another person's desktop in a Terminal Co-op ring, by its number at the owner: shown on the frames the
+     *  ring sends, never opened or resized here (the picture is letterboxed). Keys and the mouse go to the owner. */
+    remote?: number;
+    /** Your own tab's number in the ring while you share it: the others' pointers show over it. */
+    shared?: number;
     onid: (id: number) => void;
     onmeta: (m: Meta) => void;
     /** The desktop's picture arrived (true), or the connection is gone or starting over (false). */
@@ -36,8 +45,13 @@
   } = $props();
 
   let box: HTMLDivElement;
-  let canvas: HTMLCanvasElement;
+  /** Bound once drawn: the cursors over the picture measure it. */
+  let canvas: HTMLCanvasElement = $state()!;
   let id = 0;
+  /** The channel of the latest connect(): a viewer's backend stops sending to it when this view goes. */
+  let channel = 0;
+  /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
+  const ringTab = $derived(peer || shared);
   let status = $state(_("starting…"));
   let closed = $state(false);
   let size = $state<[number, number] | null>(null);
@@ -67,6 +81,8 @@
       size = [u16(1), u16(3)];
       locks = ""; // a new connection: its lock keys are whatever the desktop had
       screen.size(...size);
+      // A viewer who joins mid-stream may never get the status that says the desktop is up.
+      if (peer) status = "";
       onconnected(true);
     } else if (b[0] === 3) {
       // Changed areas back to back: [x][y][w][h: u16][w*h RGBA pixels].
@@ -88,6 +104,44 @@
       if (closed || status) onconnected(false);
       onmeta({ cursor: null, title: "", alive: !closed, ended: false, lost: false, link: false, scrolled: false, images: [] });
     } else if (b[0] === 5) onexit();
+    else if (b[0] === COOP_MSG_JPEG && peer) jpeg(b.subarray(1));
+  }
+
+  /** A website shared with you arrives as the whole page in a JPEG, with no size message first (src/coop.rs
+   *  MSG_JPEG). It is decoded into the same surface, which CSS scales to fit; one decodes at a time and only
+   *  the newest waits, so a slow decode never queues stale pages.
+   *  ponytail: a read-back of the whole page per frame (4 a second at most); upload the bitmap as a texture
+   *  if that shows up in a profile. */
+  let latest: Uint8Array | null = null;
+  let decoding = false;
+  async function jpeg(data: Uint8Array) {
+    latest = data;
+    if (decoding) return;
+    decoding = true;
+    while (latest) {
+      const next: Uint8Array = latest;
+      latest = null;
+      try {
+        const page = await createImageBitmap(new Blob([next as BlobPart], { type: "image/jpeg" }));
+        const [w, h] = [page.width, page.height];
+        const scratch = new OffscreenCanvas(w, h).getContext("2d", { willReadFrequently: true })!;
+        scratch.drawImage(page, 0, 0);
+        page.close();
+        if (gone) break;
+        if (!size || size[0] !== w || size[1] !== h) {
+          size = [w, h];
+          screen.size(w, h);
+        }
+        // The first page ends "starting…".
+        if (status) [status, closed] = ["", false];
+        onconnected(true);
+        screen.put(0, 0, w, h, new Uint8Array(scratch.getImageData(0, 0, w, h).data.buffer));
+        screen.show();
+      } catch {
+        // A frame that doesn't decode is skipped; the next one replaces it.
+      }
+    }
+    decoding = false;
   }
 
   /** Attached (or opened) once already. */
@@ -95,13 +149,18 @@
   async function connect() {
     const [width, height] = desktop(box.getBoundingClientRect());
     const out = new Channel<unknown>(message);
+    channel = out.id;
     [closed, status, size] = [false, _("starting…"), null];
     onconnected(false);
     onmeta({ cursor: null, title: "", alive: true, ended: false, lost: false, link: false, scrolled: false, images: [] });
     // One moving here is attached to (once: reconnecting opens anew); if it's gone, it opens anew.
     const to = attached ? 0 : attach;
     attached = true;
-    if (to && (await invoke<boolean>("tab_attach", { id: to, out }))) id = to;
+    if (peer) {
+      // Someone else's desktop: its frames come on this channel, and nothing here owns the tab.
+      await invoke("coop_open_remote", { ringTab: peer, out }).catch((e) => (app.status = String(e)));
+      id = peer;
+    } else if (to && (await invoke<boolean>("tab_attach", { id: to, out }))) id = to;
     else {
       insecure = !tunneled();
       id = await invoke<number>("open_rdp", {
@@ -112,8 +171,8 @@
       });
     }
     // Closed while starting: end it now (onDestroy found no id yet).
-    if (gone) return void invoke("close_tab", { id });
-    onid(id);
+    if (gone) return void (!peer && invoke("close_tab", { id }));
+    if (!peer) onid(id);
   }
 
   /** Pointer position in remote desktop pixels. */
@@ -132,8 +191,23 @@
   const send = (ev: object) => {
     if (!id || closed) return;
     const to = id;
-    queue = queue.then(() => invoke("rdp_input", { id: to, ev })).catch(() => {});
+    queue = queue.then(() => deliver(to, ev)).catch(() => {});
   };
+  /** A viewer's keys, text and pointer go to the owner as the events rdp_input takes; their desktop (or VNC
+   *  server) handles them as it does its own. A website is view-only for now. */
+  const deliver = (to: number, ev: object) => (peer ? invoke("coop_remote_input", { ringTab: peer, ev }) : invoke("rdp_input", { id: to, ev }));
+
+  /** Where the pointer is over a tab in the ring, in desktop pixels, for the others to see (20 times a
+   *  second at most; -1 when it leaves). */
+  const pointing = throttle((x: number, y: number) => void (ringTab && invoke("coop_cursor", { tab: ringTab, col: x, row: y }).catch(() => {})), 50);
+
+  /** Where a desktop pixel is in the box, in CSS pixels: the picture is centred and scaled to fit. */
+  function pixelAt(x: number, y: number): [number, number] {
+    const r = canvas.getBoundingClientRect();
+    const [w, h] = size ?? [1, 1];
+    const scale = Math.min(r.width / w, r.height / h);
+    return [(r.width - w * scale) / 2 + x * scale, (r.height - h * scale) / 2 + y * scale];
+  }
 
   const MODIFIERS = new Set(["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"]);
   const LOCKS = ["CapsLock", "NumLock", "ScrollLock"];
@@ -160,7 +234,8 @@
     }
     // Shift+Insert / Ctrl+Shift+V: type the local clipboard into the session.
     const paste = (e.shiftKey && e.code === "Insert") || (e.ctrlKey && e.shiftKey && e.code === "KeyV");
-    if (paste) return down && send({ t: "paste" });
+    // A viewer's paste would type the owner's clipboard on their desktop: not offered.
+    if (paste) return down && !peer && send({ t: "paste" });
     // The lock keys go over as their states here, not as presses that would toggle whatever the
     // desktop had (Num Lock on there would turn the arrows of a numpad here into digits).
     sync(e);
@@ -196,7 +271,7 @@
   }
 
   function reconnect() {
-    invoke("close_tab", { id });
+    if (!peer) invoke("close_tab", { id });
     id = 0;
     connect();
   }
@@ -211,7 +286,7 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const r = box.getBoundingClientRect();
-      if (!size || closed || r.width < 50 || r.height < 50) return; // hidden or not connected yet
+      if (!size || closed || peer || r.width < 50 || r.height < 50) return; // hidden or not connected yet; a viewer follows the owner
       const [width, height] = desktop(r);
       if (width !== size[0] || height !== size[1]) send({ t: "resize", width, height });
     }, 400);
@@ -238,7 +313,8 @@
     observer.disconnect();
     clearTimeout(resizeTimer);
     screen?.drop();
-    if (id && !released) invoke("close_tab", { id });
+    if (id && !released && !peer) invoke("close_tab", { id });
+    if (peer && channel) invoke("coop_close_remote", { ringTab: peer, channel }).catch(() => {});
   });
 </script>
 
@@ -262,9 +338,12 @@
     onpointermove={(e) => {
       if (!move) requestAnimationFrame(() => move && (send({ t: "move", ...remote(move) }), (move = null)));
       move = e;
+      if (ringTab && size) pointing(remote(e).x, remote(e).y);
     }}
+    onpointerleave={() => ringTab && pointing(-1, -1)}
     onwheel={wheel}
   ></canvas>
+  {#if ringTab && canvas}<CoopCursors tab={ringTab} at={pixelAt} />{/if}
   {#if status}
     <div class="status" class:over={size}>
       {#if !closed}<Icon name="loader-alt" size={32} spin />{/if}

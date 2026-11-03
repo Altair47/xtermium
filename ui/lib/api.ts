@@ -43,14 +43,17 @@ export type Kind =
   | { type: "kvm"; vendor: string; host: string; port: number; credential?: string }
   /** An AI agent's command line in folder `dir` ("" = home): `tool` from AGENTS, run with the flags for `mode`
    *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command. */
-  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string };
+  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string }
+  /** A tab someone in your Terminal Co-op ring shares with you (App.svelte `openRemote`): `tab` is its
+   *  number at the owner, `picture` a remote desktop rather than a terminal. Never stored or saved. */
+  | { type: "coop"; tab: number; picture: boolean; owner: string };
 export type KindName = Kind["type"];
 /** Shown as a picture (Rdp.svelte), not a terminal. */
 export const isDesktop = (k: Kind) => k.type === "rdp" || k.type === "vnc";
 /** Terminal sessions: they get the terminal look and settings. */
 export const broadcasts = (k: Kind) => ["ssh", "shell", "serial", "telnet", "winrm", "agent"].includes(k.type);
 /** Sessions broadcast reaches: terminals, remote desktops and BMC consoles (src/broadcast.rs `joins`). */
-export const joinsBroadcast = (k: Kind) => k.type !== "browser";
+export const joinsBroadcast = (k: Kind) => k.type !== "browser" && k.type !== "coop";
 /** BMC console vendors (src/config.rs `KVM_VENDORS`) and their names. */
 export const KVM_VENDORS: [string, string][] = [
   ["supermicro", "Supermicro"],
@@ -339,6 +342,8 @@ export function host(k: Kind): string {
       return `kvm ${k.host}:${k.port}`;
     case "agent":
       return (k.tool === "custom" ? k.args : `${k.tool} ${k.args}`).trim();
+    case "coop":
+      return `co-op ${k.owner}`;
   }
 }
 
@@ -353,6 +358,7 @@ export const KIND_ICON: Record<KindName, string> = {
   vnc: "laptop",
   kvm: "tv",
   agent: "bot",
+  coop: "group",
 };
 
 /** Anodized-titanium colour per connection type (app.css). */
@@ -367,6 +373,7 @@ export const KIND_COLOR: Record<KindName, string> = {
   vnc: "var(--k-vnc)",
   kvm: "var(--k-kvm)",
   agent: "var(--k-agent)",
+  coop: "var(--k-coop)",
 };
 
 export const newEndpoint = (): Endpoint => ({ host: "", port: 22, user: "", key: "" });
@@ -402,6 +409,8 @@ export function newKind(t: KindName): Kind {
       return { type: "kvm", vendor: "supermicro", host: "", port: 443, credential: "" };
     case "agent":
       return { type: "agent", tool: "claude", args: "", dir: "", mode: "", effort: "", model: "" };
+    case "coop":
+      return { type: "coop", tab: 0, picture: false, owner: "" };
   }
 }
 
@@ -471,3 +480,44 @@ export function addressSession(a: { type: "ssh" | "rdp" | "telnet" | "vnc"; host
 
 /** The latest release on GitHub (src/support.rs `update_check`). */
 export type Update = { version: string; newer: boolean; page: string; download: string | null };
+
+// ---- Terminal Co-op (src/coop.rs) ----
+//
+// Commands (Tauri turns Rust's snake_case argument names into camelCase):
+//   owner:  coop_create() · coop_refresh() every 2 s while the dialog is open · coop_passcode() ·
+//           coop_approve({ user }) · coop_decline({ user }) · coop_kick({ user }) · coop_end() ·
+//           coop_share({ tab, on }) · coop_cursor({ tab, col, row })
+//   viewer: coop_join({ passcode }) · coop_leave() · coop_cursor({ tab, col, row }) ·
+//           coop_open_remote({ ringTab, out }) (a Channel, like tab_attach) · coop_remote_key({ ringTab, key }) ·
+//           coop_remote_text({ ringTab, text }) · coop_remote_mouse({ ringTab, ev, cw, ch }) (the term_key / term_text /
+//           term_mouse arguments; cw, ch: one of your cells in device pixels, as term_resize takes) ·
+//           coop_remote_input({ ringTab, ev }) (rdp_input's events, for pictures) · coop_close_remote({ ringTab, channel }) (the view
+//           closed: channel is the closed Channel's id, so the backend lets go of it)
+//   both:   coop_state() → CoopEvent, for when the window starts or reloads.
+// coop_create, coop_refresh, coop_passcode, coop_approve, coop_decline, coop_kick and coop_join answer with a
+// CoopEvent; the others answer nothing (coop_open_remote: whether the tab is still shared). Any of them refuses
+// with a sentence for the person. Every change also arrives as the `coop` event, at most 20 times a second.
+
+/** A person in a ring, the owner first (`owner`). `state` as the server has it: "pending" while they
+ *  wait for the owner's yes, "approved" once in, "kicked" when removed or turned down (only the owner
+ *  sees those). `you`: this is you. `online`: their app is connected to the owner's now. `image` is
+ *  a picture URL or null. */
+export type CoopMember = { id: string; name: string; image: string | null; state: string; owner?: boolean; you?: boolean; online?: boolean };
+/** The ring you are in. `owner`: you started it; only then `passcode` is set, until `passcode_until`
+ *  (unix seconds; 0 for a viewer). `state`: "open" for the owner; for a viewer "pending" (waiting for
+ *  the owner's yes), "connecting", then "joined". */
+export type CoopRing = { id: string; passcode: string | null; passcode_until: number; owner: boolean; state: "open" | "pending" | "connecting" | "joined"; members: CoopMember[] };
+/** A tab shared with you; `id` is its number at the owner (what coop_open_remote and coop_remote_* take as
+ *  `ringTab`). "text": a terminal of `cols` × `rows` cells, shown with Terminal.svelte's decoder; "picture":
+ *  Rdp.svelte's messages (`w` × `h` pixels; 0 until the picture's own size message arrives), and for a
+ *  website the message COOP_MSG_JPEG: `[6]` then a JPEG of the whole page, to draw scaled to fit. */
+export type CoopRemote = { id: number; title: string; kind: "text" | "picture"; cols: number; rows: number; w: number; h: number; owner_name: string };
+export const COOP_MSG_JPEG = 6;
+/** Where another person's pointer is over a shared tab (`tab` is the owner's number for it): a cell of
+ *  a text tab, a pixel (`col` = x, `row` = y) of a picture. Never your own. */
+export type CoopCursor = { tab: number; user_id: string; name: string; image: string | null; col: number; row: number };
+/** The `coop` event: all of it, whenever any of it changes. `shared`: your own tabs (by their id) that
+ *  you share. When the ring is over `ring` is null, and `ended` says why when it wasn't you: "pro"
+ *  (the owner's Pro lapsed), "kicked", "ended" (the owner ended it), "lost" (the connection),
+ *  "signed-out"; `message` is the sentence to show. */
+export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; ended?: string; message?: string };

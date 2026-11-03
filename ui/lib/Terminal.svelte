@@ -7,6 +7,8 @@
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { wheelAction } from "./actions";
   import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
+  import { throttle } from "./coop";
+  import CoopCursors from "./CoopCursors.svelte";
   import { close, decode, frameAt, type Pic } from "./images";
   import { glRenderer, type Renderer, type Run } from "./glyphs";
   import { contexts } from "./surface";
@@ -31,6 +33,9 @@
     onzoom,
     zoom = 0,
     attach = 0,
+    remote = 0,
+    shared = 0,
+    size,
   }: {
     session: Session;
     /** In the focused pane: takes the keyboard. */
@@ -40,6 +45,13 @@
     zoom?: number;
     /** A backend tab that's already running (one moving between windows): shown, not opened. */
     attach?: number;
+    /** Another person's tab in a Terminal Co-op ring, by its number at the owner: shown on the frames the ring
+     *  sends, never opened or resized here. It follows the owner's grid, `size` (cols, rows), letterboxed. Keys
+     *  and the mouse go to the owner. */
+    remote?: number;
+    /** Your own tab's number in the ring while you share it: the others' pointers show over it. */
+    shared?: number;
+    size?: [number, number];
     onid: (id: number) => void;
     onmeta: (m: Meta) => void;
     onfocus: () => void;
@@ -49,7 +61,12 @@
     onzoom: (scope: "tab" | "all", by: number) => void;
   } = $props();
 
-  let box: HTMLDivElement;
+  /** Bound once drawn: the cursors over a remote tab measure it. */
+  let box: HTMLDivElement = $state()!;
+  /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
+  const ringTab = $derived(remote || shared);
+  /** A remote tab's canvas: the owner's grid at its own size, shrunk by `k` to fit the box. */
+  let view = $state({ w: 0, h: 0, k: 1 });
   /** The session had ended at the last update: `onexit(true)` comes once per ending. */
   let ended = false;
   let canvas: HTMLCanvasElement = $state()!;
@@ -192,10 +209,27 @@
     fit();
   }
 
+  /** A remote tab is never resized: the owner's size wins. The canvas is their grid in this font, centred
+   *  in the box and shrunk to fit it when the box is smaller. */
+  function fitRemote() {
+    const r = box.getBoundingClientRect();
+    if (!size || size[0] < 1 || size[1] < 1 || r.width < 4 || r.height < 4) return;
+    const [W, H] = [Math.round(size[0] * cell.w), Math.round(size[1] * cell.h)];
+    if (canvas.width !== W || canvas.height !== H) {
+      canvas.width = W;
+      canvas.height = H;
+      full = true;
+      schedule();
+    }
+    const [w, h] = [W / devicePixelRatio, H / devicePixelRatio];
+    view = { w, h, k: Math.min(1, r.width / w, r.height / h) };
+  }
+
   /** Size the canvas to its box and tell the backend the grid size. */
   function fit() {
     if (!look || !box) return;
     if (cell.dpr !== devicePixelRatio) return measure();
+    if (remote) return fitRemote();
     const r = canvas.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return; // hidden
     const W = Math.round(r.width * devicePixelRatio);
@@ -392,6 +426,7 @@
     if (e.key === "Control" && !e.repeat) hoverLinks(true);
     if (e.isComposing || IGNORED.has(e.key) || !id) return;
     blink();
+    if (remote && clipboardChord(e)) return;
     // Ctrl+Alt is AltGr on Windows layouts: its characters arrive as text.
     const altGr = e.getModifierState("AltGraph") || (e.ctrlKey && e.altKey && e.key.length === 1);
     const chord = (e.ctrlKey || e.altKey || e.metaKey) && !altGr;
@@ -403,6 +438,8 @@
     if (!meta.alive && (quit || !chord)) {
       e.preventDefault();
       const k = e.key.toLowerCase();
+      // Restarting and saving are the owner's; the viewer can only close the tab.
+      if (remote) return void (quit && onexit(false));
       if (k === "escape" && retryAt) giveUp();
       else if (quit) onexit(false);
       else if (k === "s")
@@ -421,14 +458,40 @@
       // for the shell whatever letter the layout puts there.
       const latin = chord && /^Key[A-Z]$/.test(e.code) && !/^[\x20-\x7e]$/.test(e.key);
       const key = { key: latin ? e.code.slice(3).toLowerCase() : e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
-      invoke("term_key", { id, key });
+      if (remote) toOwner("coop_remote_key", { key });
+      else invoke("term_key", { id, key });
     }
   }
 
   function text() {
     const t = input.value;
     input.value = "";
-    if (t && id && !dialogTakesKeys()) invoke("term_text", { id, text: t });
+    if (t && id && !dialogTakesKeys()) typed(t);
+  }
+
+  /** Text typed or pasted: the terminal takes it whole, and so does the owner's for a viewer. */
+  function typed(t: string) {
+    if (remote) toOwner("coop_remote_text", { text: t });
+    else invoke("term_text", { id, text: t });
+  }
+
+  /** What a viewer sends the owner goes one message after another, so it arrives in the order typed. */
+  let queue: Promise<unknown> = Promise.resolve();
+  const toOwner = (command: string, args: Record<string, unknown>) =>
+    void (queue = queue.then(() => invoke(command, { ringTab: remote, ...args })).catch(() => {}));
+
+  /** Copy and paste belong to this computer's clipboard, which the owner's terminal must never read: a
+   *  viewer's paste is typed there as text, and copying does nothing. True for those chords. */
+  function clipboardChord(e: KeyboardEvent) {
+    const paste = (e.ctrlKey && e.shiftKey && e.code === "KeyV") || (e.shiftKey && e.code === "Insert");
+    if (!paste && !(e.ctrlKey && e.shiftKey && e.code === "KeyC")) return false;
+    e.preventDefault();
+    if (paste)
+      navigator.clipboard
+        .readText()
+        .then((t) => t && typed(t))
+        .catch(() => {});
+    return true;
   }
 
   // ---- auto-reconnect (Settings > SSH connections): a dropped connection comes back by itself ----
@@ -450,7 +513,7 @@
     if (Date.now() - upSince > 20_000) attempt = 0;
     // Once retrying, failed connects count too: the network may still be down.
     const drop = meta.lost || (attempt > 0 && !meta.ended);
-    if (app.settings?.auto_reconnect && drop && attempt < RETRIES) {
+    if (app.settings?.auto_reconnect && drop && attempt < RETRIES && !remote) {
       // 3, 6, 12, 24, then 30 s: the first wait leaves time for a brief blip to pass.
       const wait = Math.min(30, 3 * 2 ** attempt) * 1000;
       attempt++;
@@ -491,6 +554,7 @@
 
   /** Opens the find bar (App calls this for the focused tab), with its text selected. */
   export function find() {
+    if (remote) return; // the owner's scrollback isn't searched from here
     finding = true;
     nextTick().then(() => findInput?.select());
   }
@@ -524,6 +588,8 @@
   let pointer: { x: number; y: number } | null = null;
 
   function mouse(kind: string, e: MouseEvent, lines = 0, clicks = 1) {
+    // A viewer's middle and right buttons stay here: pasting is the clipboard's, and the owner's is theirs.
+    if (remote && e.button > 0) return;
     pointer = { x: e.offsetX, y: e.offsetY };
     // Moves report button -1; the backend takes 0 (left), 1 (middle) or 2 (right).
     report({ kind, button: Math.max(0, e.button), x: e.offsetX, y: e.offsetY, lines, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, clicks });
@@ -534,6 +600,8 @@
   function report(p: Pointer) {
     if (!id) return;
     const dpr = devicePixelRatio;
+    // `cw`, `ch`: this font's cell, so the owner can turn the pixels into cells whatever font theirs is.
+    if (remote) return toOwner("coop_remote_mouse", { ev: { ...p, x: p.x * dpr, y: p.y * dpr }, cw: cell.w, ch: cell.h });
     // Ctrl+click on a link: the backend hands back its address.
     invoke<string | null>("term_mouse", { id, ev: { ...p, x: p.x * dpr, y: p.y * dpr } }).then(
       (url) => url && openUrl(url).catch((e) => (app.status = String(e))),
@@ -561,6 +629,22 @@
     // Send at most one move per frame.
     if (!move) requestAnimationFrame(() => move && (mouse("move", move), (move = null)));
     move = e;
+    if (ringTab) pointing(Math.floor((e.offsetX * devicePixelRatio) / cell.w), Math.floor((e.offsetY * devicePixelRatio) / cell.h));
+  }
+
+  /** Where the pointer is over a tab in the ring, in cells, for the others to see (20 times a second at most;
+   *  -1 when it leaves). */
+  const pointing = throttle((col: number, row: number) => void (ringTab && invoke("coop_cursor", { tab: ringTab, col, row }).catch(() => {})), 50);
+
+  /** Where a cell is in the box, in CSS pixels (the others' pointers are drawn there). */
+  function cellAt(col: number, row: number): [number, number] {
+    const [cw, ch] = [cell.w / devicePixelRatio, cell.h / devicePixelRatio];
+    if (!remote) {
+      const pad = app.settings?.pane_padding ?? 6;
+      return [pad + col * cw, pad + row * ch];
+    }
+    const { w, h, k } = view;
+    return [(box.clientWidth - w * k) / 2 + col * cw * k, (box.clientHeight - h * k) / 2 + row * ch * k];
   }
 
   function onwheel(e: WheelEvent) {
@@ -621,6 +705,11 @@
     void app.settings?.pane_padding;
     nextTick().then(() => untrack(fit));
   });
+  // The owner resized: a remote tab's canvas follows.
+  $effect(() => {
+    void [size?.[0], size?.[1]];
+    untrack(fit);
+  });
 
   /** The tab moves to another window: leaving this one doesn't end it. */
   let released = false;
@@ -664,12 +753,17 @@
     document.fonts.addEventListener("loadingdone", fontsLoaded);
     observer = new ResizeObserver(() => fit());
     observer.observe(box);
+    if (remote) {
+      // Someone else's tab: its frames come on this channel, and nothing here owns the tab.
+      await invoke("coop_open_remote", { ringTab: remote, out }).catch((e) => (app.status = String(e)));
+      id = remote;
+    }
     // One moving here is attached to; if it ended meanwhile, the session starts again.
-    if (attach && (await invoke<boolean>("tab_attach", { id: attach, out }))) id = attach;
+    else if (attach && (await invoke<boolean>("tab_attach", { id: attach, out }))) id = attach;
     else id = await invoke<number>("open_term", { session: $state.snapshot(session), out });
     // Closed while starting: end it now (onDestroy found no id yet).
-    if (gone) return void invoke("close_tab", { id });
-    onid(id);
+    if (gone) return void (!remote && invoke("close_tab", { id }));
+    if (!remote) onid(id);
     fit();
   });
   let gone = false;
@@ -677,7 +771,8 @@
     gone = true;
     observer?.disconnect();
     document.fonts.removeEventListener("loadingdone", fontsLoaded);
-    if (id && !released) invoke("close_tab", { id });
+    if (id && !released && !remote) invoke("close_tab", { id });
+    if (remote) invoke("coop_close_remote", { ringTab: remote, channel: out.id }).catch(() => {});
     clearTimeout(tick);
     clearInterval(blinker);
     gpu?.sleep();
@@ -700,9 +795,14 @@
       mouse("up", e);
     }}
     onwheel={onwheel}
-    onpointerleave={() => (hoverLinks(false), (pointer = null))}
+    onpointerleave={() => (hoverLinks(false), (pointer = null), ringTab && pointing(-1, -1))}
     style:cursor={overLink ? "pointer" : null}
     style:visibility={painted ? null : "hidden"}
+    style:inset={remote ? "0" : null}
+    style:margin={remote ? "auto" : null}
+    style:width={remote ? `${view.w}px` : null}
+    style:height={remote ? `${view.h}px` : null}
+    style:scale={remote ? view.k : null}
   ></canvas>{/key}
   <textarea
     bind:this={input}
@@ -717,7 +817,7 @@
     onfocus={() => !dialogTakesKeys() && ((focused = true), blink(), onfocus())}
     onblur={() => ((focused = false), blink(), hoverLinks(false))}
   ></textarea>
-  {#if app.settings?.scrollbar !== false && bar.above > 0}
+  {#if app.settings?.scrollbar !== false && bar.above > 0 && !remote}
     <!-- The keyboard scrolls with Shift+PageUp and Shift+PageDown; this is for the mouse. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="scrollbar" aria-hidden="true" bind:this={track} onpointerdown={trackDown}>
@@ -729,6 +829,7 @@
       ></div>
     </div>
   {/if}
+  {#if ringTab && box}<CoopCursors tab={ringTab} at={cellAt} />{/if}
   {#if retryAt}
     <div class="retry" role="status">
       <Icon name="refresh" size={16} />

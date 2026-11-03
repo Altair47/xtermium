@@ -335,6 +335,24 @@ async fn post(url: String, token: Option<&str>, body: serde_json::Value) -> Resu
     fetch(req).await
 }
 
+/// A signed-in call to another of the server's routes, with its JSON answer (`Null` for none):
+/// Terminal Co-op's rendezvous goes through here (coop.rs; docs/api.md "Co-op rings"). A refusal
+/// comes back as the server's own sentence, and the server being away as `Trouble::Later`.
+pub async fn call(url: &str, token: &str, method: reqwest::Method, path: &str, body: Option<serde_json::Value>) -> Result<serde_json::Value> {
+    let mut req = client()?.request(method, format!("{}{path}", base(url)?)).bearer_auth(token);
+    if let Some(b) = body {
+        req = req.header("Content-Type", "application/json").body(b.to_string());
+    }
+    let (status, body, after) = fetch(req).await?;
+    match status {
+        200..=299 => Ok(serde_json::from_slice(&body).unwrap_or_default()),
+        // Only the server's own 401 (a JSON sentence) is a dead token; Cloudflare's HTML is not.
+        401 if said(&body).is_none() => Err(Trouble::Later { after }.into()),
+        502..=504 | 520..=530 => Err(Trouble::Later { after }.into()),
+        s => bail!("{}", said(&body).unwrap_or_else(|| format!("sync server: HTTP {s}"))),
+    }
+}
+
 /// The id the server knows the desktop app by.
 const CLIENT_ID: &str = "xtermium-desktop";
 

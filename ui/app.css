@@ -76,6 +76,7 @@
   --k-vnc: #c46fd1;
   --k-kvm: #8fa3b8;
   --k-agent: #ec6a6a;
+  --k-coop: #c9b48a;
   --fwd: var(--k-ssh);
   --back: var(--k-shell);
   --broadcast: var(--gold);
@@ -113,6 +114,7 @@
   --k-vnc: #8d3a9c;
   --k-kvm: #4f6378;
   --k-agent: #b8443a;
+  --k-coop: #7b6a45;
   --spectrum: linear-gradient(100deg, #9a5f1f 0%, #946410 16%, #b83f75 38%, #7444c8 58%, #2f62d0 78%, #138a7b 100%);
 }
 

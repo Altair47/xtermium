@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { keysOf } from "./actions";
 import { listen } from "@tauri-apps/api/event";
-import { KIND_COLOR, KIND_ICON, type Background, type Effect, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopRemote, type CoopRing, type Effect, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -19,6 +19,11 @@ export const app = $state({
   showCredentials: false,
   /** The sign-in dialog is open (SignIn.svelte). */
   signIn: false,
+  /** The Terminal Co-op dialog is open (Coop.svelte). */
+  showCoop: false,
+  /** Terminal Co-op as the backend last said (the `coop` event, src/coop.rs): the ring you are in, your
+   *  tabs it shares (their ids), the tabs shared with you and where the others' pointers are. */
+  coop: { ring: null as CoopRing | null, shared: [] as number[], remote: [] as CoopRemote[], cursors: [] as CoopCursor[] },
   settings: null as Settings | null,
   schemes: [] as Scheme[],
   effects: [] as Effect[],
@@ -50,6 +55,35 @@ export const app = $state({
     quota: null as { used: number; total: number } | null,
   },
 });
+
+// Terminal Co-op: the whole picture arrives whenever any of it changes, pointers up to 20 times a
+// second, so only the parts that differ are assigned and the rest of the interface isn't redrawn.
+function takeCoop(p: CoopEvent) {
+  const next = { ring: p.ring ?? null, shared: p.shared ?? [], remote: p.remote ?? [], cursors: p.cursors ?? [] };
+  const same = (k: keyof typeof next) => JSON.stringify(app.coop[k]) === JSON.stringify(next[k]);
+  Object.assign(app.coop, Object.fromEntries(Object.entries(next).filter(([k]) => !same(k as keyof typeof next))));
+}
+let heard = false;
+listen<CoopEvent>("coop", ({ payload: p }) => {
+  heard = true;
+  const was = app.coop.ring;
+  takeCoop(p);
+  // Said once, as the ring goes; later events that still carry the reason don't repeat it. The backend's
+  // own sentence says why best; these are for when it sent none.
+  if (!p.ended || !was) return;
+  toast(
+    p.message ||
+      (p.ended === "pro"
+        ? _("Your ring ended because your account no longer has Pro.")
+        : p.ended === "kicked"
+          ? _("The owner removed you from the ring.")
+          : _("The ring ended.")),
+  );
+});
+// A window that starts or reloads while a ring is up learns of it here; an event that got in first is newer.
+invoke<CoopEvent>("coop_state")
+  .then((p) => heard || takeCoop(p))
+  .catch(() => {});
 
 /** Tabs to reopen, with the names they were given, handed over once by boot(). */
 let restore: [Session, string][] = [];

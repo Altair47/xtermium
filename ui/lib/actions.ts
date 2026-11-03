@@ -43,6 +43,7 @@ export const ACTIONS: Action[] = [
   { id: "toggle-broadcast", label: "Turn broadcast on or off", keys: "Ctrl+Shift+A" },
   { id: "tunnels", label: "Tunnels", keys: "Ctrl+Shift+U" },
   { id: "snippets", label: "Snippets", keys: "Ctrl+Shift+S" },
+  { id: "coop", label: "Terminal Co-op", keys: "Ctrl+Shift+G" },
   { id: "credentials", label: "Shared logins", keys: "" },
   { id: "import", label: "Import sessions", keys: "" },
   { id: "export", label: "Export all sessions", keys: "" },

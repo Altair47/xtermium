@@ -32,7 +32,7 @@
   import Quota from "./Quota.svelte";
   import { CATALOGUE, CATALOGUE_RAW, catalogueName, parseScheme } from "./schemes";
   import { _, LOCALES, N_, nativeName, pick } from "./i18n.svelte";
-  import { boot, confirmIt, copyText, loadLock, lock, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
+  import { boot, confirmIt, copyText, loadLock, lock, shortcut, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
   import { passkeyMake, passkeysWork } from "./passkey";
 
   /** `onrun`: runs a command in a new local shell (the MCP page's Run buttons; App.svelte). */
@@ -986,6 +986,12 @@ xtermium close 3`}</pre>
     <label class="check"><input type="checkbox" bind:checked={s.sync_backgrounds} />{_("Backgrounds")}</label>
     <label class="check"><input type="checkbox" bind:checked={s.sync_logins} />{_("Saved logins and passwords")}</label>
     <p class="weak">{_("Sessions, folders, workspaces, shared logins, tunnels, snippets, layouts and trusted host keys always sync.")}</p>
+    <h3>{_("Terminal Co-op")}</h3>
+    <p>
+      {_("Share tabs with up to two more people. It needs Pro.")}
+      <button class="link" onclick={() => (app.showCoop = true)}>{_("Open the Co-op dialog")}</button>
+      {#if shortcut("coop")}<kbd>{shortcut("coop")}</kbd>{/if}
+    </p>
   {:else if page === "appearance"}
     <div class="form">
       <span>{_("Theme")}</span>

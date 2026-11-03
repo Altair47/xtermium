@@ -34,6 +34,11 @@ README.md lists the features for users; this file is how it's built and how the 
   the `xtermium <command>` CLI (`src/cli.rs`) calling the same tools; website tabs are driven
   by scripts run through their own view (`web.rs` `page_*`, `web_*` tools; screenshots through
   WebView2 DevTools, Windows only),
+  **Terminal Co-op** (`src/coop.rs`: Pro people share tabs with up to two more over iroh, QUIC
+  with our own relay; the sync server only introduces them, see `docs/sync.md`. A shared tab's frames
+  are teed to a second sink, `Tab::share` in term.rs, rdp.rs and vnc.rs, and a viewer's backend hands
+  them unchanged to the channel `Terminal.svelte` / `Rdp.svelte` already decode; viewers' input goes
+  through the owner's own key and mouse paths, never broadcast, and stops while xtermium is locked),
   **cloud sync** (`src/sync.rs`, end-to-end encrypted), **tray / keep running** (`src/tray.rs`),
   **one instance per data folder** (`src/instance.rs`; a second start passes on `--open-here
   <folder>` from File Explorer's "Open in xtermium", `src/explorer.rs`, HKCU registry, Windows),
