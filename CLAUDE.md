@@ -78,15 +78,18 @@ README.md lists the features for users; this file is how it's built and how the 
   the copies older versions kept per workspace. Clone and sync are `WorkspaceOp::Clone/Sync`
   (sessions and folders only; `Store::sync_sessions` updates and adds, never removes); copies'
   website sessions get fresh profiles (`Store::own_profiles`).
-- `logins.xtm`: passwords remembered at a prompt, for every workspace, device-only (`config::login /
-  remember / forget`; old OS-keychain entries migrate on first use). Shared logins (Credentials) are
-  in the Store and sync.
-- `settings.xtm` = `Settings` (`src/settings.rs`, `#[serde(default)]`, device-only, not synced).
+- `logins.xtm`: passwords remembered at a prompt, for every workspace, device-only unless
+  `sync_logins` is ticked (`config::login / remember / forget`; old OS-keychain entries migrate on
+  first use). Shared logins (Credentials) are in the Store and sync.
+- `settings.xtm` = `Settings` (`src/settings.rs`, `#[serde(default)]`, device-only unless
+  `sync_settings` is ticked: then `Settings::for_cloud` goes to the sync server and `applied_over`
+  applies a pulled copy over this device's own fields; the backgrounds' files travel with
+  `sync_backgrounds`; docs/sync.md "Optional files").
   `known.xtm` trusted host keys, `tabs.xtm` tabs to reopen, `sync.xtm` sync state, `lock.xtm`
   the lock's hashes and passkey (`src/lock.rs`; never sent to the UI, changed only after an unlock),
   `background.xtm`, `background-sidebar.xtm`, `background-bar.xtm` the backgrounds of terminals,
-  the sidebar and the tab bar (a `data:` picture or shader source; `background_set` is the only
-  writer, `save_settings` keeps each `Settings::background_of` but its `show`). `Backdrop.svelte`
+  the sidebar and the tab bar (a `data:` picture or shader source; `background_set` and a sync pull
+  are the only writers, `save_settings` keeps each `Settings::background_of` but its `show`). `Backdrop.svelte`
   draws one under a place (its parent isolates stacking), `BackgroundPicker.svelte` picks one.
   Shaders run in `ui/lib/shader.ts`: one WebGL 2 context per window compiles each once and draws
   one frame for every view showing it.

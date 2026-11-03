@@ -5,7 +5,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, type Sizes } from "./lib/actions";
+  import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Sizes } from "./lib/actions";
   import { ACCENTS, addressSession, BANNER, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
   import Account from "./lib/Account.svelte";
@@ -918,11 +918,18 @@
     tick().then(refocus);
   }
 
-  /** The focused tab's font only; Settings › Terminal sets everyone's size. */
-  function zoom(by: number) {
-    const t = activeTab;
-    if (t) t.zoom = by ? Math.max(-8, Math.min(24, (t.zoom ?? 0) + by)) : 0;
+  /** The focused tab's font only (or `t`'s, for the wheel); Settings › Terminal sets everyone's size. */
+  function zoom(by: number, t = activeTab) {
+    if (t) t.zoom = zoomed(t.zoom ?? 0, by);
   }
+
+  /** Everyone's font size, the one in Settings › Terminal (same range as its slider), by Ctrl+Shift+wheel. */
+  function fontStep(by: number) {
+    const s = app.settings;
+    if (s) s.font_size = Math.max(8, Math.min(32, s.font_size + by));
+  }
+  // A detached tab's window turns the wheel for everyone's size too; the settings live here.
+  listen<number>("font-step", (e) => fontStep(e.payload));
 
   async function fullscreen() {
     const w = getCurrentWindow();
@@ -1465,6 +1472,7 @@
                     zoom={t.zoom}
                     active={pane === focus}
                     visible={pane >= 0}
+                    onzoom={(scope, by) => (scope === "tab" ? zoom(by, t) : fontStep(by))}
                     onid={() => {}}
                     onmeta={(m) => metaOf(t, m)}
                     onfocus={() => (focus = pane)}
@@ -1506,6 +1514,7 @@
                   onmeta={(m) => metaOf(t, m)}
                   onfocus={() => (focus = pane)}
                   onexit={(ended) => !(ended && t.background) && close(t.key, true)}
+                  onzoom={(scope, by) => (scope === "tab" ? zoom(by, t) : fontStep(by))}
                 />
               {/if}
               </div>

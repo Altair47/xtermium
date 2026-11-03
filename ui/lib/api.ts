@@ -163,6 +163,10 @@ export type Settings = {
   sync: boolean;
   sync_token: string;
   sync_email: string;
+  /** What else syncs, each only when ticked (Settings › Account and sync): the settings, the three background files, the saved logins. */
+  sync_settings: boolean;
+  sync_backgrounds: boolean;
+  sync_logins: boolean;
   /** The account button in the sidebar; always shown while signed in. */
   account_button: boolean;
   confirm_close: boolean;

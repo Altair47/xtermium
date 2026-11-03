@@ -139,7 +139,7 @@ export type SyncSide = { at: number | null; device: string; os: string; ip: stri
 export type Account = { email: string; name: string | null; image: string | null; pro: { active: boolean; plan: string | null; until: number | null } };
 /** Why nothing synced, when the app acts on it rather than only showing it (src/sync.rs `Trouble`). */
 type Trouble = { kind: "signed_out" } | { kind: "needs_pro"; message: string } | { kind: "later"; after: number };
-type SyncReply = { join: boolean; conflict: { local: SyncSide; remote: SyncSide } | null; pulled: boolean; pushed: boolean; quota: { used: number; total: number } | null; trouble: Trouble | null } & Workspaces;
+type SyncReply = { join: boolean; conflict: { local: SyncSide; remote: SyncSide } | null; pulled: boolean; pushed: boolean; quota: { used: number; total: number } | null; trouble: Trouble | null; settings: Settings | null } & Workspaces;
 
 /** Where Pro is bought: the page signs the person in first, so the purchase lands on the account. */
 export const CHECKOUT = "https://account.xtermium.com/checkout/monthly";
@@ -174,6 +174,11 @@ async function attempt(passphrase?: string, choice?: "local" | "remote") {
     sync.needsPro = false;
     if (r.join || r.conflict) return;
     if (r.pulled) useWorkspaces(r);
+    // Settings or backgrounds that came from the cloud (the other windows got the `settings` event).
+    if (r.settings) {
+      if (r.settings.language !== app.settings?.language) setLanguage(r.settings.language);
+      app.settings = r.settings;
+    }
     sync.last = new Date();
   } catch (e) {
     sync.error = String(e);

@@ -1,6 +1,7 @@
 //! Cloud sync (docs/sync.md): the encrypted sessions and trusted keys, and the recovery key, go
-//! to a sync server and other devices' changes come back. The server only ever holds ciphertext
-//! and the passphrase-sealed recovery key.
+//! to a sync server and other devices' changes come back; so do the settings, the backgrounds and
+//! the saved logins, each only when ticked. The server only ever holds ciphertext and the
+//! passphrase-sealed recovery key.
 //!
 //! When only one side changed, its copy replaces the other's whole (deletions included). When
 //! both did, nothing is merged: the person picks this device's copy or the cloud's, seeing when
@@ -8,6 +9,7 @@
 //! unseals the account's data key.
 
 use crate::config::{Known, Store};
+use crate::settings::Settings;
 use crate::vault::{self, Key};
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
@@ -27,6 +29,87 @@ pub struct Device {
     pub state: State,
     /// When this device's data last changed (Unix seconds), if known.
     pub changed: Option<u64>,
+    /// Which optional files this device syncs, and its copy of each (`Extras::local`). A pull
+    /// puts the cloud's copy of the ticked ones here, for the caller to write.
+    pub pick: Pick,
+    pub extras: Extras,
+}
+
+/// Which optional files a person ticked in Settings > Account and sync.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+pub struct Pick {
+    pub settings: bool,
+    pub backgrounds: bool,
+    pub logins: bool,
+}
+
+impl Pick {
+    pub fn of(s: &Settings) -> Self {
+        Self { settings: s.sync_settings, backgrounds: s.sync_backgrounds, logins: s.sync_logins }
+    }
+
+    /// Whether the file in slot `i` of `NAMES` is ticked.
+    fn has(self, i: usize) -> bool {
+        [self.settings, self.logins, self.backgrounds, self.backgrounds, self.backgrounds][i]
+    }
+}
+
+/// The optional vault files, in `Extras::slots` order, and the biggest sealed file the server
+/// takes of each (docs/sync.md "Caps").
+const NAMES: [(&str, usize); 5] =
+    [("settings", 256 << 10), ("logins", 1 << 20), ("background", BACKGROUND_CAP), ("background-sidebar", BACKGROUND_CAP), ("background-bar", BACKGROUND_CAP)];
+
+/// 3.5 MiB: a 2.5 MB picture, the biggest the app takes, stored as a base64 `data:` URL and sealed.
+const BACKGROUND_CAP: usize = 7 << 19;
+
+/// What sealing adds to a file: the magic, the nonce and the tag.
+const SEALED: usize = 4 + 24 + 16;
+
+/// The optional files as plain text. None: this device doesn't sync it, or doesn't have it.
+#[derive(Clone, Default, PartialEq)]
+pub struct Extras {
+    /// `Settings::for_cloud` as TOML.
+    pub settings: Option<String>,
+    /// `logins.xtm`'s text.
+    pub logins: Option<String>,
+    /// `background.xtm`, `background-sidebar.xtm` and `background-bar.xtm`'s text.
+    pub backgrounds: [Option<String>; 3],
+}
+
+/// Sizes only: the saved logins are in here, and a debug print must not show passwords.
+impl std::fmt::Debug for Extras {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Extras({:?})", self.slots().map(|s| s.as_ref().map(String::len)))
+    }
+}
+
+impl Extras {
+    /// This device's copy of each ticked file; the others aren't even read.
+    pub fn local(s: &Settings, pick: Pick) -> Self {
+        let file = |i: usize| pick.has(i).then(|| crate::config::read_if(NAMES[i].0)).flatten();
+        Self { settings: pick.settings.then(|| toml::to_string_pretty(&s.for_cloud()).ok()).flatten(), logins: file(1), backgrounds: [file(2), file(3), file(4)] }
+    }
+
+    fn slots(&self) -> [&Option<String>; 5] {
+        let [a, b, c] = &self.backgrounds;
+        [&self.settings, &self.logins, a, b, c]
+    }
+
+    fn slots_mut(&mut self) -> [&mut Option<String>; 5] {
+        let [a, b, c] = &mut self.backgrounds;
+        [&mut self.settings, &mut self.logins, a, b, c]
+    }
+
+    /// Only the ticked files.
+    fn picked(&self, pick: Pick) -> Self {
+        let mut e = self.clone();
+        for (i, slot) in e.slots_mut().into_iter().enumerate() {
+            if !pick.has(i) {
+                *slot = None;
+            }
+        }
+        e
+    }
 }
 
 /// Where this device stands with the server (`sync.xtm`).
@@ -99,6 +182,17 @@ struct Files {
     /// Sealed [`Meta`]: which device uploaded this and when. Absent from older uploads.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     meta: String,
+    /// The optional files (`NAMES`), each sealed under its own name. Absent: not synced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    settings: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    logins: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    background: Option<String>,
+    #[serde(default, rename = "background-sidebar", skip_serializing_if = "Option::is_none")]
+    background_sidebar: Option<String>,
+    #[serde(default, rename = "background-bar", skip_serializing_if = "Option::is_none")]
+    background_bar: Option<String>,
 }
 
 /// Who uploaded a revision, sealed with the data: the server never sees it.
@@ -447,19 +541,50 @@ fn now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-fn digest(store: &Store, known: &Known, recovery: Option<&str>) -> String {
+fn digest(store: &Store, known: &Known, recovery: Option<&str>, extras: &Extras) -> String {
     let mut h = Sha256::new();
     for part in [toml::to_string(store).unwrap_or_default(), toml::to_string(known).unwrap_or_default()] {
         h.update(part.as_bytes());
         h.update([0]);
     }
     h.update(recovery.unwrap_or("").as_bytes());
+    // Only files that are there count, so a device that syncs none keeps the digest it always had.
+    for ((name, _), text) in NAMES.iter().zip(extras.slots()) {
+        if let Some(text) = text {
+            h.update([0]);
+            h.update(name.as_bytes());
+            h.update([0]);
+            h.update(text.as_bytes());
+        }
+    }
     vault::hex(&h.finalize())
 }
 
 impl Device {
     fn digest(&self) -> String {
-        digest(&self.store, &self.known, self.recovery.as_deref())
+        digest(&self.store, &self.known, self.recovery.as_deref(), &self.wanted())
+    }
+
+    /// The optional files this device sends: the ticked ones that fit the server's caps. One that
+    /// doesn't fit stays home, out of the digest too, or it would look like a change forever.
+    fn wanted(&self) -> Extras {
+        let mut e = self.extras.picked(self.pick);
+        for ((_, cap), slot) in NAMES.iter().zip(e.slots_mut()) {
+            if slot.as_ref().is_some_and(|t| t.len() + SEALED > *cap) {
+                *slot = None;
+            }
+        }
+        e
+    }
+
+    /// Takes the cloud's copy of each ticked file it has; a file it lacks leaves this device's alone.
+    fn take(&mut self, theirs: Extras) {
+        let theirs = theirs.picked(self.pick);
+        for (mine, theirs) in self.extras.slots_mut().into_iter().zip(theirs.slots()) {
+            if theirs.is_some() {
+                mine.clone_from(theirs);
+            }
+        }
     }
 
     fn synced_at(&mut self, revision: u64) {
@@ -491,10 +616,17 @@ impl Device {
 fn seal(dev: &Device) -> Files {
     let file = |name, text: String| B64.encode(vault::seal(&dev.key, name, text.as_bytes()));
     let (device, os) = this_device();
+    let x = dev.wanted();
+    let [background, background_sidebar, background_bar] = x.backgrounds;
     Files {
         sessions: file("sessions", toml::to_string_pretty(&dev.store).unwrap_or_default()),
         known: file("known", toml::to_string(&dev.known).unwrap_or_default()),
         meta: file("meta", toml::to_string(&Meta { device, os, at: now() }).unwrap_or_default()),
+        settings: x.settings.map(|t| file("settings", t)),
+        logins: x.logins.map(|t| file("logins", t)),
+        background: background.map(|t| file("background", t)),
+        background_sidebar: background_sidebar.map(|t| file("background-sidebar", t)),
+        background_bar: background_bar.map(|t| file("background-bar", t)),
     }
 }
 
@@ -503,6 +635,8 @@ struct Opened {
     store: Store,
     known: Known,
     side: Side,
+    /// Whichever optional files the account's copy holds (one that won't open counts as absent).
+    extras: Extras,
 }
 
 fn open(key: &Key, r: &Remote) -> Result<Opened> {
@@ -511,6 +645,16 @@ fn open(key: &Key, r: &Remote) -> Result<Opened> {
     let store: Store = toml::from_str(&file("sessions", &r.files.sessions)?)?;
     let known: Known = toml::from_str(&file("known", &r.files.known)?)?;
     let meta: Meta = file("meta", &r.files.meta).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default();
+    let extra = |name, b64: &Option<String>| b64.as_deref().and_then(|b| file(name, b).ok());
+    let extras = Extras {
+        settings: extra("settings", &r.files.settings),
+        logins: extra("logins", &r.files.logins),
+        backgrounds: [
+            extra("background", &r.files.background),
+            extra("background-sidebar", &r.files.background_sidebar),
+            extra("background-bar", &r.files.background_bar),
+        ],
+    };
     let side = Side {
         at: r.updated.at.or((meta.at > 0).then_some(meta.at)),
         device: meta.device,
@@ -521,7 +665,7 @@ fn open(key: &Key, r: &Remote) -> Result<Opened> {
         tunnels: store.tunnels.len(),
         keys: known.ssh.len() + known.rdp.len(),
     };
-    Ok(Opened { store, known, side })
+    Ok(Opened { store, known, side, extras })
 }
 
 /// Brings this device and the server level. When both changed, returns the conflict and changes
@@ -542,7 +686,7 @@ pub async fn sync(dev: &mut Device, api: &Api, choice: Option<Choice>) -> Result
             Some(remote) => {
                 out.quota = remote.quota;
                 let theirs = open(&dev.key, &remote).map_err(|_| NeedsPassphrase)?;
-                if digest(&theirs.store, &theirs.known, Some(&remote.recovery)) == dev.digest() {
+                if digest(&theirs.store, &theirs.known, Some(&remote.recovery), &theirs.extras.picked(dev.pick)) == dev.digest() {
                     dev.synced_at(remote.revision);
                     return Ok(out);
                 }
@@ -550,6 +694,7 @@ pub async fn sync(dev: &mut Device, api: &Api, choice: Option<Choice>) -> Result
                 if moved && (!changed || choice == Some(Choice::Remote)) {
                     dev.store = theirs.store;
                     dev.known = theirs.known;
+                    dev.take(theirs.extras);
                     dev.recovery = Some(remote.recovery);
                     dev.synced_at(remote.revision);
                     out.pulled = true;
@@ -582,7 +727,8 @@ pub async fn join(dev: &mut Device, api: &Api, passphrase: &str, choice: Option<
     let pass = passphrase.to_string();
     let key = tokio::task::spawn_blocking(move || vault::unwrap(&pass, &r)).await??;
     let theirs = open(&key, &remote)?;
-    let differs = digest(&theirs.store, &theirs.known, None) != digest(&dev.store, &dev.known, None);
+    let none = Extras::default();
+    let differs = digest(&theirs.store, &theirs.known, None, &none) != digest(&dev.store, &dev.known, None, &none);
     if dev.has_data() && differs && choice.is_none() {
         let conflict = Conflict { local: dev.side(), remote: theirs.side };
         return Ok(Outcome { conflict: Some(conflict), ..Default::default() });
@@ -596,6 +742,7 @@ pub async fn join(dev: &mut Device, api: &Api, passphrase: &str, choice: Option<
     }
     dev.store = theirs.store;
     dev.known = theirs.known;
+    dev.take(theirs.extras);
     dev.synced_at(remote.revision);
     Ok(Outcome { pulled: true, quota: remote.quota, ..Default::default() })
 }
@@ -725,7 +872,7 @@ mod tests {
         for s in sessions {
             store.sessions.push(Session::new(*s, "", Kind::Shell { program: String::new(), dir: String::new() }));
         }
-        Device { key, store, known: Known::default(), recovery: None, state: State::default(), changed: Some(42) }
+        Device { key, store, known: Known::default(), recovery: None, state: State::default(), changed: Some(42), pick: Pick::default(), extras: Extras::default() }
     }
 
     fn names(d: &Device) -> Vec<&str> {
@@ -736,6 +883,152 @@ mod tests {
 
     fn add(d: &mut Device, name: &str) {
         d.store.sessions.push(Session::new(name, "", Kind::Shell { program: String::new(), dir: String::new() }));
+    }
+
+    const ALL: Pick = Pick { settings: true, backgrounds: true, logins: true };
+
+    /// One of each file, the sidebar's background missing.
+    fn texts() -> Extras {
+        Extras {
+            settings: Some("theme = \"Dark\"\n".into()),
+            logins: Some("[[login]]\nid = \"u@h:22\"\npassword = \"p\"\n".into()),
+            backgrounds: [Some("data:image/png;base64,AA==".into()), None, Some("void main() {}".into())],
+        }
+    }
+
+    fn sealed(d: &Device) -> serde_json::Value {
+        serde_json::to_value(seal(d)).unwrap()
+    }
+
+    #[test]
+    fn extra_files_travel_only_when_ticked() {
+        let none = sealed(&Device { extras: texts(), ..device(&["a"]) });
+        for (name, _) in NAMES {
+            assert!(none.get(name).is_none(), "{name} left home");
+        }
+        let f = sealed(&Device { pick: Pick { settings: true, ..Pick::default() }, extras: texts(), ..device(&["a"]) });
+        assert!(f.get("settings").is_some() && f.get("logins").is_none() && f.get("background").is_none());
+
+        // Everything ticked: what exists goes, under the contract's names; what doesn't, doesn't.
+        let d = Device { pick: ALL, extras: texts(), ..device(&["a"]) };
+        let f = sealed(&d);
+        for name in ["settings", "logins", "background", "background-bar"] {
+            assert!(f[name].is_string(), "{name}");
+        }
+        assert!(f.get("background-sidebar").is_none());
+        let remote = |files: serde_json::Value| -> Remote {
+            serde_json::from_value(json!({ "revision": 1, "files": files, "recovery": "" })).unwrap()
+        };
+        assert_eq!(open(&d.key, &remote(f.clone())).unwrap().extras, texts());
+
+        // Each is sealed under its own name: one passed off as another doesn't open.
+        let mut swapped = f.clone();
+        swapped["logins"] = f["settings"].clone();
+        assert_eq!(open(&d.key, &remote(swapped)).unwrap().extras.logins, None);
+    }
+
+    #[test]
+    fn a_tick_is_a_change() {
+        let base = device(&["a"]);
+        let unticked = Device { extras: texts(), ..base.clone() };
+        assert_eq!(unticked.digest(), base.digest(), "files that aren't ticked don't count");
+        let ticked = Device { pick: Pick { settings: true, ..Pick::default() }, ..unticked.clone() };
+        assert_ne!(ticked.digest(), base.digest());
+        let mut edited = ticked.clone();
+        edited.extras.settings = Some("theme = \"Light\"\n".into());
+        assert_ne!(edited.digest(), ticked.digest());
+        // A background edited while only the settings are ticked is not a change either.
+        let mut other = ticked.clone();
+        other.extras.backgrounds[0] = Some("void main() {}".into());
+        assert_eq!(other.digest(), ticked.digest());
+
+        // A file over the server's cap stays home, and out of the digest, or it would look like
+        // a change that never syncs.
+        let mut big = Device { pick: ALL, extras: texts(), ..base.clone() };
+        let with = big.digest();
+        big.extras.logins = Some("x".repeat(1 << 20));
+        assert!(sealed(&big).get("logins").is_none());
+        let mut without = big.clone();
+        without.extras.logins = None;
+        assert_eq!(big.digest(), without.digest());
+        assert_ne!(big.digest(), with);
+
+        // A background goes up to 3.5 MiB sealed: the biggest picture the app takes (2.5 MB) as a
+        // data: URL fits, one byte more doesn't.
+        let background = |len: usize| Device { pick: ALL, extras: Extras { backgrounds: [Some("x".repeat(len)), None, None], ..Extras::default() }, ..base.clone() };
+        let picture = "data:image/png;base64,".len() + (5usize << 19).div_ceil(3) * 4;
+        assert!(picture + SEALED <= 3_670_016, "a 2.5 MB picture fits");
+        assert!(sealed(&background(3_670_016 - SEALED)).get("background").is_some());
+        assert!(sealed(&background(3_670_016 - SEALED + 1)).get("background").is_none());
+    }
+
+    #[test]
+    fn the_cloud_copy_of_the_settings_has_nothing_of_this_device() {
+        let mut mine = Settings {
+            font_size: 17.0,
+            sync_token: "tok-secret".into(),
+            sync_email: "me@example.com".into(),
+            automation: true,
+            automation_token: "ab12cd".into(),
+            workspace: "Lab".into(),
+            ssh_password: "hunter2".into(),
+            sync_logins: true,
+            ..Default::default()
+        };
+        (mine.background.kind, mine.background.name, mine.background.stamp) = ("image".into(), "x.png".into(), 7);
+        let text = toml::to_string_pretty(&mine.for_cloud()).unwrap();
+        for private in ["tok-secret", "me@example.com", "ab12cd", "Lab", "hunter2", "x.png"] {
+            assert!(!text.contains(private), "{private} went into the cloud copy");
+        }
+        let theirs: Settings = toml::from_str(&text).unwrap();
+        assert!(theirs.font_size == 17.0 && !theirs.automation && !theirs.sync_logins && theirs.background.stamp == 0);
+
+        // Applied on another device: its own fields stay, and the copy it makes is the one it got.
+        let mut other = Settings::default();
+        (other.sync_token, other.workspace, other.automation_port, other.background.stamp) = ("other-tok".into(), "Home".into(), 9000, 3);
+        let merged = theirs.clone().applied_over(&other);
+        assert!(merged.font_size == 17.0 && merged.sync_token == "other-tok" && merged.workspace == "Home");
+        assert!(merged.automation_port == 9000 && merged.background.stamp == 3);
+        assert!(merged.for_cloud() == theirs, "pulling must not look like a change, or devices would trade it back and forth");
+    }
+
+    #[tokio::test]
+    async fn ticked_files_across_devices() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let (url, vault) = server().await;
+        let api = Api::new(&url, "t").unwrap();
+        let mut a = device(&["a1"]);
+        a.recovery = Some(toml::to_string(&vault::wrap("correct horse battery", &a.key).unwrap()).unwrap());
+        a.pick = ALL;
+        a.extras = texts();
+        assert!(sync(&mut a, &api, None).await.unwrap().pushed);
+        assert!(!sync(&mut a, &api, None).await.unwrap().pushed, "nothing new");
+        let held = vault.lock().unwrap().as_ref().unwrap().1.clone();
+        assert!(held["settings"].is_string() && held["logins"].is_string() && held["background-bar"].is_string());
+        assert!(held.get("background-sidebar").is_none());
+
+        // B syncs only the backgrounds: it takes those and leaves the rest of its own alone.
+        let mut b = device(&["b1"]);
+        b.pick = Pick { backgrounds: true, ..Pick::default() };
+        let o = join(&mut b, &api, "correct horse battery", Some(Choice::Remote)).await.unwrap();
+        assert!(o.pulled);
+        assert_eq!(b.extras.backgrounds, texts().backgrounds);
+        assert!(b.extras.settings.is_none() && b.extras.logins.is_none());
+
+        // Ticking the settings on B is a change of its own, and goes up. B doesn't sync the saved
+        // logins, so the new revision has none.
+        b.pick.settings = true;
+        b.extras.settings = Some("theme = \"Light\"\n".into());
+        assert!(sync(&mut b, &api, None).await.unwrap().pushed);
+        assert!(vault.lock().unwrap().as_ref().unwrap().1.get("logins").is_none());
+
+        // A takes B's settings. The saved logins the cloud no longer has stay on A, and go up again.
+        let o = sync(&mut a, &api, None).await.unwrap();
+        assert!(o.pulled && o.conflict.is_none());
+        assert_eq!(a.extras.settings.as_deref(), Some("theme = \"Light\"\n"));
+        assert_eq!(a.extras.logins, texts().logins);
+        assert!(sync(&mut a, &api, None).await.unwrap().pushed);
+        assert!(vault.lock().unwrap().as_ref().unwrap().1["logins"].is_string());
     }
 
     #[tokio::test]

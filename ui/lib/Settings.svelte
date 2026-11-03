@@ -18,7 +18,7 @@
   // App.svelte watches them.
   import { onDestroy, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { ACTIONS, chord, keysOf, score, TERMINAL_KEYS } from "./actions";
+  import { ACTIONS, chord, isWheel, keysOf, score, TERMINAL_KEYS, wheelChord } from "./actions";
   import { ACCENTS, COLORS, css, openUrl, OUTLINES, type CursorShape, type Login, type Scheme, type Settings } from "./api";
   import About from "./About.svelte";
   import BackgroundPicker from "./BackgroundPicker.svelte";
@@ -141,6 +141,10 @@
       N_("Create an account"),
       N_("Sign out"),
       N_("Show the account button in the sidebar"),
+      N_("What syncs"),
+      N_("Settings (look and defaults)"),
+      N_("Backgrounds"),
+      N_("Saved logins and passwords"),
       N_("Sync now"),
       N_("Delete the cloud copy"),
     ],
@@ -398,9 +402,21 @@
     if (e.key === "Escape") return void (recording = null);
     if (e.key === "Backspace" && !e.ctrlKey && !e.altKey && !e.metaKey) return void ((recording = null), bind(id, ""));
     const c = chord(e);
-    if (!c) return;
+    // A wheel action's chord is a turn of the wheel with keys held (recordWheel), not a key press.
+    if (!c || isWheel(id)) return;
     // A plain key would be taken from everything you type, the terminal included.
     if (!/^(Ctrl|Alt|Meta)\+|^(Shift\+)?F\d+$/.test(c)) return void (hint = _("Use Ctrl, Alt or a function key (F1–F12)."));
+    [recording, hint] = [null, ""];
+    bind(id, c);
+  }
+
+  /** A turn of the wheel while a wheel action is recording: with Ctrl, Alt, Shift or Meta held it
+   *  is the chord; a plain wheel binds nothing and scrolls on. */
+  function recordWheel(e: WheelEvent, id: string) {
+    const c = isWheel(id) ? wheelChord(e) : "";
+    if (!c) return;
+    e.preventDefault();
+    e.stopPropagation();
     [recording, hint] = [null, ""];
     bind(id, c);
   }
@@ -786,16 +802,17 @@
         {@const keys = keysOf(a.id, s.shortcuts)}
         {@const why = clash(a.id, keys)}
         <div class="row shortcut">
-          <span class="grow">{_(a.label)}{#if why}<span class="warn note">{why}</span>{/if}</span>
+          <span class="grow">{_(a.label)}{#if why}<span class="warn note">{why}</span>{/if}{#if recording === a.id && isWheel(a.id)}<span class="weak note">{_("Hold Ctrl, Alt, Shift or Meta and turn the mouse wheel.")}</span>{/if}</span>
           <button
             class="flat chord"
             class:on={recording === a.id}
             data-record
             onclick={(e) => ((e.currentTarget as HTMLElement).focus(), ([recording, hint] = [a.id, ""]))}
             onkeydown={(e) => recording === a.id && record(e, a.id)}
+            onwheel={(e) => recording === a.id && recordWheel(e, a.id)}
             onblur={() => recording === a.id && (recording = null)}
           >
-            {#if recording === a.id}{_("Press keys…")}{:else if keys}<kbd>{keys}</kbd>{:else}<span class="weak">{_("none")}</span>{/if}
+            {#if recording === a.id}{isWheel(a.id) ? _("Turn the wheel…") : _("Press keys…")}{:else if keys}<kbd>{keys}</kbd>{:else}<span class="weak">{_("none")}</span>{/if}
           </button>
           <button class="flat icon-only" title={_("Reset to {keys}", { keys: a.keys || _("none") })} disabled={!(a.id in s.shortcuts)} onclick={() => delete s.shortcuts[a.id]}><Icon name="refresh" /></button>
         </div>
@@ -926,7 +943,7 @@ xtermium close 3`}</pre>
       <input type="checkbox" checked={s.account_button || !!s.sync_token} disabled={!!s.sync_token} onchange={(e) => (s.account_button = (e.target as HTMLInputElement).checked)} />{_("Show the account button in the sidebar")}
     </label>
     <p class="weak">
-      {_("Your data is encrypted on this computer before it leaves it, so the sync server stores data it can't read. Settings stay on each device. Syncing happens when xtermium starts and when you click Sync now; if both sides changed, you choose which copy to keep.")}
+      {_("Your data is encrypted on this computer before it leaves it, so the sync server stores data it can't read. Syncing happens when xtermium starts and when you click Sync now; if both sides changed, you choose which copy to keep.")}
     </p>
     {#if s.sync_token}
       <div class="form">
@@ -964,6 +981,11 @@ xtermium close 3`}</pre>
         <button onclick={deleteCloud}>{confirmDelete ? _("Click again to delete it") : _("Delete the cloud copy")}</button>
       </div>
     {/if}
+    <h3>{_("What syncs")}</h3>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_settings} />{_("Settings (look and defaults)")}</label>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_backgrounds} />{_("Backgrounds")}</label>
+    <label class="check"><input type="checkbox" bind:checked={s.sync_logins} />{_("Saved logins and passwords")}</label>
+    <p class="weak">{_("Sessions, folders, workspaces, shared logins, tunnels, snippets, layouts and trusted host keys always sync.")}</p>
     <h3>{_("Terminal Co-op")}</h3>
     <p>
       {_("Share tabs with up to two more people. It needs Pro.")}

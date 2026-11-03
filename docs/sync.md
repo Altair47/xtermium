@@ -13,7 +13,9 @@ All files are in the data folder (`~/.xtermium`, or `XTERMIUM_HOME`).
 | `sessions.xtm` | yes | sessions, folders (with tags), logins, tunnels, snippets, saved layouts and workspaces, sealed under the data key |
 | `known.xtm` | yes | trusted SSH host keys and RDP server keys, sealed under the data key |
 | `recovery.key` | yes | the data key, sealed under a key derived from the recovery passphrase |
-| `settings.xtm` | no | this device's look and defaults (including the default SSH password) |
+| `settings.xtm` | only when ticked | this device's look and defaults (including the default SSH password); a copy without this device's own fields goes, see [Optional files](#optional-files) |
+| `logins.xtm` | only when ticked | passwords remembered at a prompt |
+| `background.xtm`, `background-sidebar.xtm`, `background-bar.xtm` | only when ticked | the terminal, sidebar and tab bar backgrounds (a `data:` picture or shader source) |
 | `sync.xtm` | no | the server revision this device last matched, and a digest of what was in sync then |
 
 The **data key** is 32 random bytes. Each device keeps it in its OS keychain under service `xtermium` and account `data-key-<first 8 bytes of SHA-256 of the config dir path, hex>`.
@@ -72,7 +74,7 @@ There is no password. A person signs in with an account they already have at Goo
 
 | Method and path | Body | Response |
 |---|---|---|
-| `GET /v1/vault` | | `200 {"revision": n, "files": {"sessions": "<base64>", "known": "<base64>", "meta": "<base64>"}, "recovery": "<recovery.key text>", "updated": {"at": <unix seconds>, "ip": "<address>", "location": "<city, country>"}, "quota": {"used": <bytes>, "total": <bytes>}}`, or `404` when the account has no vault yet |
+| `GET /v1/vault` | | `200 {"revision": n, "files": {"sessions": "<base64>", "known": "<base64>", "meta": "<base64>", plus any optional files the revision has}, "recovery": "<recovery.key text>", "updated": {"at": <unix seconds>, "ip": "<address>", "location": "<city, country>"}, "quota": {"used": <bytes>, "total": <bytes>}}`, or `404` when the account has no vault yet |
 | `PUT /v1/vault` | `{"base": n, "files": {...}, "recovery": "..."}` | `200 {"revision": n+1, "quota": {...}}`, `402` without Pro, `409 {"revision": m}` when `base` isn't the current revision, or `413 {"error": "..."}` when a file is over its cap or the upload would go past the account's storage |
 | `DELETE /v1/vault` | | `204`; removes everything stored for the account |
 
@@ -80,7 +82,8 @@ There is no password. A person signs in with an account they already have at Goo
 - **`meta`:** a sealed file (associated data `meta`, TOML `device`, `os`, `at`) naming the device that uploaded the revision. Stored and returned like the other files; older uploads may lack it.
 - **`updated`:** what the server saw of the `PUT` that made the current revision: when, from which IP address, and the city and country it maps to. All fields optional.
 - **`quota`:** the account's storage, bytes held and bytes allowed. `used` counts the current revision's raw files; `total` is 10 MiB. The client shows it as a bar in the account menu and in Settings › Account and sync, warns from 95% that past 100% nothing more syncs, and at 100% that nothing does. Pictures used as session and folder icons are what takes the room: they travel inside `sessions`.
-- **Caps:** `sessions` up to 10 MiB, `known` 1 MiB, `meta` 16 KiB, `recovery` 4 KiB; a `PUT` body up to 14 MiB. Over any of them, or over the total: `413`, and nothing is stored.
+- **Caps:** `sessions` up to 10 MiB, `known` 1 MiB, `meta` 16 KiB, `recovery` 4 KiB, and the optional files below; a `PUT` body up to 14 MiB. Over any of them, or over the total: `413`, and nothing is stored.
+- **Optional files:** settings, saved logins and backgrounds travel too, when ticked (below).
 - **Retried `PUT`:** the same request sent again after a timeout answers `200` with the same revision; no second revision is made.
 - **Conflicts:** when this device and the server both changed since the last sync, nothing is merged. The client shows both sides (last change, device, OS, and for the server's copy the IP address and location from `updated`) and the person keeps one: "this device's" puts with the current revision as `base`, "the cloud's" replaces the local files. A `409` during that put means a third change arrived: the client looks again.
 - **First device:** if `GET` returns 404, upload the local files and `recovery.key`. Sync can't be turned on until a recovery passphrase is set.
@@ -89,6 +92,22 @@ There is no password. A person signs in with an account they already have at Goo
 - **Joining with data of its own:** the person chooses between the device's data and the account's, the same way; either way every local file, settings included, is then encrypted again under the account's data key.
 - **`429`:** too many requests; `Retry-After` says how many seconds to wait. `GET /v1/vault` is limited to 120 an hour per account: `recovery.key` rides along in every answer and allows offline passphrase guessing, so the client also requires passphrases of at least 12 characters.
 - **`503`:** the server is away (`Retry-After: 30`; minutes, hours at worst). Never a bare 500.
+
+### Optional files
+
+Three ticks in Settings › Account and sync (`sync_settings`, `sync_backgrounds`, `sync_logins` in `settings.xtm`, all off by default) add files to `files`. Each is the base64 of a sealed `.xtm` file whose associated data is its name, so one can't be passed off as another.
+
+| Name in `files` | Cap (sealed file) | Tick | Contents |
+|---|---|---|---|
+| `settings` | 256 KiB | Settings (look and defaults) | `settings.xtm`'s TOML without this device's own fields (below) |
+| `logins` | 1 MiB | Saved logins and passwords | `logins.xtm`'s TOML (`[[login]]` tables) |
+| `background`, `background-sidebar`, `background-bar` | 3.5 MiB each (3 670 016 bytes) | Backgrounds | the text of `background.xtm`, `background-sidebar.xtm` and `background-bar.xtm`: a `data:` URL or shader source, or empty for none |
+
+- **Absent means not synced by that device.** A file is in a `PUT` only when its tick is on and the file exists. The server keeps nothing for a missing one in the new revision (a revision is a whole snapshot, never a merge), and `GET` returns only the files the current revision has. So a device that leaves a tick off drops the cloud's copy of that file when it uploads; a device that has it ticked sends it again at its next sync.
+- **Pulling** takes the cloud's copy of each file the device has ticked and writes it under the same name, sealed with the device's data key. A ticked file the cloud lacks leaves the local one alone (nothing is deleted), and a file that doesn't open counts as absent. Settings are applied at once (terminals restyle, the other windows follow); a background gets a new `stamp` so windows fetch it again; saved logins replace the device's whole list.
+- **Digest:** a ticked file is part of the device's digest, so turning a tick on (or off) counts as a change of this device, and the next sync uploads. A file over its cap is not sent and is left out of the digest, so it never shows up as a change that can't sync. A background is a `data:` URL, a third bigger than the picture; the cap leaves room for the 2.5 MB picture the app takes at most.
+- **Quota:** these files count in `used` and in the total.
+- **The settings copy** has the device's own fields at their defaults, the same from any device, so applying it elsewhere is no change of that device's own and the copies don't trade back and forth. Those fields stay as they are on the pulling device: `sync`, `sync_token`, `sync_email`, `sync_settings`, `sync_backgrounds`, `sync_logins`, `automation`, `automation_port`, `automation_network`, `automation_token` (a pulled copy must not open a listener), `workspace`, `start_at_login`, `high_priority`, `custom_css`, `ssh_password` (passwords travel only in `logins`), `open_folders`, `sidebar_width`, `sidebar_collapsed`, and each background's `kind`, `name` and `stamp` (what is behind a place is its own file; `show` and `fit` do travel).
 
 ### Terminal Co-op
 

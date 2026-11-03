@@ -579,17 +579,24 @@ fn save_settings(app: State<App>, window: tauri::Window, mut settings: Settings)
         let fit = std::mem::take(&mut b.fit);
         *b = settings::Background { show: b.show, fit, ..kept.clone() };
     }
+    commit_settings(&app, window.app_handle(), (window.label() == "main").then_some(&window), settings)
+}
+
+/// Makes `settings` the ones in use: applies them (SSH defaults, automation, the tray, terminals'
+/// looks, and on the `main` window its backdrop effect), stores them and tells the other windows.
+/// A save from the UI (`save_settings`) and settings pulled by sync both end here.
+fn commit_settings(app: &App, handle: &AppHandle, main: Option<&tauri::Window>, settings: Settings) -> Res<Settings> {
     let old = std::mem::replace(&mut *app.settings.lock().unwrap(), settings.clone());
     apply_defaults(&settings);
-    apply_automation(&app, window.app_handle());
-    tray::apply(window.app_handle(), settings.keep_running);
+    apply_automation(app, handle);
+    tray::apply(handle, settings.keep_running);
     if settings.restyles(&old) {
         app.restyle();
     }
-    let effect = if window.label() == "main" { app.apply_effect(&window) } else { Ok(()) };
+    let effect = main.map_or(Ok(()), |w| app.apply_effect(w));
     settings.save().map_err(|e| format!("settings: {e:#}"))?;
     // Detached tabs' windows follow (pane padding, theme).
-    let _ = window.app_handle().emit("settings", &settings);
+    let _ = handle.emit("settings", &settings);
     effect.map(|_| settings)
 }
 
@@ -631,13 +638,17 @@ fn background_set(app: State<App>, window: tauri::Window, place: String, kind: S
     };
     config::write(file, &data).map_err(fail)?;
     let mut settings = app.settings.lock().unwrap().clone();
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
     let (b, _) = settings.background_of(&place).unwrap();
-    *b = settings::Background { kind, name, stamp, ..b.clone() };
+    *b = settings::Background { kind, name, stamp: stamp(), ..b.clone() };
     settings.sanitize();
     // save_settings keeps the backgrounds it has: this one goes in first.
     *app.settings.lock().unwrap().background_of(&place).unwrap().0 = settings.background_of(&place).unwrap().0.clone();
     save_settings(app, window, settings)
+}
+
+/// A background's `stamp`: now, in unix milliseconds. Windows fetch it again when this changes.
+fn stamp() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// The biggest background picture (2.5 MB: it's read into memory and drawn on every frame) and shader taken.
@@ -816,11 +827,12 @@ async fn export_sessions(
 }
 
 /// This device's own settings, which a backup neither carries nor replaces: the sync sign-in and
-/// the automation token.
+/// what it syncs, and the automation token.
 fn keep_device(to: &mut Settings, from: &Settings) {
     to.sync = from.sync;
     to.sync_token = from.sync_token.clone();
     to.sync_email = from.sync_email.clone();
+    (to.sync_settings, to.sync_backgrounds, to.sync_logins) = (from.sync_settings, from.sync_backgrounds, from.sync_logins);
     to.automation_token = from.automation_token.clone();
 }
 
@@ -967,6 +979,9 @@ struct SyncReply {
     quota: Option<sync::Quota>,
     /// Nothing synced because of this, and the UI acts on it: signed out, needs Pro, or try later.
     trouble: Option<sync::Trouble>,
+    /// The settings, when a pull changed them (the synced settings or backgrounds): the UI takes
+    /// these as its own.
+    settings: Option<Settings>,
     /// The workspace in use's data, and the workspaces (a pull may bring new ones).
     #[serde(flatten)]
     data: Workspaces,
@@ -984,6 +999,8 @@ async fn sync_now(handle: AppHandle, passphrase: Option<String>, choice: Option<
     // Every workspace syncs; the UI gets back the one in use.
     let before = app.all();
     let key = config::key().map_err(fail)?;
+    let pick = sync::Pick::of(&s);
+    let sent = sync::Extras::local(&s, pick);
     let mut dev = sync::Device {
         key,
         store: before.clone(),
@@ -991,12 +1008,14 @@ async fn sync_now(handle: AppHandle, passphrase: Option<String>, choice: Option<
         recovery: config::recovery_text(),
         state: sync::State::load(),
         changed: config::modified(),
+        pick,
+        extras: sent.clone(),
     };
     let r = match passphrase {
         Some(p) => sync::join(&mut dev, &api, &p, choice).await,
         None => sync::sync(&mut dev, &api, choice).await,
     };
-    let reply = |join, conflict, quota, trouble| SyncReply { join, conflict, pulled: false, pushed: false, quota, trouble, data: app.in_use() };
+    let reply = |join, conflict, quota, trouble| SyncReply { join, conflict, pulled: false, pushed: false, quota, trouble, settings: None, data: app.in_use() };
     let out = match r {
         Ok(out) => out,
         Err(e) if e.is::<sync::NeedsPassphrase>() => return Ok(reply(true, None, None, None)),
@@ -1026,8 +1045,42 @@ async fn sync_now(handle: AppHandle, passphrase: Option<String>, choice: Option<
     app.set_all(std::mem::take(&mut dev.store));
     app.save_store()?;
     config::Known::with(|k| *k = std::mem::take(&mut dev.known)).map_err(fail)?;
+    let settings = apply_pulled(&app, &handle, &sent, &dev.extras)?;
     dev.state.save().map_err(fail)?;
-    Ok(SyncReply { join: false, conflict: None, pulled: out.pulled, pushed: out.pushed, quota: out.quota, trouble: None, data: app.in_use() })
+    Ok(SyncReply { join: false, conflict: None, pulled: out.pulled, pushed: out.pushed, quota: out.quota, trouble: None, settings, data: app.in_use() })
+}
+
+/// Puts the optional files a sync brought in place: those in `now` that differ from what this
+/// device sent (`sent`). The saved logins and the backgrounds' files are written, then the
+/// settings are applied over this device's own (`Settings::applied_over`). Returns the settings
+/// when they changed.
+fn apply_pulled(app: &App, handle: &AppHandle, sent: &sync::Extras, now: &sync::Extras) -> Res<Option<Settings>> {
+    if now == sent {
+        return Ok(None);
+    }
+    let new = |a: &Option<String>, b: &Option<String>| if a != b { a.clone() } else { None };
+    if let Some(text) = new(&now.logins, &sent.logins) {
+        config::replace_logins(&text).map_err(fail)?;
+    }
+    let have = app.settings.lock().unwrap().clone();
+    let mut settings = have.clone();
+    for (i, place) in ["terminal", "sidebar", "bar"].into_iter().enumerate() {
+        let Some(data) = new(&now.backgrounds[i], &sent.backgrounds[i]) else { continue };
+        let (b, file) = settings.background_of(place).unwrap();
+        config::write(file, &data).map_err(fail)?;
+        // The picture's own name and kind aren't synced (`Settings::for_cloud`): a picture is
+        // a `data:` URL, anything else a shader.
+        let kind = if data.is_empty() { "" } else if data.starts_with("data:") { "image" } else { "shader" };
+        *b = settings::Background { kind: kind.into(), name: String::new(), stamp: stamp(), ..b.clone() };
+    }
+    if let Some(theirs) = new(&now.settings, &sent.settings).and_then(|t| toml::from_str::<Settings>(&t).ok()) {
+        settings = theirs.applied_over(&settings);
+    }
+    settings.sanitize();
+    if settings == have {
+        return Ok(None);
+    }
+    commit_settings(app, handle, handle.get_window("main").as_ref(), settings).map(Some)
 }
 
 /// Deletes everything the sync server holds for the account (this device keeps its data).
