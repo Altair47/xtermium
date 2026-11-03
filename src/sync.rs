@@ -57,7 +57,10 @@ impl Pick {
 /// The optional vault files, in `Extras::slots` order, and the biggest sealed file the server
 /// takes of each (docs/sync.md "Caps").
 const NAMES: [(&str, usize); 5] =
-    [("settings", 256 << 10), ("logins", 1 << 20), ("background", 5 << 19), ("background-sidebar", 5 << 19), ("background-bar", 5 << 19)];
+    [("settings", 256 << 10), ("logins", 1 << 20), ("background", BACKGROUND_CAP), ("background-sidebar", BACKGROUND_CAP), ("background-bar", BACKGROUND_CAP)];
+
+/// 3.5 MiB: a 2.5 MB picture, the biggest the app takes, stored as a base64 `data:` URL and sealed.
+const BACKGROUND_CAP: usize = 7 << 19;
 
 /// What sealing adds to a file: the magic, the nonce and the tag.
 const SEALED: usize = 4 + 24 + 16;
@@ -931,6 +934,14 @@ mod tests {
         without.extras.logins = None;
         assert_eq!(big.digest(), without.digest());
         assert_ne!(big.digest(), with);
+
+        // A background goes up to 3.5 MiB sealed: the biggest picture the app takes (2.5 MB) as a
+        // data: URL fits, one byte more doesn't.
+        let background = |len: usize| Device { pick: ALL, extras: Extras { backgrounds: [Some("x".repeat(len)), None, None], ..Extras::default() }, ..base.clone() };
+        let picture = "data:image/png;base64,".len() + (5usize << 19).div_ceil(3) * 4;
+        assert!(picture + SEALED <= 3_670_016, "a 2.5 MB picture fits");
+        assert!(sealed(&background(3_670_016 - SEALED)).get("background").is_some());
+        assert!(sealed(&background(3_670_016 - SEALED + 1)).get("background").is_none());
     }
 
     #[test]
