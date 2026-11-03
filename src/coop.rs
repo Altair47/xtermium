@@ -337,9 +337,13 @@ fn relay_of(named: Option<String>) -> Res<RelayMode> {
 }
 
 /// Tells the server the key this ring will use, before it is bound: the relay lets an endpoint in
-/// only once the server knows it as a Pro account's (`POST /v1/coop/node`, docs/sync.md).
-async fn register(handle: &AppHandle, key: &SecretKey) -> Res<()> {
-    let body = serde_json::json!({ "id": key.public().to_string() });
+/// only once the server knows it (`POST /v1/coop/node`, docs/sync.md), as a Pro account's when
+/// starting a ring, or by the ring's passcode when joining one.
+async fn register(handle: &AppHandle, key: &SecretKey, passcode: Option<&str>) -> Res<()> {
+    let mut body = serde_json::json!({ "id": key.public().to_string() });
+    if let Some(code) = passcode {
+        body["passcode"] = code.into();
+    }
     call(handle, reqwest::Method::POST, "/v1/coop/node", Some(body)).await.map(|_| ()).map_err(|e| said(&e))
 }
 
@@ -1423,7 +1427,7 @@ pub async fn coop_create(handle: AppHandle) -> Res<Payload> {
     let account = sync::account("", &t).await.map_err(crate::fail)?;
     needs_pro(&account.pro)?;
     let key = SecretKey::generate();
-    register(&handle, &key).await?;
+    register(&handle, &key, None).await?;
     let ep = bind(key, relay()?, true).await?;
     let made = async {
         let node = node_of(&ep).await;
@@ -1598,8 +1602,9 @@ pub async fn coop_join(handle: AppHandle, passcode: String) -> Res<Payload> {
     if current().is_some() {
         return Err(IN_RING.into());
     }
+    // The passcode is checked here first: a wrong one is refused before anything is bound.
     let key = SecretKey::generate();
-    register(&handle, &key).await?;
+    register(&handle, &key, Some(&code)).await?;
     let ep = bind(key, relay()?, false).await?;
     let asked = async {
         let node = node_of(&ep).await;
