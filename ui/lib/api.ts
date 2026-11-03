@@ -178,6 +178,8 @@ export type Settings = {
   restore_tabs: boolean;
   status_bar: boolean;
   single_click_open: boolean;
+  /** With no tabs open, typing on the start screen opens a local shell with what was typed. */
+  quick_shell: boolean;
   /** The sidebar's open folders come back next time (`open_folders`). */
   remember_folders: boolean;
   open_folders: string[];

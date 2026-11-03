@@ -75,6 +75,7 @@
       N_("Run above the normal process priority (may need administrator rights; turning it off takes a restart)"),
       N_("Sessions"),
       N_("Open a session with one click (instead of a double-click)"),
+      N_("Start typing on the start screen to open a local shell"),
       N_("Remember which folders are open in the sidebar"),
       N_("Browser"),
       N_("Open Browser sessions"),
@@ -806,6 +807,7 @@
     <h3>{_("Sessions")}</h3>
     <div class="col">
       <label class="check"><input type="checkbox" bind:checked={s.single_click_open} />{_("Open a session with one click (instead of a double-click)")}</label>
+      <label class="check"><input type="checkbox" bind:checked={s.quick_shell} />{_("Start typing on the start screen to open a local shell")}</label>
       <label class="check"><input type="checkbox" bind:checked={s.remember_folders} />{_("Remember which folders are open in the sidebar")}</label>
       {#if explorerMenu !== null}
         <label class="check"><input type="checkbox" checked={explorerMenu} onchange={(e) => setExplorerMenu((e.target as HTMLInputElement).checked)} />{_("Add \"Open in xtermium\" to folders in File Explorer: a local shell in that folder")}</label>

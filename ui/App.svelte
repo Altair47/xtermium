@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import { fade } from "svelte/transition";
+  import { cubicIn } from "svelte/easing";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -30,7 +31,7 @@
   import StatusBar from "./lib/StatusBar.svelte";
   import { _, N_, setLanguage } from "./lib/i18n.svelte";
   import { app, boot, dismiss, lock, lookOf, notify, saveStore, shortcut, tell, tip, toast, toasts, sessionKey, siteIcon, syncNow, takeRestore, workspaceOp, type SyncSide } from "./lib/state.svelte";
-  import Terminal from "./lib/Terminal.svelte";
+  import Terminal, { IGNORED } from "./lib/Terminal.svelte";
   import Tunnels from "./lib/Tunnels.svelte";
   import Web from "./lib/Web.svelte";
 
@@ -301,6 +302,64 @@
     if (key !== undefined) typeWhenUp.set(key, command);
   }
 
+  // ---- quick shell (Settings › General): with no tabs open, typing on the start screen opens a
+  // local shell, and what was typed goes to it ----
+  /** A key as the terminal sends it (Terminal.svelte `keydown`): text, or a special key or chord. */
+  type Typed = string | { key: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean };
+  /** The shell typing opened, and what was typed for it that it hasn't had yet. Until it has
+   *  it all, every key comes here before the terminal sees it, so nothing typed while the shell
+   *  starts is lost or lands out of order. */
+  let quick: { key: number; typed: Typed[] } | null = null;
+  /** Its view, unseen until the shell can take keys (`up`) and the welcome has gone (`clear`):
+   *  only then does it fade in, so the two never blur into each other. */
+  let arriving = $state<{ key: number; up: boolean; clear: boolean } | null>(null);
+  /** The welcome's exit, in ms: faster than the terminal's 200 ms entrance (app.css motion rules),
+   *  and accelerating away, so it never lingers half-faded like the window's stepped-back look. */
+  const LEAVE = 120;
+
+  /** A key no shortcut took. On the start screen, a character typed outside any field opens the
+   *  shell; while that shell starts, every key is held for it. */
+  function quickKey(e: KeyboardEvent) {
+    if (quick && !tabs.some((t) => t.key === quick!.key)) quick = null;
+    if (e.isComposing || IGNORED.has(e.key)) return;
+    const altGr = e.getModifierState("AltGraph") || (e.ctrlKey && e.altKey && e.key.length === 1);
+    const chord = (e.ctrlKey || e.altKey || e.metaKey) && !altGr;
+    const typed: Typed = e.key.length === 1 && !chord ? e.key : { key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
+    if (!quick) {
+      const el = e.target as HTMLElement;
+      if (strip.length || app.settings?.quick_shell === false || typeof typed !== "string" || document.querySelector(".backdrop, .menu")) return;
+      // A field takes its own typing, and Space presses the button or row that has the keyboard.
+      if (el.closest?.("input, textarea, select, [contenteditable]") || (typed === " " && el !== document.body)) return;
+      const key = localShell()!;
+      quick = { key, typed: [] };
+      arriving = { key, up: false, clear: false };
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    quick.typed.push(typed);
+  }
+
+  /** The shell is up: it gets what was typed, in order (runs of text as one), then the keyboard. */
+  async function handOver(id: number) {
+    const q = quick!;
+    if (arriving?.key === q.key) arriving.up = true;
+    try {
+      // Keys typed while this sends join the end of the queue.
+      while (q.typed.length) {
+        const t = q.typed.shift()!;
+        if (typeof t !== "string") await invoke("term_key", { id, key: t });
+        else {
+          let text = t;
+          while (typeof q.typed[0] === "string") text += q.typed.shift();
+          await invoke("term_text", { id, text });
+        }
+      }
+    } finally {
+      quick = null;
+      refocus();
+    }
+  }
+
   /** A terminal's meta: the tab's state. A connection that dropped becomes a desktop notification
    *  (Settings › General). */
   function metaOf(t: Tab, m: Meta) {
@@ -346,6 +405,7 @@
   /** A tab's backend is up: remember its id, and answer automation if it asked for this tab. */
   function started(key: number, id: number) {
     update(key, { id });
+    if (quick?.key === key) handOver(id);
     const command = typeWhenUp.get(key);
     if (command) {
       typeWhenUp.delete(key);
@@ -854,7 +914,7 @@
   function keydown(e: KeyboardEvent) {
     if (!ready || app.locked !== null || lock.locked || (e.target as HTMLElement).closest?.("[data-record]")) return;
     const id = keymap.get(chord(e));
-    if (!id) return;
+    if (!id) return quickKey(e);
     // In a text field (not the terminal's), arrows and the like edit the text: Ctrl+Shift+← there
     // selects a word rather than swapping panes.
     const field = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
@@ -1385,7 +1445,7 @@
 
       <div class="panes" class:split={strip.length && panes.length > 1} class:broadcasting class:sizing class:steady={app.settings?.focus_animated === false}>
         {#if !strip.length}
-          <div class="dashboard">
+          <div class="dashboard" out:fade={{ duration: arriving && !still ? LEAVE : 0, easing: cubicIn }} onoutroend={() => arriving && (arriving.clear = true)}>
             <div class="intro">
               <p class="prompt" aria-hidden="true">~/xtermium <b>$</b> <i class="cursor"></i></p>
               <div class="logo"><Logo /></div>
@@ -1419,6 +1479,7 @@
                 </button>
               </div>
               <p class="weak">
+                {#if app.settings?.quick_shell !== false}{_("Start typing to open a local shell.")}{/if}
                 {_("Keyboard shortcuts are listed, and can be changed, in")}
                 <button class="link" onclick={() => openSettings("shortcuts")}>{_("Settings › Shortcuts")}</button>
               </p>
@@ -1446,6 +1507,9 @@
               data-outline={drawn ? app.settings?.broadcast_outline : null}
               style:--oc={app.settings?.broadcast_outline_color}
               data-pane={pane}
+              class:unseen={arriving?.key === t.key}
+              class:arrive={arriving?.key === t.key && arriving.up && arriving.clear}
+              onanimationend={(e) => e.target === e.currentTarget && e.animationName === "fade-in" && (arriving = null)}
               style={pane >= 0 ? place(pane) : "display: none"}
             >
               <div class="body">
@@ -2320,6 +2384,15 @@
     font-size: var(--t-xl);
     font-weight: 600;
     letter-spacing: -0.025em;
+  }
+  /* A shell opened by typing on the start screen stays unseen until it can take keys and the
+     welcome has gone, then fades in (`arriving`, the quick shell above). */
+  .view.unseen {
+    opacity: 0;
+  }
+  .view.arrive {
+    opacity: 1;
+    animation: fade-in 0.2s var(--ease-out);
   }
   /* the ways to start, side by side */
   .starts {
