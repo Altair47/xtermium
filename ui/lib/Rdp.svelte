@@ -6,7 +6,7 @@
   import { onDestroy, onMount } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { bytes, type Meta, type Session } from "./api";
+  import { bytes, COOP_MSG_JPEG, type Meta, type Session } from "./api";
   import { throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
   import Icon from "./Icon.svelte";
@@ -48,6 +48,8 @@
   /** Bound once drawn: the cursors over the picture measure it. */
   let canvas: HTMLCanvasElement = $state()!;
   let id = 0;
+  /** The channel of the latest connect(): a viewer's backend stops sending to it when this view goes. */
+  let channel = 0;
   /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
   const ringTab = $derived(peer || shared);
   let status = $state(_("starting…"));
@@ -102,6 +104,44 @@
       if (closed || status) onconnected(false);
       onmeta({ cursor: null, title: "", alive: !closed, ended: false, lost: false, link: false, scrolled: false, images: [] });
     } else if (b[0] === 5) onexit();
+    else if (b[0] === COOP_MSG_JPEG && peer) jpeg(b.subarray(1));
+  }
+
+  /** A website shared with you arrives as the whole page in a JPEG, with no size message first (src/coop.rs
+   *  MSG_JPEG). It is decoded into the same surface, which CSS scales to fit; one decodes at a time and only
+   *  the newest waits, so a slow decode never queues stale pages.
+   *  ponytail: a read-back of the whole page per frame (4 a second at most); upload the bitmap as a texture
+   *  if that shows up in a profile. */
+  let latest: Uint8Array | null = null;
+  let decoding = false;
+  async function jpeg(data: Uint8Array) {
+    latest = data;
+    if (decoding) return;
+    decoding = true;
+    while (latest) {
+      const next: Uint8Array = latest;
+      latest = null;
+      try {
+        const page = await createImageBitmap(new Blob([next as BlobPart], { type: "image/jpeg" }));
+        const [w, h] = [page.width, page.height];
+        const scratch = new OffscreenCanvas(w, h).getContext("2d", { willReadFrequently: true })!;
+        scratch.drawImage(page, 0, 0);
+        page.close();
+        if (gone) break;
+        if (!size || size[0] !== w || size[1] !== h) {
+          size = [w, h];
+          screen.size(w, h);
+        }
+        // The first page ends "starting…".
+        if (status) [status, closed] = ["", false];
+        onconnected(true);
+        screen.put(0, 0, w, h, new Uint8Array(scratch.getImageData(0, 0, w, h).data.buffer));
+        screen.show();
+      } catch {
+        // A frame that doesn't decode is skipped; the next one replaces it.
+      }
+    }
+    decoding = false;
   }
 
   /** Attached (or opened) once already. */
@@ -109,6 +149,7 @@
   async function connect() {
     const [width, height] = desktop(box.getBoundingClientRect());
     const out = new Channel<unknown>(message);
+    channel = out.id;
     [closed, status, size] = [false, _("starting…"), null];
     onconnected(false);
     onmeta({ cursor: null, title: "", alive: true, ended: false, lost: false, link: false, scrolled: false, images: [] });
@@ -152,14 +193,9 @@
     const to = id;
     queue = queue.then(() => deliver(to, ev)).catch(() => {});
   };
-  /** A viewer's pointer goes to the owner as mouse and the rest as keys; their desktop takes both as it takes its own. */
-  const POINTER = new Set(["move", "button", "wheel"]);
-  const deliver = (to: number, ev: object) =>
-    !peer
-      ? invoke("rdp_input", { id: to, ev })
-      : POINTER.has((ev as { t: string }).t)
-        ? invoke("coop_remote_mouse", { ringTab: peer, ev })
-        : invoke("coop_remote_key", { ringTab: peer, key: ev });
+  /** A viewer's keys, text and pointer go to the owner as the events rdp_input takes; their desktop (or VNC
+   *  server) handles them as it does its own. A website is view-only for now. */
+  const deliver = (to: number, ev: object) => (peer ? invoke("coop_remote_input", { ringTab: peer, ev }) : invoke("rdp_input", { id: to, ev }));
 
   /** Where the pointer is over a tab in the ring, in desktop pixels, for the others to see (20 times a
    *  second at most; -1 when it leaves). */
@@ -278,6 +314,7 @@
     clearTimeout(resizeTimer);
     screen?.drop();
     if (id && !released && !peer) invoke("close_tab", { id });
+    if (peer && channel) invoke("coop_close_remote", { ringTab: peer, channel }).catch(() => {});
   });
 </script>
 

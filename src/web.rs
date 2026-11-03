@@ -479,15 +479,22 @@ pub fn consoles() -> Vec<u32> {
     OPEN.lock().unwrap().iter().filter(|(_, o)| o.kvm).map(|(&id, _)| id).collect()
 }
 
+/// What a website tab is called: its page's title, else the name it was opened with. Reads only
+/// this table, so it may be asked while other locks are held (`listed` waits for the main thread).
+pub fn title_of(id: u32) -> Option<String> {
+    OPEN.lock().unwrap().get(&id).map(|o| if o.title.is_empty() { o.name.clone() } else { o.title.clone() })
+}
+
 /// The open website tabs, as automation lists tabs.
 pub fn listed(handle: &AppHandle) -> Vec<(u32, serde_json::Value)> {
-    OPEN.lock()
-        .unwrap()
-        .iter()
-        .map(|(&id, o)| {
+    // `url()` waits for the main thread, which may be waiting for this table (`web_place`): the lock
+    // is let go before the views are asked.
+    let open: Vec<_> = OPEN.lock().unwrap().iter().map(|(&id, o)| (id, o.kvm, o.name.clone(), o.title.clone())).collect();
+    open.into_iter()
+        .map(|(id, kvm, name, title)| {
             let url = handle.get_webview(&label(id)).and_then(|w| w.url().ok()).map(|u| u.to_string());
-            let kind = if o.kvm { "kvm" } else { "browser" };
-            (id, serde_json::json!({ "id": id, "name": o.name, "type": kind, "url": url, "title": o.title }))
+            let kind = if kvm { "kvm" } else { "browser" };
+            (id, serde_json::json!({ "id": id, "name": name, "type": kind, "url": url, "title": title }))
         })
         .collect()
 }

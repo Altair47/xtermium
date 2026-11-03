@@ -474,23 +474,6 @@ export function addressSession(a: { type: "ssh" | "rdp" | "telnet" | "vnc"; host
   return s;
 }
 
-/** Terminal Co-op (src/coop.rs, Coop.svelte). A person in a ring: `state` is "pending" while they
- *  wait for the owner's yes, "approved" once in; `owner` marks the ring's owner. `image` is a
- *  `data:` or https picture URL, or null. */
-export type CoopMember = { id: string; name: string; image: string | null; state: string; owner?: boolean };
-/** The ring you are in; `owner`: you started it. Only the owner has a `passcode`, which stops
- *  working at `passcode_until` (unix seconds). */
-export type CoopRing = { id: string; passcode: string | null; passcode_until: number; owner: boolean; members: CoopMember[] };
-/** A tab shared with you: `id` is its number at the owner. `kind` "text" has a grid of `cols` ×
- *  `rows`; "picture" a desktop of `w` × `h` pixels. */
-export type CoopRemote = { id: number; title: string; kind: string; cols: number; rows: number; w: number; h: number; owner_name: string };
-/** Where another person's pointer is over a shared tab (`tab` is the owner's number for it): a
- *  cell of a text tab, a pixel (`col` = x, `row` = y) of a picture. */
-export type CoopCursor = { tab: number; user_id: string; name: string; image: string | null; col: number; row: number };
-/** The `coop` event: all of it, whenever any of it changes. `shared`: your own tabs (by their id)
- *  that you share. `ended` says why the ring went away: "pro", "kicked", or another reason. */
-export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; ended?: string };
-
 /** The latest release on GitHub (src/support.rs `update_check`). */
 export type Update = { version: string; newer: boolean; page: string; download: string | null };
 
@@ -504,7 +487,8 @@ export type Update = { version: string; newer: boolean; page: string; download: 
 //           coop_open_remote({ ringTab, out }) (a Channel, like tab_attach) · coop_remote_key({ ringTab, key }) ·
 //           coop_remote_text({ ringTab, text }) · coop_remote_mouse({ ringTab, ev, cw, ch }) (the term_key / term_text /
 //           term_mouse arguments; cw, ch: one of your cells in device pixels, as term_resize takes) ·
-//           coop_remote_input({ ringTab, ev }) (rdp_input's events, for pictures)
+//           coop_remote_input({ ringTab, ev }) (rdp_input's events, for pictures) · coop_close_remote({ ringTab, channel }) (the view
+//           closed: channel is the closed Channel's id, so the backend lets go of it)
 //   both:   coop_state() → CoopEvent, for when the window starts or reloads.
 // coop_create, coop_refresh, coop_passcode, coop_approve, coop_decline, coop_kick and coop_join answer with a
 // CoopEvent; the others answer nothing (coop_open_remote: whether the tab is still shared). Any of them refuses

@@ -1356,12 +1356,9 @@ fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, bool)> {
         Some(Tab::Rdp(t)) => Ok((picture(&t.session.name, t.size()), false)),
         Some(Tab::Vnc(t)) => Ok((picture(&t.session.name, (0, 0)), false)),
         None => match web::console(id) {
-            Some(false) if cfg!(windows) => {
-                let name = web::listed(handle).into_iter().find(|(i, _)| *i == id).map(|(_, v)| {
-                    v["title"].as_str().filter(|s| !s.is_empty()).or(v["name"].as_str()).unwrap_or("").to_string()
-                });
-                Ok((picture(&name.unwrap_or_default(), (0, 0)), true))
-            }
+            // Not `web::listed`: it asks every view for its address, which waits for the main thread
+            // while `tabs` is held here (a command on the main thread wanting `tabs` would deadlock it).
+            Some(false) if cfg!(windows) => Ok((picture(&web::title_of(id).unwrap_or_default(), (0, 0)), true)),
             Some(false) => Err(SITES.into()),
             Some(true) => Err("BMC console tabs can't be shared.".into()),
             None => Err("That tab isn't open.".into()),
@@ -1636,6 +1633,22 @@ pub fn coop_open_remote(ring_tab: u32, out: Channel) -> bool {
     let Some(channel) = channel else { return false };
     *channel.lock().unwrap() = Some(out);
     ring.to_owner(Msg::Refresh { tab: ring_tab })
+}
+
+/// The window that showed a tab shared with you is gone: its frames stop going to its channel, and
+/// dropping the channel ends the callback on the page (a page keeps decoding a channel's frames until
+/// then). `channel` is the closed window's channel id: a newer window for the same tab has another
+/// one, and is left alone.
+#[tauri::command]
+pub fn coop_close_remote(ring_tab: u32, channel: u32) {
+    let Ok(ring) = viewer() else { return };
+    let slot = ring.st().remote.get(&ring_tab).map(|r| r.channel.clone());
+    if let Some(slot) = slot {
+        let mut open = slot.lock().unwrap();
+        if open.as_ref().is_some_and(|c| c.id() == channel) {
+            *open = None;
+        }
+    }
 }
 
 fn hands(ring_tab: u32, input: Hands) -> Res<()> {

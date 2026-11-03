@@ -19,7 +19,8 @@
   let refused = $state(false);
   const needsPro = $derived(refused || app.sync.needsPro || app.sync.account?.pro.active === false);
   const pending = $derived(ring?.members.filter((m) => m.state === "pending") ?? []);
-  const inside = $derived(ring?.members.filter((m) => m.state !== "pending") ?? []);
+  // The owner hears of the people turned away too ("kicked"); they are no longer in the ring.
+  const inside = $derived(ring?.members.filter((m) => m.state === "approved") ?? []);
 
   let code = $state("");
   let error = $state("");
@@ -28,7 +29,9 @@
   /** Left to the passcode, in seconds. */
   const left = $derived(ring?.passcode_until ? ring.passcode_until - now / 1000 : 0);
 
-  const refresh = () => invoke("coop_refresh").catch(() => {});
+  /** Only the owner asks the server who is waiting; a viewer hears of changes from the `coop` event. */
+  const owns = $derived(!!ring?.owner);
+  const refresh = () => owns && invoke("coop_refresh").catch(() => {});
   $effect(() => {
     refresh();
     const [look, tick] = [setInterval(refresh, 2000), setInterval(() => (now = Date.now()), 1000)];
@@ -38,41 +41,28 @@
   $effect(() => void (signedIn && loadAccount()));
   $effect(() => void (app.sync.account?.pro.active && (refused = false)));
 
-  /** Runs one of the backend's commands, then looks again at once; its refusal is shown in words. */
+  /** Runs one of the backend's commands, then looks again at once; its refusal is shown in words.
+   *  True when it went through. */
   async function act(command: string, args?: Record<string, unknown>) {
     [busy, error] = [true, ""];
     try {
       await invoke(command, args);
       refresh();
+      return true;
     } catch (e) {
       error = String(e);
       // The server's answer to a ring without Pro names it ("needs XTermium Pro"): show the link instead.
       if (command === "coop_create" && /\bPro\b/.test(error)) refused = true;
+      return false;
     } finally {
       busy = false;
     }
   }
 
-  /** Cancelled by the person while the owner has not answered: the join's failure isn't news. */
-  let cancelled = false;
+  /** The backend answers at once; the ring then waits ("pending") until the owner says yes. */
   async function join() {
     const typed = passcode(code);
-    if (typed.length !== PASSCODE_LENGTH || app.coop.joining) return;
-    [cancelled, error, app.coop.joining] = [false, "", true];
-    try {
-      // Resolves once the owner has said yes and the connection is up.
-      await invoke("coop_join", { passcode: typed });
-      code = "";
-      refresh();
-    } catch (e) {
-      if (!cancelled) error = String(e);
-    } finally {
-      app.coop.joining = false;
-    }
-  }
-  function cancel() {
-    [cancelled, app.coop.joining] = [true, false];
-    invoke("coop_leave").catch(() => {});
+    if (typed.length === PASSCODE_LENGTH && !busy && (await act("coop_join", { passcode: typed }))) code = "";
   }
 
   /** Whose ring it is, for someone who joined it. */
@@ -87,8 +77,10 @@
 {#snippet foot()}
   {#if ring?.owner}
     <button class="danger" disabled={busy} onclick={() => act("coop_end")}><Icon name="x-circle" />{_("End the ring")}</button>
-  {:else}
+  {:else if ring?.state === "joined"}
     <button disabled={busy} onclick={() => act("coop_leave")}><Icon name="log-out" />{_("Leave the ring")}</button>
+  {:else}
+    <button disabled={busy} onclick={() => act("coop_leave")}>{_("Cancel")}</button>
   {/if}
 {/snippet}
 
@@ -114,26 +106,21 @@
       </button>
     </div>
     <h3>{_("Join a ring")}</h3>
-    {#if app.coop.joining}
-      <p class="row weak"><Icon name="loader-alt" spin /><span class="grow">{_("Waiting for the owner to say yes…")}</span></p>
-      <div class="row"><button onclick={cancel}>{_("Cancel")}</button></div>
-    {:else}
-      <p class="weak">{_("Ask the person who started it for the passcode.")}</p>
-      <div class="row">
-        <input
-          class="grow code"
-          value={code}
-          placeholder="A7K2M9QX"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          aria-label={_("Passcode")}
-          oninput={(e) => (code = e.currentTarget.value = passcode(e.currentTarget.value))}
-          onkeydown={(e) => e.key === "Enter" && join()}
-        />
-        <button disabled={!signedIn || passcode(code).length !== PASSCODE_LENGTH} onclick={join}>{_("Join")}</button>
-      </div>
-    {/if}
+    <p class="weak">{_("Ask the person who started it for the passcode.")}</p>
+    <div class="row">
+      <input
+        class="grow code"
+        value={code}
+        placeholder="A7K2M9QX"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        aria-label={_("Passcode")}
+        oninput={(e) => (code = e.currentTarget.value = passcode(e.currentTarget.value))}
+        onkeydown={(e) => e.key === "Enter" && join()}
+      />
+      <button disabled={!signedIn || busy || passcode(code).length !== PASSCODE_LENGTH} onclick={join}>{_("Join")}</button>
+    </div>
   {:else if ring.owner}
     <p class="weak">{_("Give people this passcode. They ask to join, and you say yes.")}</p>
     <div class="passcode row">
@@ -150,7 +137,7 @@
         <div class="row person">
           {@render person(m)}
           <!-- Quiet, and Approve the one gold button: Enter never lets anyone in by itself (the keyboard starts on the dialog). -->
-          <button class="flat" disabled={busy} onclick={() => act("coop_kick", { user: m.id })}>{_("Decline")}</button>
+          <button class="flat" disabled={busy} onclick={() => act("coop_decline", { user: m.id })}>{_("Decline")}</button>
           <button class="primary" disabled={busy} onclick={() => act("coop_approve", { user: m.id })}>{_("Approve")}</button>
         </div>
       {/each}
@@ -163,10 +150,13 @@
           <button class="flat" disabled={busy} title={_("Take {name} out of the ring", { name: m.name })} onclick={() => act("coop_kick", { user: m.id })}>{_("Kick")}</button>
         {/if}
       </div>
-    {:else}
-      <p class="weak">{_("Nobody else is in yet.")}</p>
     {/each}
+    {#if inside.length < 2}<p class="weak">{_("Nobody else is in yet.")}</p>{/if}
     <p class="weak">{_("Right-click a tab › Share with the ring puts it in front of everyone here.")}</p>
+  {:else if ring.state !== "joined"}
+    <p class="row weak">
+      <Icon name="loader-alt" spin /><span class="grow">{ring.state === "pending" ? _("Waiting for the owner to say yes…") : _("Connecting to the owner…")}</span>
+    </p>
   {:else}
     <p>{owner ? _("You're in {name}'s ring.", { name: owner }) : _("You're in a ring.")}</p>
     {#each inside as m (m.id)}

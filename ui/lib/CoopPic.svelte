@@ -1,7 +1,6 @@
 <script lang="ts">
-  // A person's picture, round, or their first letter when they have none or it doesn't load. The
-  // window only lets `data:` pictures through (tauri.conf.json `img-src`), so a picture at an
-  // https address shows as the letter until the backend sends it inline.
+  // A person's picture, round, or their first letter when they have none or it doesn't load (the
+  // window's CSP lets https pictures through, tauri.conf.json `img-src`).
   let { name, image, size = 21, color = "" }: { name: string; image: string | null; size?: 21 | 13; color?: string } = $props();
 
   /** The address that failed to load, so a new picture is tried afresh. */

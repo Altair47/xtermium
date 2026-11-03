@@ -463,11 +463,10 @@
     if (t && id && !dialogTakesKeys()) typed(t);
   }
 
-  /** Text typed or pasted: the terminal takes it whole; a viewer's goes to the owner a key at a time. */
+  /** Text typed or pasted: the terminal takes it whole, and so does the owner's for a viewer. */
   function typed(t: string) {
-    if (!remote) return void invoke("term_text", { id, text: t });
-    for (const c of t.replace(/\r\n/g, "\n"))
-      toOwner("coop_remote_key", { key: { key: c === "\n" || c === "\r" ? "Enter" : c, ctrl: false, alt: false, shift: false, meta: false } });
+    if (remote) toOwner("coop_remote_text", { text: t });
+    else invoke("term_text", { id, text: t });
   }
 
   /** What a viewer sends the owner goes one message after another, so it arrives in the order typed. */
@@ -596,7 +595,7 @@
     if (!id) return;
     const dpr = devicePixelRatio;
     // `cw`, `ch`: this font's cell, so the owner can turn the pixels into cells whatever font theirs is.
-    if (remote) return toOwner("coop_remote_mouse", { ev: { ...p, x: p.x * dpr, y: p.y * dpr, cw: cell.w, ch: cell.h } });
+    if (remote) return toOwner("coop_remote_mouse", { ev: { ...p, x: p.x * dpr, y: p.y * dpr }, cw: cell.w, ch: cell.h });
     // Ctrl+click on a link: the backend hands back its address.
     invoke<string | null>("term_mouse", { id, ev: { ...p, x: p.x * dpr, y: p.y * dpr } }).then(
       (url) => url && openUrl(url).catch((e) => (app.status = String(e))),
@@ -756,6 +755,7 @@
     observer?.disconnect();
     document.fonts.removeEventListener("loadingdone", fontsLoaded);
     if (id && !released && !remote) invoke("close_tab", { id });
+    if (remote) invoke("coop_close_remote", { ringTab: remote, channel: out.id }).catch(() => {});
     clearTimeout(tick);
     clearInterval(blinker);
     gpu?.sleep();

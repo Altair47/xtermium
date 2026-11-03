@@ -65,7 +65,7 @@ Tests in the same file: `only_local_callers` (Host and Origin), the oversized-li
 
 ## Windows and webviews
 
-- CSP (`tauri.conf.json` `app.security.csp`): `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.jsdelivr.net; connect-src ipc: http://ipc.localhost; frame-ancestors 'none'`. `devCsp` adds `http://localhost:8400` for development.
+- CSP (`tauri.conf.json` `app.security.csp`): `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: https://cdn.jsdelivr.net; connect-src ipc: http://ipc.localhost; frame-ancestors 'none'`. `devCsp` adds `http://localhost:8400` for development. `https:` in `img-src` lets Co-op members' pictures load from wherever their account keeps them (images run no script).
 - Capabilities (`capabilities/default.json`): windows `main` and `tab-*` only; permissions `core:default`, `core:webview:allow-set-webview-zoom`, `core:window:allow-set-fullscreen`, `core:window:allow-is-fullscreen`, `core:window:allow-set-title`.
 - `ui/main.ts` throws unless `ownWindow(label, framed)` says the webview is `main` or `tab-*` and not framed: website tabs share the app's address (`http://tauri.localhost`) and command rights, so the interface refuses to start anywhere but xtermium's own unframed windows.
 - Website views step aside while a dialog or menu overlaps them; pages can't reach xtermium itself; BMC consoles and unsaved websites browse privately; saved websites keep their own profile.

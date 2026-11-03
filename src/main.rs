@@ -1988,6 +1988,7 @@ fn main() {
             coop::coop_join,
             coop::coop_state,
             coop::coop_open_remote,
+            coop::coop_close_remote,
             coop::coop_remote_key,
             coop::coop_remote_text,
             coop::coop_remote_mouse,
