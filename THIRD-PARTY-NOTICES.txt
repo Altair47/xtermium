@@ -12313,9 +12313,9 @@ the following restrictions:
 JavaScript and fonts in the interface
 ================================================================================
 
-@fontsource-variable/recursive 5.3.0 (OFL-1.1)
+@fontsource-variable/jetbrains-mono 5.3.0 (OFL-1.1)
 
-Copyright 2019 The Recursive Project Authors (github.com/arrowtype/recursive)
+Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
