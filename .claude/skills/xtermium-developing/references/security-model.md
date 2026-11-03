@@ -11,18 +11,18 @@ The data folder is `~/.xtermium` (`%USERPROFILE%\.xtermium` on Windows) or `XTER
 | `sessions.xtm` | sessions, folders and tags, shared logins, tunnels, snippets, saved layouts, workspaces | yes |
 | `known.xtm` | trusted SSH host keys and RDP server keys | yes |
 | `recovery.key` | the data key sealed under the recovery passphrase | yes |
-| `settings.xtm` | Settings, including the default SSH password and the sync token | no |
-| `logins.xtm` | passwords remembered at a prompt, every workspace, this device only | no |
+| `settings.xtm` | Settings, including the default SSH password and the sync token | only when ticked, as a copy without the token, email, automation, default SSH password and other device-only fields (`Settings::for_cloud`) |
+| `logins.xtm` | passwords remembered at a prompt, every workspace | only when ticked |
 | `lock.xtm` | the lock: Argon2id hashes of password and PIN, the passkey's public key, when it locks | no |
 | `sync.xtm` | the revision this device last matched and a digest | no |
 | `tabs.xtm` | tabs to reopen | no |
-| `background.xtm`, `background-sidebar.xtm`, `background-bar.xtm` | backgrounds (a `data:` picture or shader source) | no |
+| `background.xtm`, `background-sidebar.xtm`, `background-bar.xtm` | backgrounds (a `data:` picture or shader source) | only when ticked |
 | `automation-cert.xtm` | the self-signed certificate for network-mode automation | no |
 | `restore-points/<ms>-<reason>.xtm` | a full backup's text plus saved logins, sealed with the data key (re-sealed by `rekey`), newest 10 | no |
 | `websites/<profile>` | each saved website session's WebView2 data folder; unused ones swept at load | no |
 | `webview/`, `logs/`, `temp/<pid>/`, `custom.css`, `instance.lock`, `instance.port` | the windows' browser data, logs, this run's passing data (swept at the next start), the user stylesheet, single-instance state | no |
 
-- Remembered passwords stay on the device; shared logins live in `sessions.xtm` and sync; exports carry them only inside the passphrase-protected `.xtermium` file.
+- Remembered passwords stay on the device unless "Saved logins and passwords" is ticked in Settings › Account and sync; shared logins live in `sessions.xtm` and sync; exports carry them only inside the passphrase-protected `.xtermium` file.
 - The sync token is kept in `settings.xtm` (sealed) and left out of backups, exports and troubleshooting bundles.
 - Settings › Troubleshoot writes plain-text files about the installation (version, system, settings without secrets, counts of what is stored and open).
 

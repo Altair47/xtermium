@@ -201,7 +201,7 @@ Every feature is free. Sync, a hosted service, is the only paid part. Each group
 Sync is xtermium's one paid part: **Pro**, a hosted service. It isn't open yet. Until it is, a passphrase-protected `.xtermium` export moves sessions by hand.
 
 - **What syncs:** your sessions, folders and workspaces, shared logins, tunnels, snippets, layouts and trusted host keys.
-- **What stays on each computer:** your settings and the passwords you chose to remember.
+- **What syncs only when you tick it** (Settings › Account and sync): your settings, backgrounds and the passwords you chose to remember.
 - **Encrypted before it leaves.** Everything is end-to-end encrypted: the sync server only ever holds files it can't read.
 
 The sync server is proprietary and not in this repository; the client talks to it through the open API in [docs/sync.md](docs/sync.md).
@@ -266,7 +266,7 @@ All `.xtm` files are encrypted with XChaCha20-Poly1305 under a random 256-bit da
 - **Recovery passphrase:** set one under Settings › Security. On a new computer, after a reinstall, or if the keychain entry is lost, xtermium asks for it and unlocks everything. Without it, a lost keychain entry means the files can't be read.
 - **Post-quantum safety:** only symmetric cryptography is used (XChaCha20-Poly1305, Argon2id for passphrases). Quantum computers threaten public-key schemes, and 256-bit symmetric keys stay secure.
 - **Upgrading:** the first start of this version encrypts the old plain-text `sessions.toml`, `settings.toml`, `known_hosts` and `known_rdp`, checks the result and deletes the plain-text files.
-- **Remembered passwords:** "Remember" stores a session's password in `logins.xtm`, on this computer only (it isn't synced).
+- **Remembered passwords:** "Remember" stores a session's password in `logins.xtm`, on this computer only unless you tick "Saved logins and passwords" in Settings › Account and sync.
 - **custom.css:** a `custom.css` in the data folder restyles the interface (the tokens and classes are in `ui/app.css` and `DESIGN.md`). It's applied at start; one that changed since you last kept it is tried for 30 seconds and taken off unless you keep it, so a stylesheet that hides the window can't lock you out.
 
 The formats, and the API a sync server would need, are in [docs/sync.md](docs/sync.md).

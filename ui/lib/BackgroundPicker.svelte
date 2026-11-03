@@ -60,7 +60,7 @@
 <div class="col">
   <div class="row">
     <span class="grow name" class:weak={!b.kind} title={b.name}>
-      {b.kind === "shader" ? _("Shader: {name}", { name: b.name }) : b.kind ? _("Picture: {name}", { name: b.name }) : _("Nothing")}
+      {b.kind === "shader" ? (b.name ? _("Shader: {name}", { name: b.name }) : _("Shader")) : b.kind ? (b.name ? _("Picture: {name}", { name: b.name }) : _("Picture")) : _("Nothing")}
     </span>
     <button disabled={busy} onclick={pickFile}><Icon name="upload" />{_("File…")}</button>
     {#if b.kind}<button onclick={() => set("", "", "")}><Icon name="trash" />{_("Remove")}</button>{/if}
