@@ -119,7 +119,7 @@ How the tools look from the outside: `xtermium-mcp`.
 - `npm run tauri build` builds `xtermium-rdp` (`rdp/`), the UI into `dist/`, then the app with the UI embedded, and the installers (`target/release/bundle/msi` and `nsis` on Windows). `-- --no-bundle` skips the installers; `-- --debug --no-bundle` gives a standalone debug exe.
 - Build and test with `CARGO_TARGET_DIR=target/work` (`CLAUDE.md` "Build, test, run"): a running `target/debug/xtermium.exe` locks `target/debug`, so builds there fail while it runs. The test exe is then `target/work/debug/xtermium.exe`, locked in turn while it runs: stop it before rebuilding.
 - A plain `cargo build`, `cargo test` or `cargo clippy` needs `npm run rdp` once first (Tauri checks the files it bundles). A plain `cargo build` gives the dev-mode binary, which expects the Vite server on port 1420.
-- Requirements: Rust 1.89 or newer, Node.js 20 or newer; on Linux the WebKitGTK packages Tauri needs. On Windows the WezTerm git dependency needs `git config --global core.longpaths true`.
+- Requirements: Rust 1.91 or newer, Node.js 20 or newer; on Linux the WebKitGTK packages Tauri needs. On Windows the WezTerm git dependency needs `git config --global core.longpaths true`.
 - Dependencies compile with optimizations even in dev builds, so the first build takes a few minutes.
 
 ## The security model

@@ -774,7 +774,6 @@ pub async fn page_screenshot(handle: &AppHandle, id: u32) -> Res<Picture> {
     #[cfg(windows)]
     {
         use base64::Engine;
-        use windows::core::HSTRING;
         // A hidden view draws nothing to capture: it's shown for the moment, outside the window's
         // client area so nothing on screen changes, and hidden again after.
         let hidden = !OPEN.lock().unwrap().get(&id).is_some_and(|o| o.shown);
@@ -782,29 +781,12 @@ pub async fn page_screenshot(handle: &AppHandle, id: u32) -> Res<Picture> {
             view.set_position(PhysicalPosition::new(-30_000.0, -30_000.0)).and_then(|_| view.show()).map_err(|e| e.to_string())?;
             tokio::time::sleep(Duration::from_millis(400)).await;
         }
-        let (tx, rx) = tokio::sync::oneshot::channel::<Res<String>>();
-        let shot = view.with_webview(move |w| {
-            let done = webview2_com::CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |hr, json| {
-                let _ = tx.send(hr.map(|()| json).map_err(|e| e.to_string()));
-                Ok(())
-            }));
-            // SAFETY: with_webview runs on the view's thread with its controller alive; the
-            // handler is kept by WebView2 until it has been called.
-            unsafe {
-                if let Ok(core) = w.controller().CoreWebView2() {
-                    let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Page.captureScreenshot"), &HSTRING::from(r#"{"format":"png"}"#), &done);
-                }
-            }
-        });
-        let answer = match shot {
-            Ok(()) => tokio::time::timeout(Duration::from_secs(10), rx).await.ok().and_then(Result::ok),
-            Err(_) => None,
-        };
+        let answer = devtools_shot(&view, r#"{"format":"png"}"#.into()).await;
         // Unless the tab came on screen meanwhile (web_place showed it where it belongs).
         if hidden && !OPEN.lock().unwrap().get(&id).is_some_and(|o| o.shown) {
             let _ = view.hide();
         }
-        let json = answer.ok_or("the page didn't answer")??;
+        let json = answer?;
         let data: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
         let png = base64::engine::general_purpose::STANDARD.decode(data["data"].as_str().unwrap_or_default()).map_err(|e| e.to_string())?;
         let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
@@ -817,8 +799,53 @@ pub async fn page_screenshot(handle: &AppHandle, id: u32) -> Res<Picture> {
     }
 }
 
+/// DevTools' `Page.captureScreenshot` with `params`, as the JSON it answers (the picture is base64
+/// under `data`). WebView2 only.
+#[cfg(windows)]
+async fn devtools_shot(view: &tauri::Webview, params: String) -> Res<String> {
+    use windows::core::HSTRING;
+    let (tx, rx) = tokio::sync::oneshot::channel::<Res<String>>();
+    let shot = view.with_webview(move |w| {
+        let done = webview2_com::CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |hr, json| {
+            let _ = tx.send(hr.map(|()| json).map_err(|e| e.to_string()));
+            Ok(())
+        }));
+        // SAFETY: with_webview runs on the view's thread with its controller alive; the
+        // handler is kept by WebView2 until it has been called.
+        unsafe {
+            if let Ok(core) = w.controller().CoreWebView2() {
+                let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Page.captureScreenshot"), &HSTRING::from(params.as_str()), &done);
+            }
+        }
+    });
+    let answer = match shot {
+        Ok(()) => tokio::time::timeout(Duration::from_secs(10), rx).await.ok().and_then(Result::ok),
+        Err(_) => None,
+    };
+    answer.ok_or("the page didn't answer")?
+}
+
+/// A website tab's page as a JPEG, for Terminal Co-op (coop.rs shares websites as pictures). None
+/// while the tab isn't on screen: a hidden view draws nothing, and showing it off-screen every
+/// quarter second, as `page_screenshot` does for one picture, would flicker and cost too much.
+/// ponytail: a website tab that isn't in front shows viewers its last picture; capture it off-screen
+/// when that bites.
+#[cfg(windows)]
+pub async fn page_jpeg(handle: &AppHandle, id: u32, quality: u8) -> Res<Option<Vec<u8>>> {
+    use base64::Engine;
+    let view = site_view(handle, id)?;
+    if !OPEN.lock().unwrap().get(&id).is_some_and(|o| o.shown) {
+        return Ok(None);
+    }
+    let json = devtools_shot(&view, format!(r#"{{"format":"jpeg","quality":{quality}}}"#)).await?;
+    let data: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let jpeg = base64::engine::general_purpose::STANDARD.decode(data["data"].as_str().unwrap_or_default()).map_err(|e| e.to_string())?;
+    Ok(Some(jpeg))
+}
+
 #[tauri::command]
 pub fn web_close(window: Window, id: u32) {
+    crate::coop::forget(id);
     let temp = OPEN.lock().unwrap().remove(&id).is_some_and(|o| o.temp);
     if let Ok(w) = web(&window, id) {
         let _ = w.close();

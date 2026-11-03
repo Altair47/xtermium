@@ -283,7 +283,7 @@ The formats, and the API a sync server would need, are in [docs/sync.md](docs/sy
 
 ## Requirements
 
-- Rust 1.89 or newer, and Node.js 20 or newer with npm.
+- Rust 1.91 or newer, and Node.js 20 or newer with npm.
 - On Linux, the WebKitGTK development packages that Tauri needs (see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)). Windows 10/11 ship WebView2.
 - Windows: long git paths. The WezTerm git dependency contains paths longer than 260 characters. If `cargo fetch` fails with `path too long`, run `git config --global core.longpaths true`, or run that one fetch with a `HOME`/`USERPROFILE` whose `.gitconfig` sets it.
 

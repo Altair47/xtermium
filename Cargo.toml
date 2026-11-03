@@ -2,7 +2,7 @@
 name = "xtermium"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.91"
 authors = ["Sotirios Roussis"]
 license = "Apache-2.0"
 homepage = "https://xtermium.com"
@@ -24,6 +24,11 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 getrandom = "0.3"
 keyring = "4"
 portable-pty = "0.9"
+# Terminal Co-op (coop.rs): QUIC between peers with hole punching and our own relay. Only the ring
+# crypto provider (the one the app pins everywhere); no n0 relays or discovery are configured.
+iroh = { version = "1", default-features = false, features = ["tls-ring"] }
+# Co-op's wire messages, framed with a length prefix.
+postcard = { version = "1", default-features = false, features = ["use-std"] }
 # Randomness for new SSH keys (sshkeys.rs): the RNG russh's ssh-key takes.
 rand = { version = "0.10", features = ["thread_rng"] }
 rcgen = { version = "0.14", default-features = false, features = ["ring"] } # the self-signed certificate of automation over the network

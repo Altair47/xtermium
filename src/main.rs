@@ -8,6 +8,7 @@ mod automation;
 mod clean;
 mod cli;
 mod config;
+mod coop;
 mod explorer;
 mod files;
 mod flow;
@@ -1475,6 +1476,8 @@ async fn save_output(handle: AppHandle, id: u32) -> Res<Option<String>> {
 #[tauri::command]
 fn close_tab(app: State<App>, handle: AppHandle, id: u32) {
     let tab = app.tabs.lock().unwrap().remove(&id);
+    // A tab shared with a Terminal Co-op ring stops being shared.
+    coop::forget(id);
     // A detached tab's window goes with it.
     if let Some(w) = handle.get_webview_window(&detached_label(id)) {
         let _ = w.destroy();
@@ -1554,17 +1557,8 @@ async fn term_key(app: State<'_, App>, handle: AppHandle, id: u32, key: term::Ke
 
 #[tauri::command]
 fn term_text(app: State<App>, handle: AppHandle, id: u32, text: String) {
-    use wezterm_term::{KeyCode, KeyModifiers};
     // Line breaks (snippets) press Enter, encoded for the terminal's mode like a typed one.
-    let evs: Vec<_> = text
-        .replace("\r\n", "\n")
-        .chars()
-        .map(|c| match c {
-            '\n' | '\r' => term::Typed::Key(KeyCode::Enter, KeyModifiers::NONE),
-            c => term::Typed::Key(KeyCode::Char(c), KeyModifiers::NONE),
-        })
-        .collect();
-    type_into(&app, &handle, &app.tabs.lock().unwrap(), id, &evs);
+    type_into(&app, &handle, &app.tabs.lock().unwrap(), id, &term::typed(&text));
 }
 
 /// A pointer event; returns a link's address on Ctrl+click, for the UI to open.
@@ -1582,6 +1576,7 @@ fn term_resize(app: State<App>, id: u32, cols: usize, rows: usize, cw: f32, ch: 
     if let Some(Tab::Term(t)) = app.tabs.lock().unwrap().get(&id) {
         t.resize(cols, rows, (cw, ch));
     }
+    coop::resized(id, cols, rows);
 }
 
 /// The scroll bar: shows the screen `back` rows up from the bottom of a terminal's output.
@@ -1980,6 +1975,23 @@ fn main() {
             tunnel_stop,
             tunnel_stats,
             prompt_reply,
+            coop::coop_create,
+            coop::coop_refresh,
+            coop::coop_passcode,
+            coop::coop_approve,
+            coop::coop_decline,
+            coop::coop_kick,
+            coop::coop_end,
+            coop::coop_leave,
+            coop::coop_share,
+            coop::coop_cursor,
+            coop::coop_join,
+            coop::coop_state,
+            coop::coop_open_remote,
+            coop::coop_remote_key,
+            coop::coop_remote_text,
+            coop::coop_remote_mouse,
+            coop::coop_remote_input,
         ])
         .build(tauri::generate_context!())
         .expect("starting xtermium")

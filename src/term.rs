@@ -247,6 +247,18 @@ pub enum Typed {
     Paste(String),
 }
 
+/// Text typed key by key: a line break presses Enter, encoded for the terminal's mode like a typed
+/// one (snippets, and a Co-op viewer's typing).
+pub fn typed(text: &str) -> Vec<Typed> {
+    text.replace("\r\n", "\n")
+        .chars()
+        .map(|c| match c {
+            '\n' | '\r' => Typed::Key(KeyCode::Enter, KeyModifiers::NONE),
+            c => Typed::Key(KeyCode::Char(c), KeyModifiers::NONE),
+        })
+        .collect()
+}
+
 impl Look {
     /// The clipboard's text, ready to paste.
     fn pasted(&self) -> Option<String> {
@@ -262,8 +274,9 @@ fn apply(term: &mut Terminal, ev: &Typed) {
     };
 }
 
-/// A key press from the UI (DOM `KeyboardEvent.key` plus modifiers).
-#[derive(Deserialize)]
+/// A key press from the UI (DOM `KeyboardEvent.key` plus modifiers). Serialised too: a Co-op
+/// viewer's keys travel to the tab's owner (coop.rs).
+#[derive(Serialize, Deserialize)]
 pub struct Key {
     pub key: String,
     #[serde(default)]
@@ -277,7 +290,7 @@ pub struct Key {
 }
 
 /// A pointer event over the grid. `x`/`y` are device pixels from the grid's top-left corner.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Mouse {
     pub kind: MouseKind,
     /// 0 left, 1 middle, 2 right.
@@ -299,7 +312,7 @@ pub struct Mouse {
     pub clicks: u8,
 }
 
-#[derive(Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MouseKind {
     Down,
@@ -417,6 +430,8 @@ struct Inner {
     /// When output last arrived (automation waits for it to go quiet).
     last_output: std::time::Instant,
     log: Option<Log>,
+    /// Terminal Co-op (coop.rs): a second place the frames go, while the tab is shared.
+    share: Option<UnboundedSender<Vec<u8>>>,
 }
 
 /// `%41` → `A`: a `file://` path's segments as the shell wrote them.
@@ -714,6 +729,7 @@ impl Inner {
             images: HashSet::new(),
             highlighted: HashMap::new(),
             last_output: std::time::Instant::now(),
+            share: None,
         }
     }
 }
@@ -868,6 +884,19 @@ impl Tab {
         i.images.clear();
         drop(i);
         self.notify.notify_one();
+    }
+
+    /// Terminal Co-op: from now on the bytes the window gets go to `sink` as well (None stops it).
+    /// Setting a sink, and calling this again for a viewer who joins, sends everything again, so
+    /// every viewer starts from the same state as the owner's window.
+    pub fn share(&self, sink: Option<UnboundedSender<Vec<u8>>>) {
+        let mut i = self.inner.lock().unwrap();
+        let on = sink.is_some();
+        i.set_share(sink);
+        drop(i);
+        if on {
+            self.notify.notify_one();
+        }
     }
 
     /// Settings changed: new colours, font and scrollback apply immediately.
@@ -1047,6 +1076,19 @@ impl Tab {
 
     /// A pointer event; Ctrl+click on a link returns its address for the UI to open.
     pub fn mouse(&self, m: &Mouse) -> Option<String> {
+        self.pointer(m, None)
+    }
+
+    /// A Co-op viewer's pointer event, in pixels of their cells (`theirs`, width and height): it
+    /// acts on the screen like the owner's, at the same cell, but never reads or writes the
+    /// owner's clipboard (copy on select, right-click paste).
+    pub fn mouse_remote(&self, m: &Mouse, theirs: (f32, f32)) {
+        self.pointer(m, Some(theirs));
+    }
+
+    /// `theirs`: a Co-op viewer's cell size, else None.
+    fn pointer(&self, m: &Mouse, theirs: Option<(f32, f32)>) -> Option<String> {
+        let remote = theirs.is_some();
         let mut guard = self.inner.lock().unwrap();
         let i = &mut *guard;
         let (cols, rows) = i.size;
@@ -1054,9 +1096,10 @@ impl Tab {
             return None;
         }
         let (cw, ch) = i.cell;
-        let (x, y) = (((m.x.max(0.0) / cw) as usize).min(cols - 1), ((m.y.max(0.0) / ch) as usize).min(rows - 1));
+        let (mx, my) = in_our_cells((m.x, m.y), (cw, ch), theirs);
+        let (x, y) = (((mx.max(0.0) / cw) as usize).min(cols - 1), ((my.max(0.0) / ch) as usize).min(rows - 1));
         // Offset inside the cell in pixels (SGR-pixel reports, used by e.g. terminal-browser).
-        let (px, py) = ((m.x - x as f32 * cw).max(0.0) as isize, (m.y - y as f32 * ch).max(0.0) as isize);
+        let (px, py) = ((mx - x as f32 * cw).max(0.0) as isize, (my - y as f32 * ch).max(0.0) as isize);
         let ev = |kind, button| MouseEvent {
             kind,
             x,
@@ -1124,6 +1167,7 @@ impl Tab {
                 i.sel = Some(unit);
                 (i.block, i.drag, i.unit) = (false, Some(true), Some((m.clicks > 2, unit)));
                 if i.look.copy_on_select
+                    && !remote
                     && let Some(s) = selection_text(i)
                 {
                     clipboard(|c| c.set_text(s));
@@ -1133,7 +1177,7 @@ impl Tab {
                 i.sel = Some(((stable, x), (stable, x)));
                 (i.block, i.drag, i.unit) = (m.alt, Some(false), None);
             }
-            MouseKind::Down if m.button == 2 && i.look.right_click_paste => {
+            MouseKind::Down if m.button == 2 && i.look.right_click_paste && !remote => {
                 if let Some(s) = i.look.pasted() {
                     let _ = i.term.send_paste(&s);
                 }
@@ -1155,7 +1199,7 @@ impl Tab {
             MouseKind::Up if m.button == 0 => {
                 i.unit = None;
                 match i.drag.take() {
-                    Some(true) if i.look.copy_on_select => {
+                    Some(true) if i.look.copy_on_select && !remote => {
                         if let Some(s) = selection_text(i) {
                             clipboard(|c| c.set_text(s));
                         }
@@ -1170,6 +1214,15 @@ impl Tab {
         drop(guard);
         self.notify.notify_one();
         None
+    }
+}
+
+/// A Co-op viewer's pointer position, measured in pixels of their cells (`theirs`), as pixels of
+/// ours: the same cell at our size. Unchanged when they don't say how big their cells are.
+fn in_our_cells((x, y): (f32, f32), ours: (f32, f32), theirs: Option<(f32, f32)>) -> (f32, f32) {
+    match theirs {
+        Some((tw, th)) if tw > 0.0 && th > 0.0 => (x * ours.0 / tw, y * ours.1 / th),
+        _ => (x, y),
     }
 }
 
@@ -1214,7 +1267,7 @@ async fn frames(inner: Arc<Mutex<Inner>>, notify: Arc<Notify>, out: Arc<Mutex<Ch
             if i.closed {
                 return;
             }
-            contained("terminal frame", || i.frame()).unwrap_or_default()
+            i.next_frames()
         };
         // A window gone (the tab moving to another) drops frames until `attach`, which sends all.
         let out = out.lock().unwrap().clone();
@@ -1229,6 +1282,27 @@ async fn frames(inner: Arc<Mutex<Inner>>, notify: Arc<Notify>, out: Arc<Mutex<Ch
 }
 
 impl Inner {
+    /// The messages for the window, and for the Co-op sink when the tab is shared. Taken under
+    /// the tab's lock, so a sink set just now starts with the full frame `set_share` asks for.
+    fn next_frames(&mut self) -> Vec<Vec<u8>> {
+        let msgs = contained("terminal frame", || self.frame()).unwrap_or_default();
+        // A sink nobody reads any more (the ring ended) is dropped; no copy is made without one.
+        if let Some(s) = &self.share
+            && msgs.iter().any(|m| s.send(m.clone()).is_err())
+        {
+            self.share = None;
+        }
+        msgs
+    }
+
+    fn set_share(&mut self, sink: Option<UnboundedSender<Vec<u8>>>) {
+        if sink.is_some() {
+            self.meta = None;
+            self.images.clear();
+        }
+        self.share = sink;
+    }
+
     /// Program output. Scrolled back, the screen keeps showing the same lines (`scroll` counts
     /// from the bottom, so it moves up by what arrived), or jumps to the bottom if set to.
     fn output(&mut self, b: &[u8]) {
@@ -2322,6 +2396,56 @@ mod tests {
         let size = terminal_size(&i);
         i.term.resize(size);
         i
+    }
+
+    /// A viewer with bigger cells clicks the same cell on the owner's screen.
+    #[test]
+    fn viewer_pointers_land_on_the_same_cell() {
+        // Their cells are 10 × 20 pixels, ours 8 × 16: the 3rd column and 2nd row either way.
+        assert_eq!(in_our_cells((25.0, 30.0), (8.0, 16.0), Some((10.0, 20.0))), (20.0, 24.0));
+        assert_eq!(in_our_cells((25.0, 30.0), (8.0, 16.0), Some((0.0, 0.0))), (25.0, 30.0));
+        assert_eq!(in_our_cells((25.0, 30.0), (8.0, 16.0), None), (25.0, 30.0));
+    }
+
+    /// A shared tab's sink gets the very bytes the window gets, starts with a full frame (the one
+    /// that carries the style), and gets a full frame again when a viewer joins.
+    #[test]
+    fn the_co_op_sink_gets_what_the_window_gets() {
+        let full = |m: &[u8]| m[0] == MSG_FRAME && std::str::from_utf8(&m[1..]).unwrap().contains("\"style\"");
+        let mut i = inner(20, 3, None);
+        i.term.advance_bytes(b"hello");
+        let window = i.next_frames();
+        assert!(!window.is_empty());
+
+        // Not shared: nothing is copied anywhere.
+        assert!(i.share.is_none());
+
+        let (tx, mut rx) = unbounded_channel();
+        i.set_share(Some(tx.clone()));
+        let first = i.next_frames();
+        assert!(full(&first[0]), "sharing starts from the whole screen");
+        let mut got = vec![];
+        while let Ok(m) = rx.try_recv() {
+            got.push(m);
+        }
+        assert_eq!(got, first, "the sink and the window get the same bytes");
+
+        // A change after that is a small frame, to both.
+        i.term.advance_bytes(b"!");
+        let diff = i.next_frames();
+        assert!(!diff.is_empty() && !full(&diff[0]));
+        assert_eq!(rx.try_recv().ok().as_ref(), diff.first());
+
+        // A viewer joining: everything again.
+        i.set_share(Some(tx));
+        let again = i.next_frames();
+        assert!(full(&again[0]));
+
+        // A sink nobody listens to is let go.
+        drop(rx);
+        i.term.advance_bytes(b"?");
+        i.next_frames();
+        assert!(i.share.is_none());
     }
 
     /// The log holds the text as the screen showed it: no colours, redrawn progress bars once in

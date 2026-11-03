@@ -21,6 +21,8 @@ enum Ctl {
     Input(Input),
     /// Automation wants a screenshot: the screen as it is (None before it's connected).
     Shot(tokio::sync::oneshot::Sender<Option<crate::rdp::Picture>>),
+    /// Terminal Co-op: a second place the messages go (None stops it), after a catch-up.
+    Share(Option<UnboundedSender<Vec<u8>>>),
     Close,
 }
 
@@ -86,6 +88,16 @@ impl Screen {
         self.dirty.push(dst);
     }
 
+    /// The whole screen as one frame, for a Co-op viewer that starts watching.
+    fn whole(&self) -> Vec<u8> {
+        let mut m = vec![MSG_FRAME];
+        for v in [0, 0, self.w as u16, self.h as u16] {
+            m.extend_from_slice(&v.to_le_bytes());
+        }
+        m.extend_from_slice(&self.px);
+        m
+    }
+
     /// `[MSG_FRAME]` then each changed area `[x][y][w][h: u16 LE][RGBA]`; None if nothing changed.
     fn frame(&mut self) -> Option<Vec<u8>> {
         if self.dirty.is_empty() {
@@ -142,6 +154,13 @@ impl VncTab {
 
     pub fn input(&self, ev: Input) {
         let _ = self.tx.send(Ctl::Input(ev));
+    }
+
+    /// Terminal Co-op: from now on the messages the window gets go to `sink` as well (None stops
+    /// it), starting with the desktop's size and the whole picture; a viewer who joins later
+    /// gets that again by calling this again.
+    pub fn share(&self, sink: Option<UnboundedSender<Vec<u8>>>) {
+        let _ = self.tx.send(Ctl::Share(sink));
     }
 
     /// What the desktop shows now; None before it's connected (or after it closed). The future
@@ -226,6 +245,7 @@ async fn run(
     }
 
     let mut screen: Option<Screen> = None;
+    let mut share: Option<UnboundedSender<Vec<u8>>> = None;
     let mut held = Held::default();
     let mut tick = tokio::time::interval(Duration::from_millis(16));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -254,6 +274,10 @@ async fn run(
                         let mut m = vec![MSG_SIZE];
                         m.extend_from_slice(&w.to_le_bytes());
                         m.extend_from_slice(&h.to_le_bytes());
+                        if let Some(s) = &share {
+                            let _ = s.send(m.clone());
+                            let _ = s.send(vec![MSG_STATUS, 0]);
+                        }
                         let _ = out.send(InvokeResponseBody::Raw(m));
                         let _ = out.send(InvokeResponseBody::Raw(vec![MSG_STATUS, 0]));
                         if !first {
@@ -275,10 +299,13 @@ async fn run(
                         _ => {}
                     }
                 }
-                if let Some(m) = screen.as_mut().and_then(Screen::frame)
-                    && out.send(InvokeResponseBody::Raw(m)).is_err()
-                {
-                    break;
+                if let Some(m) = screen.as_mut().and_then(Screen::frame) {
+                    if let Some(s) = &share {
+                        let _ = s.send(m.clone());
+                    }
+                    if out.send(InvokeResponseBody::Raw(m)).is_err() {
+                        break;
+                    }
                 }
                 vnc.input(X11Event::Refresh).await?;
             }
@@ -296,6 +323,17 @@ async fn run(
                 }
                 Some(Ctl::Shot(reply)) => {
                     let _ = reply.send(screen.as_ref().map(|s| crate::rdp::Picture { w: s.w, h: s.h, px: s.px.clone() }));
+                }
+                Some(Ctl::Share(sink)) => {
+                    if let (Some(s), Some(scr)) = (&sink, &screen) {
+                        let mut size = vec![MSG_SIZE];
+                        size.extend_from_slice(&(scr.w as u16).to_le_bytes());
+                        size.extend_from_slice(&(scr.h as u16).to_le_bytes());
+                        for m in [size, vec![MSG_STATUS, 0], scr.whole()] {
+                            let _ = s.send(m);
+                        }
+                    }
+                    share = sink;
                 }
                 Some(Ctl::Close) | None => break,
             },
@@ -461,6 +499,16 @@ fn keysym(code: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Co-op viewer who joins gets the whole screen as a single frame from the corner.
+    #[test]
+    fn a_whole_screen_is_one_frame() {
+        let mut s = Screen::new(2, 1);
+        s.px[..4].copy_from_slice(&[9, 8, 7, 255]);
+        let m = s.whole();
+        assert_eq!(m[..9], [MSG_FRAME, 0, 0, 0, 0, 2, 0, 1, 0]);
+        assert_eq!(m[9..], s.px[..]);
+    }
 
     #[test]
     fn keysyms() {

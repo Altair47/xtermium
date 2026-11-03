@@ -89,3 +89,12 @@ There is no password. A person signs in with an account they already have at Goo
 - **Joining with data of its own:** the person chooses between the device's data and the account's, the same way; either way every local file, settings included, is then encrypted again under the account's data key.
 - **`429`:** too many requests; `Retry-After` says how many seconds to wait. `GET /v1/vault` is limited to 120 an hour per account: `recovery.key` rides along in every answer and allows offline passphrase guessing, so the client also requires passphrases of at least 12 characters.
 - **`503`:** the server is away (`Retry-After: 30`; minutes, hours at worst). Never a bare 500.
+
+### Terminal Co-op
+
+Pro people share tabs with up to two more over iroh (QUIC, hole punching, our own relay `https://relay.xtermium.com`, or `XTERMIUM_COOP_RELAY`; no n0 relays or discovery). The server is only the rendezvous: the routes and tables are `docs/api.md` "Co-op rings" in the server's repository, and the client (`src/coop.rs`) uses them like this. Every call is bearer-authenticated; a refusal is `{"error": "<message>"}`, shown as it is.
+
+- **Our address:** `{"id": "<NodeId>", "relay": "<url or null>", "addrs": ["ip:port", …]}`, sent when a ring starts (`POST /v1/coop/rings`) and when joining (`POST /v1/coop/join`). Each ring gets a fresh iroh key, dropped with the ring.
+- **Owner:** `POST /v1/coop/rings` (needs Pro, `402` otherwise), then `GET /v1/coop/rings/:id` every 2 s while the dialog is open (pending requests, the passcode), `POST …/members/:user` with `approved` or `kicked`, `POST …/passcode`, `DELETE …/rings/:id`. Pro is read again every 5 minutes (`GET /v1/account`) while a ring is open; without it the ring ends. The owner's app accepts a connection only from a NodeId the server lists as `approved`, and only when the Hello names that member's user id.
+- **Viewer:** `POST /v1/coop/join` with the passcode, then `GET /v1/coop/join/:ring` every 2 s until `approved` (every 5 s after), then it dials the owner's address; `POST …/rings/:id/leave` to leave. `404` means the ring is over.
+- **Between the apps** (ALPN `xtermium/coop/1`): one bi-stream for control, postcard messages behind a 4-byte big-endian length (`Hello`, `Share`, `Unshare`, `Resize`, `Cursor`, `Refresh`, `Input`, `Kicked`, `Ended`), and one uni-stream per shared tab carrying `Frame` messages: the bytes the tab's own window gets. Nothing of the tabs goes through the server.
