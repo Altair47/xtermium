@@ -1238,14 +1238,15 @@ xtermium close 3`}</pre>
       </div>
       <span class:weak={s.broadcast_outline === "rainbow"}>{_("Colour")}</span>
       <div class="row wrap">
+        <button class="swatch" class:selected={!s.broadcast_outline_color} title={_("Accent")} aria-label={_("Accent")} style:--c="var(--gold)" onclick={() => (s.broadcast_outline_color = "")}></button>
         {#each ["#9aa3ad", ...COLORS] as c (c)}
           <button class="swatch" class:selected={s.broadcast_outline_color === c} title={c} aria-label={_("Colour {c}", { c })} style:--c={c} onclick={() => (s.broadcast_outline_color = c)}></button>
         {/each}
-        <input type="color" title={_("Any colour")} value={s.broadcast_outline_color} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
-        {@render back(["broadcast_outline_color"], (d) => d.broadcast_outline_color)}
+        <input type="color" title={_("Any colour")} value={s.broadcast_outline_color || s.accent || "#ffb000"} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
+        {@render back(["broadcast_outline_color"], (d) => d.broadcast_outline_color || _("Accent"))}
       </div>
       <span>{_("Preview")}</span>
-      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color} {@attach offscreenStill}>$ uptime</div>
+      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color || null} {@attach offscreenStill}>$ uptime</div>
     </div>
     <div class="foot"><button onclick={reset}>{_("Reset appearance and terminal settings")}</button></div>
   {:else if page === "terminal"}
@@ -1273,7 +1274,7 @@ xtermium close 3`}</pre>
           <button class:selected={s.cursor === c} onclick={() => (s.cursor = c)}>{_(c)}</button>
         {/each}
         <label class="check"><input type="checkbox" bind:checked={s.cursor_blink} />{_("Blink")}</label>
-        {@render back(["cursor", "cursor_blink"], (d) => `${_(d.cursor)}, ${_("Blink")}`)}
+        {@render back(["cursor", "cursor_blink"], (d) => (d.cursor_blink ? `${_(d.cursor)}, ${_("Blink")}` : _(d.cursor)))}
       </div>
       <span>{_("Line height")}</span>
       <div class="row"><input type="range" min="1" max="2" step="0.05" bind:value={s.line_height} />{s.line_height.toFixed(2)}×{@render back(["line_height"], (d) => `${d.line_height.toFixed(2)}×`)}</div>

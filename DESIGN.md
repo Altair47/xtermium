@@ -798,8 +798,8 @@ one button per kind, glyph and name, the picked one in the amber wash. The type 
 the editor because it decides every field below it; changing it keeps the host typed so far.
 
 ### Broadcast Outline (signature)
-Every terminal that receives broadcast keystrokes gets a 2px inset outline in a chosen colour
-(`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
+Every terminal that receives broadcast keystrokes gets a 2px inset outline in the accent or a
+chosen colour (`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
 ring, march, rainbow, off). While broadcast is on, the focus ring around the pane you type in
 turns to a 2px dashed ring in the text colour (`fg`) and steps 2px further out, so it never reads
 as one band with an outline in the same colour. All animated styles stop under reduced motion, and

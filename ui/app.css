@@ -689,8 +689,9 @@ progress {
 }
 
 /* Broadcast: the outline on every terminal that gets the keys. `data-outline` is the style
-   (src/settings.rs OUTLINES), `--oc` its colour. */
+   (src/settings.rs OUTLINES), `--oc` its colour, the accent unless one was picked. */
 .outline {
+  --oc: var(--gold);
   position: relative;
 }
 .outline::after {

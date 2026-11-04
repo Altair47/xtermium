@@ -214,6 +214,7 @@ export type Settings = {
   custom_css: string;
   /** The outline on terminals broadcast types into (app.css `.outline`) and its colour. */
   broadcast_outline: string;
+  /** `#rrggbb`; "" = the accent. */
   broadcast_outline_color: string;
   /** The focused pane's ring glides to the next pane; false: it jumps. */
   focus_animated: boolean;
