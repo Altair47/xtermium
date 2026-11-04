@@ -1677,9 +1677,9 @@ xtermium close 3`}</pre>
   {:else if page === "troubleshoot"}
     <h3>{_("Troubleshoot")}</h3>
     <p>
-      {_("Something isn't working? Make a bundle: a folder of plain-text files about this installation (version, system, settings, counts of what's stored and what's open), then send its files to support@xtermium.com with what you saw.")}
+      {_("Something isn't working? Make a bundle: a .zip of plain-text files about this installation (version, system, settings, counts of what's stored and what's open), then send it to support@xtermium.com with what you saw.")}
     </p>
-    <p class="weak">{_("Nothing in it names a server, a login or a password, and it never leaves this computer by itself: have a look before you send it.")}</p>
+    <p class="weak">{_("Nothing in it names a server, a login or a password; your user and computer names, your home folder and any email or IP address are taken out. It never leaves this computer by itself: have a look before you send it.")}</p>
     <div class="row">
       <button class="primary" disabled={bundle.busy} onclick={makeBundle}>{#if bundle.busy}<Icon name="loader-alt" spin />{/if}{_("Create bundle")}</button>
       {#if bundle.path}<span class="weak">{_("Saved in {path}", { path: bundle.path })}</span>{/if}

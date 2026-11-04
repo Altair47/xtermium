@@ -159,16 +159,19 @@ fn linux_packages() -> &'static [&'static str] {
     }
 }
 
-/// Writes a folder of plain-text facts about this installation for support@xtermium.com (no
-/// passwords, tokens, names or addresses: settings, counts and the environment) and opens it.
-/// Returns the folder.
+/// Writes a .zip of plain-text facts about this installation for support@xtermium.com (settings,
+/// counts and the environment; no passwords, tokens, names or addresses: every file goes through
+/// `redact` first) and shows it in the file manager. Returns the .zip's path.
 #[tauri::command]
 pub fn troubleshoot_bundle(handle: AppHandle) -> Res<String> {
     use tauri_plugin_opener::OpenerExt;
     let app = handle.state::<App>();
-    let dir = config::dir().join("troubleshoot").join(chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string());
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let write = |name: &str, text: String| std::fs::write(dir.join(name), text).map_err(|e| format!("{name}: {e}"));
+    let now = chrono::Local::now();
+    let mut files: Vec<(&str, String)> = Vec::new();
+    let mut write = |name: &'static str, text: String| -> Res<()> {
+        files.push((name, text));
+        Ok(())
+    };
 
     let mut about = format!(
         "xtermium {} build {} ({})\nsystem: {} {}\ntauri: {}\nwebview: {}\ndata folder: {}\nprogram: {}\n",
@@ -215,7 +218,7 @@ pub fn troubleshoot_bundle(handle: AppHandle) -> Res<String> {
 
     // The settings without anything secret or personal.
     let mut s = app.settings.lock().unwrap().clone();
-    for secret in [&mut s.automation_token, &mut s.sync_token, &mut s.sync_email, &mut s.ssh_password, &mut s.ssh_user, &mut s.ssh_key, &mut s.shell] {
+    for secret in [&mut s.automation_token, &mut s.sync_token, &mut s.sync_email, &mut s.ssh_password, &mut s.ssh_user, &mut s.ssh_key, &mut s.shell, &mut s.workspace] {
         if !secret.is_empty() {
             *secret = "(set)".into();
         }
@@ -260,8 +263,124 @@ pub fn troubleshoot_bundle(handle: AppHandle) -> Res<String> {
     }
     write("data.txt", data)?;
 
-    let _ = handle.opener().open_path(dir.display().to_string(), None::<&str>);
-    Ok(dir.display().to_string())
+    let names = Personal::here();
+    let files: Vec<(&str, String)> = files.into_iter().map(|(name, text)| (name, names.redact(&text))).collect();
+    let dir = config::dir().join("troubleshoot");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(format!("xtermium-troubleshoot-{}.zip", now.format("%Y-%m-%d_%H-%M-%S")));
+    std::fs::write(&path, zip(&files, now.naive_local())).map_err(|e| format!("{}: {e}", path.display()))?;
+    let _ = handle.opener().reveal_item_in_dir(&path);
+    Ok(path.display().to_string())
+}
+
+/// What in a troubleshooting bundle could name the person or the computer (the home folder and
+/// the user and computer names), and what only looks like an address (`keep`).
+struct Personal {
+    home: String,
+    names: Vec<(String, &'static str)>,
+    keep: Vec<String>,
+}
+
+impl Personal {
+    fn here() -> Self {
+        let home = directories::BaseDirs::new().map(|d| d.home_dir().display().to_string()).unwrap_or_default();
+        let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default();
+        let computer = gethostname::gethostname().to_string_lossy().into_owned();
+        let keep = vec![tauri::webview_version().unwrap_or_default()];
+        Personal { home, names: vec![(user, "<user>"), (computer, "<computer>")], keep }
+    }
+
+    /// The text with the home folder written `~`, the user and computer names (in any case) as
+    /// `<user>` and `<computer>`, and email and IP addresses as `<email>` and `<ip>`. Loopback and
+    /// 0.0.0.0 stay: they say how something listens, not where.
+    fn redact(&self, text: &str) -> String {
+        use regex::{NoExpand, Regex};
+        let mut out = text.to_string();
+        if self.home.len() > 3 {
+            // Either slash, any case: Windows paths come both ways and ignore case.
+            let pattern = regex::escape(&self.home.replace('\\', "/")).replace('/', r"[\\/]");
+            out = Regex::new(&format!("(?i){pattern}")).unwrap().replace_all(&out, NoExpand("~")).into_owned();
+        }
+        let email = Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}").unwrap();
+        // SSH algorithm names (chacha20-poly1305@openssh.com) are written like addresses.
+        out = email
+            .replace_all(&out, |c: &regex::Captures| {
+                let s = &c[0];
+                if s.ends_with("@openssh.com") || s.ends_with("@libssh.org") { s.to_string() } else { "<email>".into() }
+            })
+            .into_owned();
+        let v4 = Regex::new(r"\b\d{1,3}(?:\.\d{1,3}){3}\b").unwrap();
+        out = v4
+            .replace_all(&out, |c: &regex::Captures| {
+                let s = &c[0];
+                // A four-part version (the webview's) looks the same; it was named in `keep`.
+                if s.starts_with("127.") || s == "0.0.0.0" || self.keep.iter().any(|k| k == s) { s.to_string() } else { "<ip>".into() }
+            })
+            .into_owned();
+        // An IPv6 (or MAC) address has a "::" or at least four colons, with nothing word-like
+        // either side; a time like 03:52:10 has two, a Rust path like a::b has letters around it.
+        let v6 = Regex::new(r"[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}").unwrap();
+        let src = out.clone();
+        out = v6
+            .replace_all(&src, |c: &regex::Captures| {
+                let m = c.get(0).unwrap();
+                let word = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == ':');
+                let alone = !word(src[..m.start()].chars().next_back()) && !word(src[m.end()..].chars().next());
+                let s = m.as_str();
+                let address = (s.contains("::") || s.matches(':').count() >= 4) && s.chars().any(|ch| ch.is_ascii_hexdigit());
+                if alone && address && s != "::1" { "<ip>".into() } else { s.to_string() }
+            })
+            .into_owned();
+        for (name, mark) in &self.names {
+            if name.chars().count() >= 3 {
+                let word = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(name))).unwrap();
+                out = word.replace_all(&out, NoExpand(mark)).into_owned();
+            }
+        }
+        out
+    }
+}
+
+/// A .zip holding `files` uncompressed (they are a few kilobytes of text), dated `when`.
+fn zip(files: &[(&str, String)], when: chrono::NaiveDateTime) -> Vec<u8> {
+    use chrono::{Datelike, Timelike};
+    let time = ((when.hour() << 11) | (when.minute() << 5) | (when.second() / 2)) as u16;
+    let date = ((when.year().clamp(1980, 2107) - 1980) as u32 * 512 + when.month() * 32 + when.day()) as u16;
+    let (mut out, mut central) = (Vec::new(), Vec::new());
+    for (name, text) in files {
+        let (data, crc, offset) = (text.as_bytes(), crc32fast::hash(text.as_bytes()), out.len() as u32);
+        // The fields both headers share: version 2.0, UTF-8 names, stored, the time and the sizes.
+        let mut common = Vec::new();
+        for v in [20u16, 0x0800, 0, time, date] {
+            common.extend(v.to_le_bytes());
+        }
+        for v in [crc, data.len() as u32, data.len() as u32] {
+            common.extend(v.to_le_bytes());
+        }
+        common.extend((name.len() as u16).to_le_bytes());
+        common.extend(0u16.to_le_bytes()); // no extra field
+        out.extend(0x04034b50u32.to_le_bytes());
+        out.extend(&common);
+        out.extend(name.as_bytes());
+        out.extend(data);
+        central.extend(0x02014b50u32.to_le_bytes());
+        central.extend(20u16.to_le_bytes()); // made by version 2.0
+        central.extend(&common);
+        central.extend([0u8; 10]); // no comment, disk 0, no attributes
+        central.extend(offset.to_le_bytes());
+        central.extend(name.as_bytes());
+    }
+    let (start, size) = (out.len() as u32, central.len() as u32);
+    out.extend(central);
+    out.extend(0x06054b50u32.to_le_bytes());
+    out.extend([0u8; 4]); // this disk, the disk the directory starts on
+    for _ in 0..2 {
+        out.extend((files.len() as u16).to_le_bytes());
+    }
+    out.extend(size.to_le_bytes());
+    out.extend(start.to_le_bytes());
+    out.extend(0u16.to_le_bytes()); // no comment
+    out
 }
 
 /// `custom.css` in the data folder, and its hex SHA-256: the UI applies it at start, asking
@@ -300,7 +419,7 @@ pub async fn pick_background(handle: AppHandle) -> Res<Option<(String, String, S
 
 #[cfg(test)]
 mod tests {
-    use super::semver;
+    use super::{Personal, semver, zip};
 
     /// Versions compare as semver orders them, numbers as numbers.
     #[test]
@@ -311,5 +430,61 @@ mod tests {
         }
         assert_eq!(semver("1.0.0+abc"), semver("1.0.0"), "build metadata doesn't count");
         assert!(semver("0.1.0") <= semver("0.1.0"), "the same version isn't newer");
+    }
+
+    /// The bundle's text loses the home folder, the user and computer names, email and IP
+    /// addresses; loopback, times, versions and Rust paths stay.
+    #[test]
+    fn bundle_text_is_redacted() {
+        let p = Personal {
+            home: r"C:\Users\Sotiris".into(),
+            names: vec![("sotiris".into(), "<user>"), ("DESKTOP-K7Q2".into(), "<computer>")],
+            keep: vec!["142.0.3595.80".into()],
+        };
+        let text = r"data folder: c:\users\sotiris\.xtermium
+program: C:/Users/Sotiris/scoop/apps/xtermium/xtermium.exe
+XTERMIUM_HOME=C:\Users\Sotiris\scoop\persist\xtermium
+DISPLAY=desktop-k7q2:0
+user sotiris, mail sotiris@example.com
+automation: listening (bind 192.168.1.20:8721, fe80::1c2:3ff:fe4a:5b6c, aa:bb:cc:dd:ee:ff)
+kept: 127.0.0.1:8721 0.0.0.0 ::1 at 03:52:10, webview 142.0.3595.80, std::fs::write, tauri 2.9.2
+ciphers: chacha20-poly1305@openssh.com, curve25519-sha256@libssh.org
+";
+        let out = p.redact(text);
+        for gone in ["otiris", "K7Q2", "k7q2", "example.com", "192.168", "fe80", "aa:bb"] {
+            assert!(!out.contains(gone), "{gone} left in:\n{out}");
+        }
+        for kept in [r"~\.xtermium", "~/scoop/apps", "<computer>:0", "user <user>", "<email>", "<ip>:8721", "127.0.0.1:8721", "0.0.0.0", "::1", "03:52:10", "142.0.3595.80", "std::fs::write", "2.9.2", "chacha20-poly1305@openssh.com", "curve25519-sha256@libssh.org"] {
+            assert!(out.contains(kept), "{kept} missing from:\n{out}");
+        }
+    }
+
+    /// The bundle's .zip holds each file whole under its name, and its directory points at them.
+    #[test]
+    fn bundle_zip_holds_the_files() {
+        let files = vec![("about.txt", "xtermium 0.7.0\n".to_string()), ("settings.json", "{}".to_string())];
+        let when = chrono::NaiveDate::from_ymd_opt(2026, 11, 4).unwrap().and_hms_opt(3, 52, 10).unwrap();
+        let z = zip(&files, when);
+        // For a look with another tool: XTERMIUM_DUMP_ZIP=<path> cargo test bundle_zip.
+        if let Ok(path) = std::env::var("XTERMIUM_DUMP_ZIP") {
+            std::fs::write(path, &z).unwrap();
+        }
+        let u16_at = |i: usize| u16::from_le_bytes([z[i], z[i + 1]]) as usize;
+        let u32_at = |i: usize| u32::from_le_bytes(z[i..i + 4].try_into().unwrap()) as usize;
+        let end = z.len() - 22;
+        assert_eq!(u32_at(end), 0x06054b50);
+        assert_eq!(u16_at(end + 10), 2, "two entries");
+        let mut at = u32_at(end + 16);
+        for (name, text) in &files {
+            assert_eq!(u32_at(at), 0x02014b50);
+            let (name_len, local) = (u16_at(at + 28), u32_at(at + 42));
+            assert_eq!(&z[at + 46..at + 46 + name_len], name.as_bytes());
+            assert_eq!(u32_at(local), 0x04034b50);
+            let size = u32_at(local + 18);
+            let data = &z[local + 30 + name_len..local + 30 + name_len + size];
+            assert_eq!(data, text.as_bytes());
+            assert_eq!(u32_at(local + 14), crc32fast::hash(data) as usize);
+            at += 46 + name_len;
+        }
     }
 }
