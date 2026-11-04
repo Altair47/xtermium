@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/xtermium/xtermium/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/xtermium/xtermium?style=flat-square&labelColor=141414&color=FFC20E&label=release"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/xtermium/xtermium?style=flat-square&labelColor=141414&color=F2F2F2"></a>
-  <img alt="Platforms: Windows and Linux, macOS later" src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20Linux%20%28macOS%20later%29-F2F2F2?style=flat-square&labelColor=141414">
+  <img alt="Platforms: Windows, Linux and macOS" src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-F2F2F2?style=flat-square&labelColor=141414">
   <a href="https://github.com/xtermium/xtermium/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/xtermium/xtermium/total?style=flat-square&labelColor=141414&color=F2F2F2"></a>
   <a href="https://xtermium.com"><img alt="Website: xtermium.com" src="https://img.shields.io/badge/website-xtermium.com-FFC20E?style=flat-square&labelColor=141414"></a>
 </p>
@@ -43,7 +43,15 @@ curl -fsSL https://xtermium.com/install.sh | sh
 
 Or download the `.deb` (Debian, Ubuntu), the `.rpm` (Fedora, RHEL, openSUSE) or the `.AppImage` (any distribution, no install) from the [latest release](https://github.com/xtermium/xtermium/releases/latest).
 
-**macOS**: later.
+**macOS** (Apple silicon and Intel). The same script installs the universal app into Applications:
+
+```sh
+curl -fsSL https://xtermium.com/install.sh | sh
+```
+
+Or download the `.dmg` from the [latest release](https://github.com/xtermium/xtermium/releases/latest) and drag xtermium into Applications.
+
+The macOS app isn't signed or notarized yet: that takes an Apple Developer membership, a yearly fee that waits until community support covers it; sponsoring through [GitHub Sponsors](https://github.com/sponsors/xtonousou) helps pay for it. Until then macOS blocks the first open of a downloaded `.dmg`. Open System Settings › Privacy & Security, scroll to Security, where it says "xtermium" was blocked to protect your Mac, click **Open Anyway** and confirm. The script downloads with curl, which doesn't mark the file as downloaded, so the app it installs shouldn't be blocked. The macOS build is new and hasn't been tried on a Mac yet: if something doesn't work, [open an issue](https://github.com/xtermium/xtermium/issues).
 
 Both scripts check each download against the sha256 GitHub publishes for it before installing anything. Read [install.ps1](https://xtermium.com/install.ps1) or [install.sh](https://xtermium.com/install.sh) first if you like.
 

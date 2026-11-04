@@ -1,6 +1,6 @@
 # Releases follow semantic versioning: Cargo.toml's version is the app's. A merge to main that
-# raises it builds Windows and Linux and publishes them as release v<version>; a merge that
-# doesn't publishes nothing. It runs on GitHub-hosted runners, as GitHub advises for a public
+# raises it builds Windows, Linux and macOS (one universal .dmg for Apple silicon and Intel) and
+# publishes them as release v<version>; a merge that doesn't publishes nothing. It runs on GitHub-hosted runners, as GitHub advises for a public
 # repository, where a self-hosted runner can be made to run anyone's code. Running it by hand
 # (Actions tab, `gh workflow run release.yml`) publishes the version on main if it has no release
 # yet.
@@ -53,10 +53,11 @@ jobs:
           # The oldest Ubuntu runner: the Linux packages run on its glibc (2.35) or newer.
           - os: ubuntu-22.04
             args: ""
-          # macOS: off. Its build failed when last tried (2026-10-15), and the app hasn't been run
-          # on a Mac.
-          # - os: macos-latest
-          #   args: --target universal-apple-darwin
+          # One app for both Macs (scripts/rdp.mjs joins the RDP helper's two builds with lipo).
+          # Ad-hoc signed and not notarized: there is no Apple Developer ID yet. Built on every
+          # pull request (build.yml), but the app hasn't been run on a Mac.
+          - os: macos-latest
+            args: --target universal-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       # The WezTerm git dependency has paths longer than 260 characters.
