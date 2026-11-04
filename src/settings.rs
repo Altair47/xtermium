@@ -350,7 +350,14 @@ impl Settings {
     /// Stored encrypted in `settings.xtm`; unreadable or missing settings fall back to defaults.
     pub fn load() -> Self {
         let text = crate::config::read("settings", &["settings.toml"], |t| Ok(t.concat()));
-        text.ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default()
+        text.ok().and_then(|s| Self::parse(&s)).unwrap_or_default()
+    }
+
+    /// A settings file's text, cleaned: an older version may have saved it under wider limits.
+    fn parse(text: &str) -> Option<Self> {
+        let mut settings: Self = toml::from_str(text).ok()?;
+        settings.sanitize();
+        Some(settings)
     }
 
     /// Makes the automation token if there is none yet; true if it did. It's made once and kept
@@ -573,9 +580,8 @@ mod tests {
     fn older_effects_and_opacities_load() {
         for effect in ["Acrylic", "Mica", "Vibrancy", "Transparent"] {
             for (saved, loaded) in [(0.9, 0.9), (0.6, 0.8)] {
-                let text = format!(r#"{{"effect":"{effect}","window_opacity":{saved},"terminal_opacity":0.4}}"#);
-                let mut s: Settings = serde_json::from_str(&text).unwrap();
-                s.sanitize();
+                let text = format!("effect = \"{effect}\"\nwindow_opacity = {saved}\nterminal_opacity = 0.4\n");
+                let s = Settings::parse(&text).unwrap();
                 assert_eq!(s.effect, Effect::Transparent);
                 assert_eq!(s.opacity, loaded);
             }
