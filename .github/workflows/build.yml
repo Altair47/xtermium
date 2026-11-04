@@ -1,11 +1,11 @@
-# Pull requests build the macOS app, the one platform no one can build locally (the maintainer's
-# PC is Windows), so a change that breaks it shows before it reaches main. It publishes nothing;
-# the .dmg is kept 7 days as the run's artifact. Windows and Linux build in release.yml. A run
+# Builds the macOS app on request (Actions tab, `gh workflow run build.yml --ref <branch>`), the
+# one platform no one can build locally (the maintainer's PC is Windows), to try a change that may
+# break it before release. Nothing builds on pull requests or commits: only releases build by
+# themselves (release.yml). It publishes nothing; the .dmg is kept 7 days as the run's artifact. Windows and Linux build in release.yml. A run
 # takes about 80 minutes: two release builds of the app and of the RDP helper, one per CPU.
 name: build
 
 on:
-  pull_request:
   workflow_dispatch:
 
 concurrency:

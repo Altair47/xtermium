@@ -1,6 +1,7 @@
 # Releases follow semantic versioning: Cargo.toml's version is the app's. A merge to main that
 # raises it builds Windows, Linux and macOS (one universal .dmg for Apple silicon and Intel) and
-# publishes them as release v<version>; a merge that doesn't publishes nothing. It runs on GitHub-hosted runners, as GitHub advises for a public
+# publishes them as release v<version>; a merge that doesn't publishes nothing. Only a push that
+# changes Cargo.toml starts it, so other merges don't run it at all. It runs on GitHub-hosted runners, as GitHub advises for a public
 # repository, where a self-hosted runner can be made to run anyone's code. Running it by hand
 # (Actions tab, `gh workflow run release.yml`) publishes the version on main if it has no release
 # yet.
@@ -9,6 +10,7 @@ name: release
 on:
   push:
     branches: [main]
+    paths: [Cargo.toml]
   workflow_dispatch:
 
 concurrency:
