@@ -230,7 +230,7 @@ The sync server is proprietary and not in this repository; the client talks to i
 
 - **This computer** (Settings › General): start xtermium when you sign in, desktop notifications (a new version, a connection that dropped; off by default), and running above the normal process priority (may need administrator rights).
 - **Settings › About** shows the version (semantic versioning; each release on GitHub lists what changed since the one before), build number and kind of build, checks GitHub for a newer release (a quiet check at start, which "Tell me when a new version is out" turns off) and opens the download for this computer. Installing it is up to you; xtermium never updates itself.
-- **Settings › Troubleshoot** makes a bundle: a folder of plain-text files about the installation (version, system, settings without secrets, counts of what's stored and open) to send to [support@xtermium.com](mailto:support@xtermium.com).
+- **Settings › Troubleshoot** makes a bundle: a .zip of plain-text files about the installation (version, system, settings without secrets, counts of what's stored and open) to send to [support@xtermium.com](mailto:support@xtermium.com). Your user and computer names, your home folder and any email or IP address are taken out before it's written.
 - **Settings › Defaults:** the program for Local shell, and the SSH user, key and password used when a session leaves them empty.
 
 </details>
