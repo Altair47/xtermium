@@ -98,6 +98,16 @@ body:
     validations:
       required: true
   - type: textarea
+    id: bundle
+    attributes:
+      label: Troubleshooting bundle
+      description: |
+        Settings › Troubleshoot › Create bundle (xtermium 0.7.1 or newer) makes a .zip of plain-text files about your installation, with your user and computer names, home folder, and any email or IP address taken out. Read it, then drag the .zip here.
+        If xtermium doesn't start, or you're on an older version, say so instead.
+      placeholder: Drag xtermium-troubleshoot-….zip here.
+    validations:
+      required: true
+  - type: textarea
     id: screenshots
     attributes:
       label: Screenshots or a recording
@@ -120,5 +130,5 @@ body:
       options:
         - label: I searched the open issues and this isn't one of them.
           required: true
-        - label: The screenshots and logs show no passwords, keys or private addresses.
+        - label: The screenshots, logs and bundle show no passwords, keys or private addresses.
           required: true

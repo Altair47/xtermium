@@ -15,7 +15,8 @@ Include what you can of:
 
 - the version and build (Settings › About) and your operating system;
 - what an attacker can do, and what they need first (local access, a malicious server, a crafted file, a network position);
-- the steps to reproduce it, or a proof of concept, and any logs that help.
+- the steps to reproduce it, or a proof of concept, and any logs that help;
+- a troubleshooting bundle (Settings › Troubleshoot › Create bundle, xtermium 0.7.1 or newer), if it helps: a .zip with your user and computer names, home folder, and email and IP addresses taken out. Read it before you send it.
 
 You get a reply as soon as the report has been read. A confirmed problem is fixed in a new release, published as a GitHub security advisory, and credited to you unless you'd rather not be named. Please give a reasonable time to fix it before you make it public.
 
