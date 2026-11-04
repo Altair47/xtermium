@@ -7,7 +7,7 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Sizes } from "./lib/actions";
-  import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
+  import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
   import Logo from "./lib/Logo.svelte";
   import Account from "./lib/Account.svelte";
@@ -135,7 +135,7 @@
     const s = app.settings;
     if (!s) return;
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    document.documentElement.style.setProperty("--chrome-alpha", String(s.effect === "None" ? 1 : s.window_opacity));
+    seeThrough(s);
     accent(s.accent);
   });
   // Apart, so dragging the opacity slider or the accent picker doesn't call the backend each step.
@@ -2011,7 +2011,6 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: rgba(var(--bg-rgb), var(--chrome-alpha));
   }
   /* editor-style tab bar: flat 34px tabs split by lines; the active one joins its pane */
   .strip {
@@ -2057,8 +2056,9 @@
   .tab.visible {
     color: var(--fg);
   }
+  /* over the strip, so only while the window is solid: see-through, it would be a third layer */
   .tab.active {
-    background: rgba(var(--bg-rgb), var(--chrome-alpha));
+    background: rgba(var(--bg-rgb), var(--solid));
     box-shadow: none;
     color: var(--fg);
   }
@@ -2170,9 +2170,6 @@
     min-height: 0;
   }
   /* split: each pane a panel of its own, with the window's dark showing between them */
-  .panes.split {
-    background: rgba(var(--window-rgb), var(--chrome-alpha));
-  }
   .split .view {
     border: 1px solid var(--line);
   }
@@ -2328,7 +2325,7 @@
     padding: 5px 13px;
     border: 1px solid var(--line);
     border-radius: var(--r-menu);
-    background: rgba(var(--panel-rgb), 0.98);
+    background: rgba(var(--panel-rgb), var(--float-alpha));
     box-shadow: var(--shadow-menu);
     animation: float-in 0.16s var(--ease-out);
   }
@@ -2344,6 +2341,7 @@
   .dashboard {
     position: absolute;
     inset: 0;
+    background: rgba(var(--bg-rgb), var(--chrome-alpha));
     overflow: auto;
     display: flex;
     flex-direction: column;

@@ -301,8 +301,9 @@ impl Settings {
     pub fn sanitize(&mut self) {
         let d = Settings::default();
         self.ui_scale = finite(self.ui_scale, 0.8, 1.6, d.ui_scale);
-        self.window_opacity = finite(self.window_opacity, 0.3, 1.0, d.window_opacity);
-        self.terminal_opacity = finite(self.terminal_opacity, 0.3, 1.0, d.terminal_opacity);
+        // Below 80% the desktop shows through enough to break up the window's own text: over a white
+        // desktop the sidebar's text falls under 3:1 (2.7:1 at 70%, 1:1 at 30%).
+        self.opacity = finite(self.opacity, 0.8, 1.0, d.opacity);
         self.scheme = text(&self.scheme);
         self.font = text(&self.font);
         self.font_size = finite(self.font_size, 6.0, 48.0, d.font_size);

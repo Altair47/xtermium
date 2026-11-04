@@ -62,7 +62,6 @@ wezterm-term = { git = "https://github.com/wezterm/wezterm", rev = "e2a98e1b8af1
 wezterm-surface = { git = "https://github.com/wezterm/wezterm", rev = "e2a98e1b8af156988ad0ac778658ac27b60a55fb" }
 wezterm-blob-leases = { git = "https://github.com/wezterm/wezterm", rev = "e2a98e1b8af156988ad0ac778658ac27b60a55fb", features = ["simple_tempdir"] }
 russh-sftp = "3"
-window-vibrancy = "0.8.1"
 smb2 = "0.28"
 
 # A website tab's WebView2 says when it gets the keyboard and which keys it got (web.rs), both

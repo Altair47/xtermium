@@ -9478,7 +9478,6 @@ dependencies = [
  "wezterm-blob-leases",
  "wezterm-surface",
  "wezterm-term",
- "window-vibrancy",
  "windows",
  "windows-future",
 ]

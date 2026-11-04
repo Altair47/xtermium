@@ -140,7 +140,7 @@
     max-height: calc(100vh / var(--phi));
     display: flex;
     flex-direction: column;
-    background: rgba(var(--panel-rgb), 0.98);
+    background: rgba(var(--panel-rgb), var(--float-alpha));
     border: 1px solid var(--line);
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-dialog);

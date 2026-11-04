@@ -40,6 +40,8 @@
   --t-xxl: 18.5px;
   /* Opacity of the chrome; < 1 only while a window effect is on. */
   --chrome-alpha: 1;
+  --float-alpha: 0.98;
+  --solid: 1;
   /* Only what floats over the work and goes away again casts a shadow: a bar over a view, a
      menu or toast, a dialog or the palette. Panels, tabs, rows and buttons stay flat. */
   --shadow-float: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -509,7 +511,7 @@ h3 {
   padding: 3px;
   gap: 0;
   min-width: 190px;
-  background: rgba(var(--panel-rgb), 0.98);
+  background: rgba(var(--panel-rgb), var(--float-alpha));
   border: 1px solid var(--line);
   border-radius: var(--r-menu);
   box-shadow: var(--shadow-menu);
@@ -583,7 +585,7 @@ kbd {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  background: rgba(var(--panel-rgb), 0.98);
+  background: rgba(var(--panel-rgb), var(--float-alpha));
   border: 1px solid var(--line);
   border-radius: var(--r-menu);
   box-shadow: var(--shadow-menu);

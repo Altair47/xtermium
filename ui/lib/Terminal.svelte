@@ -23,7 +23,7 @@
   import Backdrop from "./Backdrop.svelte";
   import { app } from "./state.svelte";
   /** `blink`: the cursor blinks while focused; `line`: line height as a multiple of the font's. */
-  type Look = { font: string; size: number; cursor: "Block" | "Bar" | "Underline"; blink: boolean; line: number; fg: number; bg: number; cc: number; alpha: number };
+  type Look = { font: string; size: number; cursor: "Block" | "Bar" | "Underline"; blink: boolean; line: number; fg: number; bg: number; cc: number };
   type Frame = { rows: number; scroll?: number; lines: [number, Run[]][]; meta?: Meta; style?: Look };
 
   const BOLD = 1, ITALIC = 2, UNDERLINE = 4, STRIKE = 8, DIM = 16;
@@ -111,7 +111,7 @@
   let focused = false;
   /** The terminal background, also painted around the grid's margin. */
   let bg = $state("");
-  /** The terminal's background colour (`bg` is it with the window effect's transparency). */
+  /** The terminal's background colour (`bg` is it as a see-through layer: see App.svelte). */
   let base = $state(0);
 
   let queued = false;
@@ -135,7 +135,7 @@
   function frame(f: Frame) {
     if (f.style) {
       look = f.style;
-      bg = css(look.bg, look.alpha);
+      bg = "rgb(" + [look.bg >> 16, (look.bg >> 8) & 255, look.bg & 255].join(" ") + " / var(--chrome-alpha))";
       base = look.bg;
       measure();
       blink();
@@ -914,7 +914,7 @@
     align-items: center;
     gap: 2px;
     padding: 3px;
-    background: rgba(var(--panel-rgb), 0.98);
+    background: rgba(var(--panel-rgb), var(--float-alpha));
     border: 1px solid var(--line);
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);
@@ -931,7 +931,7 @@
     gap: 8px;
     padding: 5px 5px 5px 8px;
     white-space: nowrap;
-    background: rgba(var(--panel-rgb), 0.98);
+    background: rgba(var(--panel-rgb), var(--float-alpha));
     border: 1px solid var(--warn);
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);

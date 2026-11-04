@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { keysOf } from "./actions";
 import { listen } from "@tauri-apps/api/event";
-import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopRemote, type CoopRing, type Effect, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -26,7 +26,6 @@ export const app = $state({
   coop: { ring: null as CoopRing | null, shared: [] as number[], remote: [] as CoopRemote[], cursors: [] as CoopCursor[] },
   settings: null as Settings | null,
   schemes: [] as Scheme[],
-  effects: [] as Effect[],
   ciphers: [] as string[],
   version: "",
   os: "",
@@ -318,7 +317,6 @@ export async function boot() {
   Object.assign(app, {
     settings: b.settings,
     schemes: b.schemes,
-    effects: b.effects,
     ciphers: b.ciphers,
     version: b.version,
     os: b.os,
