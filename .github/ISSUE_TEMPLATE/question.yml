@@ -1,0 +1,27 @@
+name: Question
+description: How do I …? Something in xtermium isn't clear.
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: The [wiki](https://github.com/xtermium/xtermium/wiki) may already answer it. Pro, billing and account questions go to [support@xtermium.com](mailto:support@xtermium.com).
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What you are trying to do, and what you tried so far.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: xtermium version and operating system
+      description: Settings › About, and your OS.
+      placeholder: "0.7.0 build 123, Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here, if they help. Hide host names, addresses and anything private first.

@@ -1,0 +1,56 @@
+name: Feature request
+description: Something xtermium should do, or do differently.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Please check the [open issues](https://github.com/xtermium/xtermium/issues) first; a thumbs-up on an existing request counts too.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what gets in the way today.
+      placeholder: "When I manage 40 switches over serial, I have to …"
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+      description: How it should work, from your side of the screen.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now, or other ways you considered
+      description: A workaround, another tool that does it, a setting you tried.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Connections (SSH, SFTP, RDP, VNC, telnet, serial, WinRM, BMC)
+        - Website tabs
+        - Tunnels
+        - Sessions, folders, import or export
+        - Terminal
+        - Security, lock or encryption
+        - Sync, account or Terminal Co-op (Pro)
+        - MCP server, CLI or AI agents
+        - Look, themes or customisation
+        - Install or platforms
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Mock-ups, screenshots or examples
+      description: Drag images here, or link to how another tool does it.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Helping
+      options:
+        - label: I'd like to send a pull request for it (open the issue first, so we agree on the approach).

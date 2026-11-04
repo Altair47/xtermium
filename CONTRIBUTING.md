@@ -41,7 +41,7 @@ and the locale files.
 ## Security problems
 
 Don't open a public issue. Report them privately: **Security › Report a vulnerability** on the
-repository.
+repository, or by email to abuse@xtermium.com. [SECURITY.md](.github/SECURITY.md) says what to include and what is in scope.
 
 ## Licence
 
