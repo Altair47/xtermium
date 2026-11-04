@@ -557,6 +557,9 @@ it is a cut.
 
 Forms are a two-column grid (labels in `weak`, minimum 120px, gaps `8px 13px`), and a label
 beside a multi-line field aligns to its first baseline.
+A customisable setting with more than two values ends its row with a flat reset button, shown
+only once the value differs from the default and naming that default in its tooltip; it keeps
+its place while hidden, so rows never move, and a reset offers Undo.
 
 This is a desktop app with no breakpoints: things shrink, ellipsize and scroll rather than
 reflow. Long names truncate with an ellipsis; Settings page names wrap to two lines instead.

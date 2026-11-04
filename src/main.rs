@@ -678,6 +678,12 @@ fn set_dark(app: State<App>, dark: bool) {
     }
 }
 
+/// What every setting is until someone changes it, for the reset buttons in Settings.
+#[tauri::command]
+fn default_settings() -> Settings {
+    Settings::default()
+}
+
 /// Installed monospace font families, sorted.
 #[tauri::command]
 async fn fonts() -> Vec<String> {
@@ -2006,6 +2012,7 @@ fn main() {
             agent_history_rename,
             agent_history_delete,
             save_settings,
+            default_settings,
             save_tabs,
             regex_error,
             set_dark,
