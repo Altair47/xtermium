@@ -1558,6 +1558,7 @@ async fn detach_tab(handle: AppHandle, id: u32, title: String, state: serde_json
         .data_directory(config::webview_dir())
         .build()
         .map_err(|e| e.to_string())?;
+    tray::window_icon(&w, &handle);
     let h = handle.clone();
     w.on_window_event(move |e| {
         // With the main window gone (the app is quitting), it just closes.
