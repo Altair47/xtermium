@@ -101,6 +101,9 @@ export function changelog(ref, prev, brief = false) {
     `built from ${short(head)}`,
   ].filter(Boolean);
   return [
+    // The site's downloads list the one-line installers and every file's sha256.
+    `Install it with one command, or pick a file and check its sha256: [xtermium.com/#downloads](https://xtermium.com/#downloads).`,
+    "",
     `## ${lead}`,
     "",
     sections.length ? sections.join("\n\n") : "_No changes: a rebuild of the same commit._",
