@@ -1,5 +1,5 @@
 # Pull requests build the macOS app, the one platform no one can build locally (the maintainer's
-# PC is Windows) and that no release has shipped yet, so a change that breaks it shows before it
+# PC is Windows), so a change that breaks it shows before it
 # reaches main. It publishes nothing; the .dmg is kept a few days as the run's artifact. Windows
 # and Linux build in release.yml.
 name: build

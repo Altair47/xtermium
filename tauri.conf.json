@@ -45,6 +45,9 @@
       "LICENSE": "LICENSE",
       "NOTICE": "NOTICE",
       "THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
+    },
+    "macOS": {
+      "signingIdentity": "-"
     }
   }
 }
