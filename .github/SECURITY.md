@@ -15,8 +15,7 @@ Include what you can of:
 
 - the version and build (Settings › About) and your operating system;
 - what an attacker can do, and what they need first (local access, a malicious server, a crafted file, a network position);
-- the steps to reproduce it, or a proof of concept;
-- logs or a troubleshooting bundle (Settings › Troubleshoot › Create bundle), if they help. The bundle holds no passwords, tokens, names or addresses; read it before you send it.
+- the steps to reproduce it, or a proof of concept, and any logs that help.
 
 You get a reply as soon as the report has been read. A confirmed problem is fixed in a new release, published as a GitHub security advisory, and credited to you unless you'd rather not be named. Please give a reasonable time to fix it before you make it public.
 
