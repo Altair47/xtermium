@@ -98,16 +98,6 @@ body:
     validations:
       required: true
   - type: textarea
-    id: bundle
-    attributes:
-      label: Troubleshooting bundle
-      description: |
-        Settings › Troubleshoot › Create bundle opens a folder of plain-text files about your installation. It holds no passwords, tokens, names or addresses, but read it before you share it. Zip the folder and drag the .zip here.
-        If xtermium doesn't start, say so instead.
-      placeholder: Drag bundle.zip here.
-    validations:
-      required: true
-  - type: textarea
     id: screenshots
     attributes:
       label: Screenshots or a recording
@@ -130,5 +120,5 @@ body:
       options:
         - label: I searched the open issues and this isn't one of them.
           required: true
-        - label: The screenshots, logs and bundle show no passwords, keys or private addresses.
+        - label: The screenshots and logs show no passwords, keys or private addresses.
           required: true
