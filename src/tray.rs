@@ -66,6 +66,111 @@ fn menu(h: &AppHandle, tasks: &[Task], l: &Labels) -> tauri::Result<Menu<Wry>> {
     Menu::with_items(h, &[&open, &list, &PredefinedMenuItem::separator(h)?, &exit])
 }
 
+/// The mark has no tile behind it, so each OS theme needs its own: white diamonds vanish on a
+/// light taskbar and charcoal ones on a dark taskbar.
+const MARK_LIGHT: &[u8] = include_bytes!("../icons/mark-light.png");
+const MARK_DARK: &[u8] = include_bytes!("../icons/mark-dark.png");
+
+/// How big a window's icon is made, in pixels; Windows scales it down for the taskbar and title bar.
+const WINDOW_ICON: u32 = 64;
+
+/// The tray's slot before display scaling, in pixels.
+const TRAY_ICON: f64 = 16.0;
+
+/// The mark for a light or dark OS theme, `size` pixels square.
+fn mark(light: bool, size: u32) -> Option<Image<'static>> {
+    let png = if light { MARK_LIGHT } else { MARK_DARK };
+    let img = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?.to_rgba8();
+    let img = image::imageops::resize(&img, size, size, image::imageops::FilterType::Lanczos3);
+    Some(Image::new_owned(img.into_raw(), size, size))
+}
+
+/// Where Windows keeps its theme, under HKEY_CURRENT_USER.
+#[cfg(windows)]
+const THEME_KEY: windows::core::PCWSTR = windows::core::w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+/// Whether the taskbar is light. Windows themes apps and the taskbar apart, and a window's own theme
+/// follows the apps' setting, so this reads the taskbar's. Windows too old to have it are dark.
+#[cfg(windows)]
+fn light(_: &AppHandle) -> bool {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+    let (mut value, mut size) = (0u32, 4u32);
+    // SAFETY: the value and its size are valid for the call, which writes at most 4 bytes.
+    let read = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            THEME_KEY,
+            windows::core::w!("SystemUsesLightTheme"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut value).cast()),
+            Some(&raw mut size),
+        )
+    };
+    read.is_ok() && value != 0
+}
+
+/// Whether the OS theme is light.
+#[cfg(not(windows))]
+fn light(h: &AppHandle) -> bool {
+    h.get_window("main").and_then(|w| w.theme().ok()) == Some(tauri::Theme::Light)
+}
+
+/// Gives one window the icon for the OS theme. Windows has no large icon set for our windows, so
+/// its taskbar shows this one too.
+pub fn window_icon(w: &tauri::WebviewWindow, h: &AppHandle) {
+    if let Some(icon) = mark(light(h), WINDOW_ICON) {
+        let _ = w.set_icon(icon);
+    }
+}
+
+/// Puts the OS theme's mark on the tray and on every window.
+///
+/// ponytail: the tray's size is worked out here, so moving to a display with another scale keeps
+/// the old size until the theme next changes. Windows scales it, so it's only a little softer.
+fn show_theme(h: &AppHandle) {
+    if let Some(t) = h.tray_by_id(ID) {
+        let scale = h.get_window("main").and_then(|w| w.scale_factor().ok()).unwrap_or(1.0);
+        let _ = t.set_icon(mark(light(h), (TRAY_ICON * scale).round() as u32));
+    }
+    for w in h.webview_windows().values() {
+        window_icon(w, h);
+    }
+}
+
+/// Follows the taskbar's theme. A window's theme event doesn't fire when only the taskbar's setting
+/// changes, so this waits on the registry key itself, on a thread that lasts as long as the app.
+#[cfg(windows)]
+fn follow_theme(h: &AppHandle) {
+    use windows::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_NOTIFY, REG_NOTIFY_CHANGE_LAST_SET, RegNotifyChangeKeyValue, RegOpenKeyExW,
+    };
+    let h = h.clone();
+    std::thread::spawn(move || {
+        let mut key = HKEY::default();
+        // SAFETY: the handle is ours and stays open until the process ends. The wait is synchronous,
+        // so it needs no event.
+        unsafe {
+            if RegOpenKeyExW(HKEY_CURRENT_USER, THEME_KEY, None, KEY_NOTIFY, &mut key).is_err() {
+                return;
+            }
+            let mut was = light(&h);
+            while RegNotifyChangeKeyValue(key, false, REG_NOTIFY_CHANGE_LAST_SET, None, false).is_ok() {
+                let now = light(&h);
+                if now != was {
+                    was = now;
+                    let again = h.clone();
+                    let _ = h.run_on_main_thread(move || show_theme(&again));
+                }
+            }
+        }
+    });
+}
+
+/// Elsewhere the windows' theme event says when the OS theme changes (`setup`).
+#[cfg(not(windows))]
+fn follow_theme(_: &AppHandle) {}
+
 /// Brings the window back and gives it the keyboard.
 fn open(h: &AppHandle) {
     if let Some(w) = h.get_window("main") {
@@ -97,13 +202,19 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
                 open(t.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
+    if let Some(icon) = mark(light(h), TRAY_ICON as u32) {
+        tray = tray.icon(icon);
     }
     tray.build(app)?;
+    show_theme(h);
+    follow_theme(h);
     if let Some(w) = app.get_window("main") {
         let h = h.clone();
         w.on_window_event(move |e| {
+            #[cfg(not(windows))]
+            if let WindowEvent::ThemeChanged(_) = e {
+                show_theme(&h);
+            }
             if let WindowEvent::CloseRequested { api, .. } = e
                 && h.state::<App>().settings.lock().unwrap().keep_running
             {
@@ -134,4 +245,28 @@ pub fn apply(h: &AppHandle, keep_running: bool) {
 pub fn tray_tasks(h: AppHandle, tasks: Vec<Task>, labels: Labels) -> Result<(), String> {
     let Some(t) = h.tray_by_id(ID) else { return Ok(()) };
     t.set_menu(Some(menu(&h, &tasks, &labels).map_err(|e| e.to_string())?)).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Swapped files would put white diamonds on a light taskbar, and a background would bring back
+    /// the tile that made the icon too small to see.
+    #[test]
+    fn each_theme_gets_its_own_mark_with_nothing_behind_it() {
+        for light in [true, false] {
+            let icon = mark(light, 64).unwrap();
+            assert_eq!((icon.width(), icon.height()), (64, 64));
+            let pixels: Vec<&[u8; 4]> = icon.rgba().as_chunks::<4>().0.iter().collect();
+            for corner in [0, 63, 64 * 63, 64 * 64 - 1] {
+                assert_eq!(pixels[corner][3], 0, "corner {corner} isn't see-through");
+            }
+            let solid = || pixels.iter().filter(|p| p[3] == 255);
+            // Amber is the only colour with far more red than blue; the rest is the diamonds.
+            assert!(solid().any(|p| p[0] > 200 && p[2] < 80), "no amber diamond");
+            let grey = solid().find(|p| p[0].abs_diff(p[2]) < 8).unwrap();
+            assert_eq!(grey[0] < 128, light, "the diamonds should contrast with the taskbar");
+        }
+    }
 }
