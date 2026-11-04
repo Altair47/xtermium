@@ -7,7 +7,7 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { bindings, chord, zoomed } from "./actions";
-  import type { Boot, Session, Settings } from "./api";
+  import { seeThrough, type Boot, type Session, type Settings } from "./api";
   import { _, setLanguage } from "./i18n.svelte";
   import Icon from "./Icon.svelte";
   import { menu } from "./menu";
@@ -45,6 +45,7 @@
     const s = app.settings;
     if (!s) return;
     document.documentElement.dataset.theme = s.theme === "Dark" || (s.theme === "System" && systemDark) ? "dark" : "light";
+    seeThrough(s);
     getCurrentWebview().setZoom(s.ui_scale).catch(() => {});
   });
 
@@ -120,7 +121,7 @@
   .detached {
     position: fixed;
     inset: 0;
-    background: rgb(var(--panel-rgb));
+    background: rgba(var(--panel-rgb), var(--solid));
   }
   .hint {
     position: absolute;
@@ -130,7 +131,7 @@
     padding: 5px 8px;
     border: 1px solid var(--line);
     border-radius: var(--r-menu);
-    background: rgba(var(--panel-rgb), 0.95);
+    background: rgba(var(--panel-rgb), var(--float-alpha));
     box-shadow: var(--shadow-float);
     font-size: var(--t-s);
     pointer-events: none;

@@ -192,7 +192,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 
 - **Light, dark or system theme**, and an interface scale.
 - **Ten terminal colour schemes**, your font and size, the cursor shape.
-- **Window effects**: Acrylic or Mica on Windows, vibrancy on macOS, plain transparency elsewhere.
+- **A see-through window**, with one opacity setting for all of it.
 - **Backgrounds** behind terminals, the sidebar and the tab bar: a picture, or a GLSL shader.
 - **Highlight rules** colour `ERROR`, `WARN`, IP addresses or any pattern in output, which helps when tailing logs.
 - **Your own stylesheet**: a `custom.css` in the data folder restyles the interface ([Configuration](#configuration)).
@@ -200,7 +200,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 <details>
 <summary>Look details</summary>
 
-- Window effects come with window and terminal opacity. The terminal settings also set the scrollback.
+- The Transparent effect comes with one opacity setting, the same for the sidebar, the bars and terminals. The terminal settings also set the scrollback.
 - **Backgrounds** (Settings › Appearance): a PNG, JPEG, GIF, WebP or SVG picture, or a GLSL shader (Shadertoy's `mainImage`, or one with its own `main()`), from a file or a link, under the place's colour at the strength you set; a picture fills, stretches, fits, tiles or sits centred.
 - **Highlight rules:** Settings › Terminal colours matches of regular expressions in output. Only text the program printed in the normal colour is coloured. Comes with rules for errors, warnings, successes and IPv4/IPv6 addresses.
 - **Languages:** the interface comes in English, Arabic (right to left), Chinese (Simplified), Finnish, French, German, Greek, Hindi, Japanese, Norwegian Bokmål, Polish, Spanish and Swedish.
@@ -328,7 +328,7 @@ The Rust backend owns all state and connections; the UI calls it through Tauri c
 
 | Path | What |
 |---|---|
-| `src/main.rs` | app state and the Tauri commands, tabs, broadcast, window effects |
+| `src/main.rs` | app state and the Tauri commands, tabs, broadcast |
 | `src/term.rs` | terminal tab: wezterm-term engine, frame diffing, keyboard and mouse, highlight rules, PTY, serial and telnet backends |
 | `src/ssh.rs` | SSH connect and auth, host keys, jump hosts, shell, SFTP channel, tunnels and SOCKS5 |
 | `src/sftp.rs` | SFTP browser state and transfers, published to the UI as `sftp` events |

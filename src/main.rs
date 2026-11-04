@@ -38,7 +38,7 @@ mod web;
 use config::{Kind, Session, Store};
 use prompt::Prompter;
 use serde::Serialize;
-use settings::{Effect, Scheme, Settings};
+use settings::{Scheme, Settings};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -62,8 +62,6 @@ pub struct App {
     locked: Mutex<Option<bool>>,
     settings: Mutex<Settings>,
     dark: AtomicBool,
-    /// Window effect currently applied, with the light/dark mode it was tinted for.
-    applied: Mutex<Option<(Effect, bool)>>,
     tabs: Mutex<HashMap<u32, Tab>>,
     pub next_id: AtomicU32,
     broadcast: AtomicBool,
@@ -137,7 +135,6 @@ impl App {
             cursor: st.cursor,
             cursor_blink: st.cursor_blink,
             line_height: st.line_height.clamp(0.8, 2.0),
-            bg_alpha: if st.transparent() { st.terminal_opacity } else { 1.0 },
             copy_on_select: st.copy_on_select,
             right_click_paste: st.right_click_paste,
             strip_paste: st.strip_paste,
@@ -153,38 +150,6 @@ impl App {
                 t.set_look(self.look(&t.session));
             }
         }
-    }
-
-    /// Native backdrop effect behind the transparent window, when it changed.
-    fn apply_effect(&self, w: &tauri::Window) -> Res<()> {
-        let want = (self.settings.lock().unwrap().effect, self.dark.load(Relaxed));
-        let mut applied = self.applied.lock().unwrap();
-        if *applied == Some(want) {
-            return Ok(());
-        }
-        *applied = Some(want);
-        let (effect, dark) = want;
-        #[cfg(windows)]
-        {
-            let _ = window_vibrancy::clear_acrylic(w);
-            let _ = window_vibrancy::clear_mica(w);
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let _ = window_vibrancy::clear_vibrancy(w);
-        }
-        let r = match effect {
-            Effect::Acrylic => {
-                window_vibrancy::apply_acrylic(w, Some(if dark { (18, 18, 22, 110) } else { (245, 245, 248, 110) }))
-            }
-            Effect::Mica => window_vibrancy::apply_mica(w, Some(dark)),
-            #[cfg(target_os = "macos")]
-            Effect::Vibrancy => {
-                window_vibrancy::apply_vibrancy(w, window_vibrancy::NSVisualEffectMaterial::HudWindow, None, None)
-            }
-            _ => Ok(()),
-        };
-        r.map_err(|e| format!("window effect: {e}"))
     }
 
     /// Stores every workspace. One write at a time, of the data as it is when it starts: of two
@@ -314,7 +279,6 @@ struct Boot {
     workspaces: Vec<String>,
     workspace: String,
     schemes: &'static [Scheme],
-    effects: &'static [Effect],
     /// SSH ciphers xtermium can use, best first.
     ciphers: &'static [&'static str],
     version: &'static str,
@@ -344,7 +308,6 @@ fn boot(app: State<App>) -> Boot {
         workspace: config::workspace(),
         settings,
         schemes: settings::SCHEMES,
-        effects: Effect::available(),
         ciphers: &ssh::CIPHERS,
         version: env!("CARGO_PKG_VERSION"),
         os: std::env::consts::OS,
@@ -579,13 +542,13 @@ fn save_settings(app: State<App>, window: tauri::Window, mut settings: Settings)
         let fit = std::mem::take(&mut b.fit);
         *b = settings::Background { show: b.show, fit, ..kept.clone() };
     }
-    commit_settings(&app, window.app_handle(), (window.label() == "main").then_some(&window), settings)
+    commit_settings(&app, window.app_handle(), settings)
 }
 
 /// Makes `settings` the ones in use: applies them (SSH defaults, automation, the tray, terminals'
-/// looks, and on the `main` window its backdrop effect), stores them and tells the other windows.
+/// looks), stores them and tells the other windows.
 /// A save from the UI (`save_settings`) and settings pulled by sync both end here.
-fn commit_settings(app: &App, handle: &AppHandle, main: Option<&tauri::Window>, settings: Settings) -> Res<Settings> {
+fn commit_settings(app: &App, handle: &AppHandle, settings: Settings) -> Res<Settings> {
     let old = std::mem::replace(&mut *app.settings.lock().unwrap(), settings.clone());
     apply_defaults(&settings);
     apply_automation(app, handle);
@@ -593,11 +556,10 @@ fn commit_settings(app: &App, handle: &AppHandle, main: Option<&tauri::Window>, 
     if settings.restyles(&old) {
         app.restyle();
     }
-    let effect = main.map_or(Ok(()), |w| app.apply_effect(w));
     settings.save().map_err(|e| format!("settings: {e:#}"))?;
     // Detached tabs' windows follow (pane padding, theme).
     let _ = handle.emit("settings", &settings);
-    effect.map(|_| settings)
+    Ok(settings)
 }
 
 /// A background's picture (a `data:` URL) or shader source, "" for none. `place`: "terminal",
@@ -702,13 +664,12 @@ fn save_tabs(tabs: Vec<Session>, labels: Vec<String>) -> Res<()> {
     config::Tabs::save(tabs, labels).map_err(fail)
 }
 
-/// The UI tells us whether it is showing light or dark (for "Auto" colours and effect tints).
+/// The UI tells us whether it is showing light or dark (for "Auto" colours).
 #[tauri::command]
-fn set_dark(app: State<App>, window: tauri::Window, dark: bool) -> Res<()> {
+fn set_dark(app: State<App>, dark: bool) {
     if app.dark.swap(dark, Relaxed) != dark {
         app.restyle();
     }
-    app.apply_effect(&window)
 }
 
 /// Installed monospace font families, sorted.
@@ -1081,7 +1042,7 @@ fn apply_pulled(app: &App, handle: &AppHandle, sent: &sync::Extras, now: &sync::
     if settings == have {
         return Ok(None);
     }
-    commit_settings(app, handle, handle.get_window("main").as_ref(), settings).map(Some)
+    commit_settings(app, handle, settings).map(Some)
 }
 
 /// Deletes everything the sync server holds for the account (this device keeps its data).
@@ -1554,6 +1515,7 @@ async fn detach_tab(handle: AppHandle, id: u32, title: String, state: serde_json
         .title(title)
         .inner_size(width.max(320.0), height.max(200.0))
         .min_inner_size(320.0, 200.0)
+        .transparent(true)
         .initialization_script(format!("window.__DETACHED__ = {state};"))
         .data_directory(config::webview_dir())
         .build()
@@ -1858,7 +1820,6 @@ fn main() {
         }),
         settings: Mutex::new(Settings::default()),
         dark: AtomicBool::new(true),
-        applied: Mutex::new(None),
         tabs: Mutex::new(HashMap::new()),
         next_id: AtomicU32::new(1),
         broadcast: AtomicBool::new(false),

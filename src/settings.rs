@@ -15,26 +15,10 @@ pub enum Theme {
 pub enum Effect {
     /// Opaque window.
     None,
-    /// See-through, no blur (works wherever the compositor supports transparency).
+    /// See-through, no blur (works wherever the compositor supports transparency). Older versions'
+    /// blurred backdrops load as this, so a saved one keeps the window see-through.
+    #[serde(alias = "Acrylic", alias = "Mica", alias = "Vibrancy")]
     Transparent,
-    /// Windows 10/11 blurred backdrop.
-    Acrylic,
-    /// Windows 11 wallpaper-tinted backdrop.
-    Mica,
-    /// macOS blurred backdrop.
-    Vibrancy,
-}
-
-impl Effect {
-    pub fn available() -> &'static [Effect] {
-        if cfg!(windows) {
-            &[Effect::None, Effect::Transparent, Effect::Acrylic, Effect::Mica]
-        } else if cfg!(target_os = "macos") {
-            &[Effect::None, Effect::Transparent, Effect::Vibrancy]
-        } else {
-            &[Effect::None, Effect::Transparent]
-        }
-    }
 }
 
 /// How Browser sessions show websites.
@@ -59,10 +43,10 @@ pub struct Settings {
     pub theme: Theme,
     pub ui_scale: f32,
     pub effect: Effect,
-    /// Opacity of the window chrome (sidebar, bars, dialogs) when an effect is on.
-    pub window_opacity: f32,
-    /// Opacity of the terminal background when an effect is on.
-    pub terminal_opacity: f32,
+    /// How solid the window is when the effect is on, the same everywhere: sidebar, bars and
+    /// terminals. Older versions' window opacity loads as this; their terminal opacity is dropped.
+    #[serde(alias = "window_opacity")]
+    pub opacity: f32,
     /// Colour scheme name; "Auto" follows the light/dark theme.
     pub scheme: String,
     pub font: String,
@@ -287,8 +271,7 @@ impl Default for Settings {
             theme: Theme::Dark,
             ui_scale: 1.0,
             effect: Effect::None,
-            window_opacity: 0.82,
-            terminal_opacity: 0.88,
+            opacity: 0.9,
             scheme: "Auto".into(),
             font: String::new(),
             font_size: 14.0,
@@ -389,7 +372,7 @@ impl Settings {
         let key = |s: &Settings| {
             (
                 (s.scheme.clone(), s.font.clone(), s.font_size, s.override_sessions, s.cursor, s.cursor_blink),
-                (s.line_height, s.scrollback, s.scroll_on_output, s.effect, s.terminal_opacity, s.copy_on_select, s.right_click_paste, s.strip_paste),
+                (s.line_height, s.scrollback, s.scroll_on_output, s.copy_on_select, s.right_click_paste, s.strip_paste),
             )
         };
         key(self) != key(old)
@@ -438,10 +421,6 @@ impl Settings {
     pub fn applied_over(mut self, mine: &Settings) -> Settings {
         self.take_device_fields(mine);
         self
-    }
-
-    pub fn transparent(&self) -> bool {
-        self.effect != Effect::None
     }
 
     /// The scheme in effect, resolving "Auto" against the current light/dark mode.
@@ -583,3 +562,23 @@ pub const SCHEMES: &[Scheme] = &[
         ],
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Files saved by older versions keep their window see-through, at their window opacity, raised
+    /// to the lowest one that's still readable.
+    #[test]
+    fn older_effects_and_opacities_load() {
+        for effect in ["Acrylic", "Mica", "Vibrancy", "Transparent"] {
+            for (saved, loaded) in [(0.9, 0.9), (0.6, 0.8)] {
+                let text = format!(r#"{{"effect":"{effect}","window_opacity":{saved},"terminal_opacity":0.4}}"#);
+                let mut s: Settings = serde_json::from_str(&text).unwrap();
+                s.sanitize();
+                assert_eq!(s.effect, Effect::Transparent);
+                assert_eq!(s.opacity, loaded);
+            }
+        }
+    }
+}

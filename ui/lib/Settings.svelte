@@ -95,8 +95,7 @@
       N_("Theme"),
       N_("Interface scale"),
       N_("Window effect"),
-      N_("Window opacity"),
-      N_("Terminal opacity"),
+      N_("Opacity"),
       N_("Accent"),
       N_("Terminal colours"),
       N_("Backgrounds"),
@@ -225,7 +224,7 @@
     }
   }
   /** Window effects, as the backend names them. */
-  const EFFECTS: Record<string, string> = { None: N_("None"), Transparent: N_("Transparent"), Acrylic: N_("Acrylic"), Mica: N_("Mica"), Vibrancy: N_("Vibrancy") };
+  const EFFECTS: Record<string, string> = { None: N_("None"), Transparent: N_("Transparent") };
   /** Languages by their own names, in that order. */
   const languages = LOCALES.map((code) => [code, nativeName(code)]).sort((a, b) => a[1].localeCompare(b[1]));
 
@@ -481,7 +480,7 @@
   async function reset() {
     // Saving only the defaults resets everything else (missing fields take their defaults).
     // Only appearance and terminal settings go back: defaults, automation, sync and the rest stay.
-    const { theme, ui_scale, effect, window_opacity, terminal_opacity, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, ...keep } =
+    const { theme, ui_scale, effect, opacity, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, ...keep } =
       $state.snapshot(s);
     app.settings = await invoke<Settings>("save_settings", { settings: keep });
   }
@@ -1056,14 +1055,12 @@ xtermium close 3`}</pre>
       <div class="row"><input type="range" min="0.8" max="1.6" step="0.05" bind:value={s.ui_scale} />{s.ui_scale.toFixed(2)}×</div>
       <span>{_("Window effect")}</span>
       <div class="row wrap">
-        {#each app.effects as e (e)}
-          <button class:selected={s.effect === e} aria-pressed={s.effect === e} onclick={() => (s.effect = e)}>{_(EFFECTS[e] ?? e)}</button>
+        {#each ["None", "Transparent"] as const as e (e)}
+          <button class:selected={s.effect === e} aria-pressed={s.effect === e} onclick={() => (s.effect = e)}>{_(EFFECTS[e])}</button>
         {/each}
       </div>
-      <span class:weak={!transparent}>{_("Window opacity")}</span>
-      <div class="row"><input type="range" min="0.3" max="1" step="0.01" disabled={!transparent} bind:value={s.window_opacity} />{Math.round(s.window_opacity * 100)}%</div>
-      <span class:weak={!transparent}>{_("Terminal opacity")}</span>
-      <div class="row"><input type="range" min="0.3" max="1" step="0.01" disabled={!transparent} bind:value={s.terminal_opacity} />{Math.round(s.terminal_opacity * 100)}%</div>
+      <span class:weak={!transparent}>{_("Opacity")}</span>
+      <div class="row"><input type="range" min="0.8" max="1" step="0.01" disabled={!transparent} bind:value={s.opacity} />{Math.round(s.opacity * 100)}%</div>
       <span>{_("Accent")}</span>
       <div class="row wrap">
         <!-- each swatch shows the value the theme in use gets -->

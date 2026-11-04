@@ -105,14 +105,13 @@ export type Gateway = { host: string; port: number; user: string; password: stri
 /** A saved command. `text` may hold `{{name}}` placeholders; `run` presses Enter after it. */
 export type Snippet = { name: string; text: string; run: boolean };
 
-export type Effect = "None" | "Transparent" | "Acrylic" | "Mica" | "Vibrancy";
+export type Effect = "None" | "Transparent";
 export type CursorShape = "Block" | "Bar" | "Underline";
 export type Settings = {
   theme: "System" | "Dark" | "Light";
   ui_scale: number;
   effect: Effect;
-  window_opacity: number;
-  terminal_opacity: number;
+  opacity: number;
   scheme: string;
   font: string;
   font_size: number;
@@ -261,7 +260,6 @@ export type Boot = {
   workspaces: string[];
   workspace: string;
   schemes: Scheme[];
-  effects: Effect[];
   /** SSH ciphers xtermium can use, best first. */
   ciphers: string[];
   version: string;
@@ -306,6 +304,17 @@ export const DEFAULT_MONO = `ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sa
 /** CSS font stack for a family name; empty = the default monospace. */
 export function fontStack(family: string): string {
   return family ? `"${family.replace(/"/g, "")}", ${DEFAULT_MONO}` : DEFAULT_MONO;
+}
+
+/** Makes this window as see-through as the settings say. Two layers make up any place: the window's
+ *  ground and the panel or terminal on it. Each lets through the square root of what the opacity
+ *  setting does, so together they're exactly it. Anything between them paints only `--solid`. */
+export function seeThrough(s: Settings) {
+  const root = document.documentElement.style;
+  root.setProperty("--chrome-alpha", String(s.effect === "None" ? 1 : 1 - Math.sqrt(1 - s.opacity)));
+  root.setProperty("--solid", s.effect === "None" ? "1" : "0");
+  // A floating layer lies over what's already there, like a window over another: one layer.
+  root.setProperty("--float-alpha", String(s.effect === "None" ? 0.98 : Math.min(0.98, s.opacity)));
 }
 
 export const css = (rgb: number, alpha = 1) =>

@@ -307,7 +307,8 @@ From the back of the window to the hand, the website's near-black, with no blue 
   sidebar's status pill, code snippets. In the light theme it is white, the lightest step.
 - **Base** (`bg`): the content area under the tabs, and the active tab that joins it.
 - **Surface** (`panel`): the sidebar, the tab strip, the file panel, the status bar, and every
-  floating layer (menus, dialogs, palette, toasts at 98% opacity).
+  floating layer (menus, dialogs, palette, toasts at 98% opacity, or the Opacity setting with the
+  Transparent effect on, up to 98%).
 - **Raised** (`raised`): button faces, menu-item hover, the current Settings page, scrollbar
   thumbs.
 - **Lit** (`hover`): a button under the pointer.
@@ -344,7 +345,11 @@ with. State (connected, waiting, failed) is always `ok` / `warn` / `error`, neve
 
 **The See-Through Chrome Rule.** Chrome backgrounds are written
 `rgba(var(--panel-rgb), var(--chrome-alpha))` (or the `window`/`bg`/`deep` triplet), never as a
-hex. `--chrome-alpha` drops below 1 while a window effect is on, and the desktop shows through.
+hex. `--chrome-alpha` drops below 1 while the Transparent effect is on, and the desktop shows through.
+Any place is two layers, the window's ground and a panel or terminal on it, and `--chrome-alpha` is
+worked out so the two together make the Opacity setting, in every window: don't paint a third layer
+between them. A floating layer is one layer at `--float-alpha`, over what's already there, as a window
+is over another. The lock screen stays solid: it hides what's behind it.
 
 ## Typography
 
@@ -666,7 +671,7 @@ session's row or tab, never on the interface's own buttons, and never under redu
 - **Do** keep amber for focus, selection, toggles that are on, links, drop targets and the one
   primary action. Read it as `var(--gold)`, since the user can change it.
 - **Do** colour a session by its kind hue (icon, tab connector, glyph tile) through `--kind`.
-- **Do** paint chrome as `rgba(var(--…-rgb), var(--chrome-alpha))` so window effects show through.
+- **Do** paint chrome as `rgba(var(--…-rgb), var(--chrome-alpha))` so the Transparent effect shows through.
 - **Do** end a menu with its destructive item (`.danger`) and start groups with `.sep`.
 - **Do** offer Undo instead of a question when the thing can be put back, and ask (with a
   danger button) only when it can't: a running connection, a folder of sessions, a restore.

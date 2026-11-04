@@ -201,8 +201,6 @@ pub struct Look {
     pub cursor_blink: bool,
     /// Line height as a multiple of the font's.
     pub line_height: f32,
-    /// Background opacity, < 1 only when a window effect is on.
-    pub bg_alpha: f32,
     pub copy_on_select: bool,
     pub right_click_paste: bool,
     /// Trim whitespace (a trailing newline runs the command) off the start and end of pastes.
@@ -372,7 +370,6 @@ struct StyleMsg<'a> {
     bg: u32,
     /// Cursor colour.
     cc: u32,
-    alpha: f32,
 }
 
 #[derive(Serialize)]
@@ -1519,7 +1516,6 @@ impl Inner {
             fg: rgb32(pal.foreground),
             bg: rgb32(pal.background),
             cc: rgb32(pal.cursor_bg),
-            alpha: look.bg_alpha,
         }
     }
 }
@@ -2412,7 +2408,6 @@ mod tests {
             cursor: Cursor::Block,
             cursor_blink: true,
             line_height: 1.0,
-            bg_alpha: 1.0,
             copy_on_select: true,
             highlights: Default::default(),
             right_click_paste: true,
