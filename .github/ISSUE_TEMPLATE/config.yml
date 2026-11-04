@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/xtermium/xtermium/security/advisories/new
+    about: Privately, never in a public issue. See SECURITY.md.
+  - name: Read the docs
+    url: https://github.com/xtermium/xtermium/wiki
+    about: Installing, using xtermium, AI agents and customisation.
+  - name: Pro, billing or your account
+    url: mailto:support@xtermium.com
+    about: Questions about sync, payments or account.xtermium.com go to support@xtermium.com.
