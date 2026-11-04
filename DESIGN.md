@@ -524,7 +524,7 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   in `…` past that; the fields take the rest. Boxes of text don't resize.
 
 ### Menus
-- **Style:** panel at 98%, hairline, 5px corners, 3px padding, at least 190px wide, Menu shadow.
+- **Style:** panel at `--float-alpha`, hairline, 5px corners, 3px padding, at least 190px wide, Menu shadow.
 - **Items:** 26px, `3px 8px`, transparent; `raised` on hover. In a menu with icons, items
   without one are indented to line up with the others' text.
 - **Groups:** `.sep` starts a group with a hairline 8px in from each side.
@@ -573,7 +573,7 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   Browser and Snippets once a tab is open, Broadcast and the layout segment with two or more.
 
 ### Dialogs and the Command Palette
-- **Dialog:** a panel at 98% with 8px corners, a hairline header (`8px 8px 8px 13px`), and a 13px
+- **Dialog:** a panel at `--float-alpha` with 8px corners, a hairline header (`8px 8px 8px 13px`), and a 13px
   body with 8px between blocks; Dialog shadow over a 40% scrim. It holds the keyboard: Tab stays
   inside and Escape closes the top one. Widths: 377 / 610 / 987. A dialog whose body can run
   long puts its buttons in `foot`, a fixed footer under a hairline (`8px 13px`), so Save never
@@ -616,7 +616,7 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   action (Undo after a delete, Reopen after Close other tabs) carries an amber link button,
   takes the pointer, and stays 8s instead of 2.4s.
 - **Tooltip (`.tooltip`, `ui/lib/tooltip.ts`):** a tool button's title in the app's own panel at
-  98%, hairline, 5px corners, `3px 8px`, label size on golden lines, Menu shadow, at most 377px
+  `--float-alpha`, hairline, 5px corners, `3px 8px`, label size on golden lines, Menu shadow, at most 377px
   wide; its shortcut follows in a `kbd` in `weak`. It hangs under what it explains (above when
   there is no room) and takes no pointer.
 - **Quota bar (`Quota.svelte`):** sync storage used, in the account menu and Settings › Sync. A
