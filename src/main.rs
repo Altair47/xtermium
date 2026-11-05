@@ -1366,25 +1366,22 @@ fn open_notices(app: AppHandle) -> Res<()> {
 }
 
 /// Opens terminal tab `id`'s folder in VS Code (`term::code_args`): `cwd` is the shell's, empty
-/// when the shell doesn't say. Then an SSH session's is its home folder on the host, asked over SFTP.
+/// when the shell doesn't say. Then an SSH session's is asked of the host (`ssh::shell_dir`).
 #[tauri::command]
 async fn open_in_code(app: State<'_, App>, id: u32, cwd: String) -> Res<()> {
-    let (kind, home) = match app.tabs.lock().unwrap().get(&id) {
+    let (kind, asked) = match app.tabs.lock().unwrap().get(&id) {
         Some(Tab::Term(t)) => {
-            let home = (t.is_ssh() && !cwd.starts_with('/')).then(|| {
+            let asked = (t.is_ssh() && !cwd.starts_with('/')).then(|| {
                 let (reply, rx) = tokio::sync::oneshot::channel();
-                let _ = t.tx().send(ssh::Ctl::Sftp(reply));
+                let _ = t.tx().send(ssh::Ctl::Cwd(reply));
                 rx
             });
-            (t.session.kind.clone(), home)
+            (t.session.kind.clone(), asked)
         }
         _ => return Err("no such terminal".into()),
     };
-    let cwd = match home {
-        Some(rx) => {
-            let sftp = rx.await.map_err(|_| "The session isn't connected.".to_string())?.map_err(|e| format!("SFTP: {e:#}"))?;
-            sftp.canonicalize(".").await.map_err(|e| format!("SFTP: {e}"))?
-        }
+    let cwd = match asked {
+        Some(rx) => rx.await.map_err(|_| "The session isn't connected.".to_string())?.map_err(|e| format!("SFTP: {e:#}"))?,
         None => cwd,
     };
     let args = term::code_args(&kind, &cwd, &app.settings.lock().unwrap().ssh_user)?;

@@ -196,7 +196,7 @@ pub fn run(
                     Some(b) => b,
                     None => continue,
                 },
-                Ctl::Sftp(_) => continue,
+                Ctl::Sftp(_) | Ctl::Cwd(_) => continue,
                 Ctl::Close => break,
             };
             if writer.write_all(&bytes).is_err() {

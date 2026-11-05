@@ -482,6 +482,8 @@ pub enum Ctl {
     Resize(u16, u16),
     /// Open an SFTP session on the existing SSH connection (SSH tabs only).
     Sftp(tokio::sync::oneshot::Sender<Result<russh_sftp::client::SftpSession>>),
+    /// The shell's folder on the host, for a shell that doesn't report it (`shell_dir`).
+    Cwd(tokio::sync::oneshot::Sender<Result<String>>),
     Close,
 }
 
@@ -489,6 +491,35 @@ async fn open_sftp(h: &Handle<Client>) -> Result<russh_sftp::client::SftpSession
     let ch = h.channel_open_session().await?;
     ch.request_subsystem(true, "sftp").await?;
     Ok(russh_sftp::client::SftpSession::new(ch.into_stream()).await?)
+}
+
+/// Prints the folder of the shell on this connection's terminal. Every channel's process is a
+/// child of the server's process for the connection, so the shell is the sibling with a terminal
+/// (field 7 of /proc/<pid>/stat, the fifth after the name). In `sh`, whatever the login shell is.
+/// ponytail: Linux only (/proc), and the login shell's folder, not that of one started inside it
+/// (`sudo -i`, `bash`); elsewhere the home folder opens.
+const SHELL_DIR: &str = r#"exec sh -c 'for d in /proc/[0-9]*; do read -r s < $d/stat || continue; set -- ${s##*) }; [ "$2" = "$PPID" ] && { [ "$5" = 0 ] || readlink $d/cwd; }; done 2>/dev/null'"#;
+
+/// The folder the shell on `h` is in, asked on a channel of its own ([`SHELL_DIR`]); its home
+/// folder, over SFTP, when that finds none.
+async fn shell_dir(h: &Handle<Client>) -> Result<String> {
+    let ask = async {
+        let mut ch = h.channel_open_session().await?;
+        ch.exec(true, SHELL_DIR).await?;
+        let mut out = vec![];
+        while let Some(msg) = ch.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => out.extend_from_slice(&data),
+                ChannelMsg::Close | ChannelMsg::Failure => break,
+                _ => {}
+            }
+        }
+        anyhow::Ok(String::from_utf8_lossy(&out).lines().next().unwrap_or_default().to_string())
+    };
+    match tokio::time::timeout(Duration::from_secs(5), ask).await {
+        Ok(Ok(dir)) if dir.starts_with('/') => Ok(dir),
+        _ => Ok(open_sftp(h).await?.canonicalize(".").await?),
+    }
 }
 
 /// SFTP on a connection of its own to `target`, through `jump`: a VNC tab's file panel, on the
@@ -553,7 +584,7 @@ pub async fn shell(
     loop {
         // What came while connecting goes first, in order.
         if let Some(c) = early.next() {
-            control(&mut ch, &conn.handle, c).await?;
+            control(&mut ch, &conn, c).await?;
             continue;
         }
         tokio::select! {
@@ -571,7 +602,7 @@ pub async fn shell(
             },
             ctl = rx.recv() => match ctl {
                 Some(Ctl::Close) | None => break, // tab closed
-                Some(c) => control(&mut ch, &conn.handle, c).await?,
+                Some(c) => control(&mut ch, &conn, c).await?,
             },
         }
     }
@@ -583,12 +614,17 @@ pub async fn shell(
 }
 
 /// Typing, a resize or the file panel's request, for an interactive shell's channel.
-async fn control(ch: &mut russh::Channel<client::Msg>, h: &Handle<Client>, c: Ctl) -> Result<()> {
+async fn control(ch: &mut russh::Channel<client::Msg>, conn: &Arc<Conn>, c: Ctl) -> Result<()> {
     match c {
         Ctl::Input(b) => ch.data_bytes(b).await.map_err(|_| Lost)?,
         Ctl::Resize(c, r) => ch.window_change(c as u32, r as u32, 0, 0).await.map_err(|_| Lost)?,
         Ctl::Sftp(reply) => {
-            let _ = reply.send(open_sftp(h).await);
+            let _ = reply.send(open_sftp(&conn.handle).await);
+        }
+        // On the side: the answer takes a round trip or two, and typing goes on meanwhile.
+        Ctl::Cwd(reply) => {
+            let conn = conn.clone();
+            tokio::spawn(async move { reply.send(shell_dir(&conn.handle).await) });
         }
         Ctl::Close => {} // the caller ends the session
     }
@@ -998,6 +1034,37 @@ mod tests {
         assert!(l.rtt_ms.is_some_and(|ms| ms < 1000), "a ping came back");
         assert!(CIPHERS.contains(&l.cipher.as_str()), "cipher {:?}", l.cipher);
         assert!(!l.kex.is_empty() && l.host_key.contains("ed25519"), "{} {}", l.kex, l.host_key);
+        tx.send(Ctl::Close).unwrap();
+        sh.await.unwrap().unwrap();
+    }
+
+    /// Open in VS Code finds the folder of a shell that doesn't report it. Needs a Linux sshd
+    /// taking "tester" with "pw" at `XTERMIUM_TEST_SSH` (host:port), such as `docker run -d -p
+    /// 2222:2222 -e USER_NAME=tester -e USER_PASSWORD=pw -e PASSWORD_ACCESS=true
+    /// lscr.io/linuxserver/openssh-server`.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "needs a Linux sshd at XTERMIUM_TEST_SSH"]
+    async fn finds_the_shells_folder() {
+        let _home = test_home();
+        let at = std::env::var("XTERMIUM_TEST_SSH").unwrap();
+        let (host, port) = at.rsplit_once(':').unwrap();
+        let target = Endpoint { host: host.into(), port: port.parse().unwrap(), user: "tester".into(), ..Default::default() };
+        let ssh = config::Ssh { target, ..Default::default() };
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let sh = tokio::spawn(async move { shell(&ssh, "xterm", (80, 24), &yes_prompter(), Default::default(), rx, |_| {}).await });
+        tx.send(Ctl::Input(b"cd /tmp\n".to_vec())).unwrap();
+        // The shell takes the cd in its own time.
+        let mut dir = String::new();
+        for _ in 0..50 {
+            let (reply, rx) = tokio::sync::oneshot::channel();
+            tx.send(Ctl::Cwd(reply)).unwrap();
+            dir = rx.await.unwrap().unwrap();
+            if dir == "/tmp" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(dir, "/tmp");
         tx.send(Ctl::Close).unwrap();
         sh.await.unwrap().unwrap();
     }
