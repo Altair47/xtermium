@@ -2066,7 +2066,7 @@ fn run_cmd(
                         let _ = m.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
                     }
                 }
-                Ctl::Sftp(_) => {}
+                Ctl::Sftp(_) | Ctl::Cwd(_) => {}
                 Ctl::Close => break,
             }
         }
@@ -2128,7 +2128,7 @@ fn run_serial(
                         break;
                     }
                 }
-                Ctl::Resize(..) | Ctl::Sftp(_) => {}
+                Ctl::Resize(..) | Ctl::Sftp(_) | Ctl::Cwd(_) => {}
                 Ctl::Close => break,
             }
         }
