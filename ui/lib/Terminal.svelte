@@ -71,8 +71,12 @@
   let box: HTMLDivElement = $state()!;
   /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
   const ringTab = $derived(remote || shared);
-  /** A remote tab's canvas: the owner's grid at its own size, shrunk by `k` to fit the box. */
+  /** A remote tab's canvas in CSS pixels, and `k` (at most 1) shrinking what the font size can't fit. */
   let view = $state({ w: 0, h: 0, k: 1 });
+  /** A remote tab's font size (CSS pixels), picked so the owner's grid fills the box; 0 until fitted. */
+  let fitted = 0;
+  /** fitRemote() is measuring the font it picked: that inner fit only sizes the canvas. */
+  let fitting = false;
   /** The session had ended at the last update: `onexit(true)` comes once per ending. */
   let ended = false;
   let canvas: HTMLCanvasElement = $state()!;
@@ -195,7 +199,7 @@
   }
 
   function font(flags: number) {
-    const size = Math.round(Math.max(6, look!.size + zoom) * devicePixelRatio * 100) / 100;
+    const size = Math.round(Math.max(6, remote && fitted ? fitted : look!.size + zoom) * devicePixelRatio * 100) / 100;
     return `${flags & ITALIC ? "italic " : ""}${flags & BOLD ? "bold " : ""}${size}px ${fontStack(look!.font)}`;
   }
 
@@ -215,12 +219,27 @@
     fit();
   }
 
-  /** A remote tab is never resized: the owner's size wins. The canvas is their grid in this font, centred
-   *  in the box and shrunk to fit it when the box is smaller. */
+  /** A remote tab is never resized: the owner's size wins. Its font grows or shrinks here until their
+   *  grid fills the box (one side, the other as the shapes allow), measured on this computer: its own
+   *  screen scaling and, where the owner's font is missing, its fallback. The grid sits at the top left,
+   *  as a terminal's does; what a font size can't fit (the smallest one, rounding) is scaled down. */
   function fitRemote() {
     const r = box.getBoundingClientRect();
     if (!size || size[0] < 1 || size[1] < 1 || r.width < 4 || r.height < 4) return;
+    const pad = app.settings?.pane_padding ?? 6;
+    const [aw, ah] = [Math.max(1, r.width - 2 * pad), Math.max(1, r.height - 2 * pad)];
     const [W, H] = [Math.round(size[0] * cell.w), Math.round(size[1] * cell.h)];
+    // Glyphs widen with the font almost exactly in step, so one new size lands within a few percent.
+    const t = Math.min((aw * devicePixelRatio) / W, (ah * devicePixelRatio) / H);
+    const now = fitted || look!.size;
+    const next = Math.max(6, Math.min(72, Math.floor(now * t * 4) / 4));
+    if (!fitting && (t < 0.98 || t > 1.03) && next !== now) {
+      fitted = next;
+      fitting = true;
+      measure(); // measures, then sizes the canvas through fit() and here again
+      fitting = false;
+      return;
+    }
     if (canvas.width !== W || canvas.height !== H) {
       canvas.width = W;
       canvas.height = H;
@@ -228,7 +247,7 @@
       schedule();
     }
     const [w, h] = [W / devicePixelRatio, H / devicePixelRatio];
-    view = { w, h, k: Math.min(1, r.width / w, r.height / h) };
+    view = { w, h, k: Math.min(1, aw / w, ah / h) };
   }
 
   /** Size the canvas to its box and tell the backend the grid size. */
@@ -652,8 +671,9 @@
       const pad = app.settings?.pane_padding ?? 6;
       return [pad + col * cw, pad + row * ch];
     }
-    const { w, h, k } = view;
-    return [(box.clientWidth - w * k) / 2 + col * cw * k, (box.clientHeight - h * k) / 2 + row * ch * k];
+    const { k } = view;
+    const pad = app.settings?.pane_padding ?? 6;
+    return [pad + col * cw * k, pad + row * ch * k];
   }
 
   function onwheel(e: WheelEvent) {
@@ -758,8 +778,19 @@
   let observer: ResizeObserver;
   // Cached glyphs drawn before a font finished loading came from a fallback font.
   const fontsLoaded = () => measure();
+  /** Matches while the screen's scaling is what the font was measured at. The window moving to a screen
+   *  scaled otherwise (a Retina and a plain monitor on macOS) can keep its size in CSS pixels, so nothing
+   *  resizes: this measures again for it. */
+  let scaling: MediaQueryList | null = null;
+  function watchScaling() {
+    scaling?.removeEventListener("change", rescaled);
+    scaling = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
+    scaling.addEventListener("change", rescaled);
+  }
+  const rescaled = () => (watchScaling(), measure());
   onMount(async () => {
     document.fonts.addEventListener("loadingdone", fontsLoaded);
+    watchScaling();
     observer = new ResizeObserver(() => fit());
     observer.observe(box);
     if (remote) {
@@ -780,6 +811,7 @@
     gone = true;
     observer?.disconnect();
     document.fonts.removeEventListener("loadingdone", fontsLoaded);
+    scaling?.removeEventListener("change", rescaled);
     if (id && !released && !remote) invoke("close_tab", { id });
     if (remote) invoke("coop_close_remote", { ringTab: remote, channel: out.id }).catch(() => {});
     clearTimeout(tick);
@@ -807,8 +839,8 @@
     onpointerleave={() => (hoverLinks(false), (pointer = null), ringTab && pointing(-1, -1))}
     style:cursor={overLink ? "pointer" : null}
     style:visibility={painted ? null : "hidden"}
-    style:inset={remote ? "0" : null}
-    style:margin={remote ? "auto" : null}
+    style:inset={remote ? "var(--pad) auto auto var(--pad)" : null}
+    style:transform-origin={remote ? "0 0" : null}
     style:width={remote ? `${view.w}px` : null}
     style:height={remote ? `${view.h}px` : null}
     style:scale={remote ? view.k : null}
