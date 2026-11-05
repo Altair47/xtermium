@@ -753,11 +753,11 @@ fn import_path(app: State<App>, format: formats::Format, path: String) -> Res<(S
 #[tauri::command]
 async fn export_sessions(
     handle: AppHandle,
+    window: tauri::Window,
     format: formats::Format,
     folder: String,
     passphrase: String,
 ) -> Res<Option<(String, usize)>> {
-    use tauri_plugin_dialog::DialogExt;
     let part = handle.state::<App>().store.lock().unwrap().subtree(&folder);
     let base = if folder.is_empty() { "sessions" } else { folder.rsplit('/').next().unwrap_or("sessions") };
     let (data, skipped, ext) = if format == formats::Format::Xtermium {
@@ -778,7 +778,7 @@ async fn export_sessions(
     };
     let base = clean::file_name(base);
     let file = if ext.is_empty() { base } else { format!("{base}.{ext}") };
-    let mut dialog = handle.dialog().file().set_file_name(file);
+    let mut dialog = file_dialog(&window).set_file_name(file);
     if !ext.is_empty() {
         dialog = dialog.add_filter(&ext, &[ext.as_str()]);
     }
@@ -821,8 +821,7 @@ fn unbackup(text: &str) -> anyhow::Result<(Store, Option<Settings>, Option<confi
 /// settings, trusted server keys) to one file encrypted with `passphrase`. Where it went; None if
 /// the user cancelled.
 #[tauri::command]
-async fn backup_save(handle: AppHandle, passphrase: String) -> Res<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
+async fn backup_save(handle: AppHandle, window: tauri::Window, passphrase: String) -> Res<Option<String>> {
     if passphrase.chars().count() < 8 {
         return Err("Use a passphrase of at least 8 characters.".into());
     }
@@ -834,7 +833,7 @@ async fn backup_save(handle: AppHandle, passphrase: String) -> Res<Option<String
         .map_err(|e| e.to_string())?
         .map_err(fail)?;
     let file = format!("xtermium backup {}.xtermium", chrono::Local::now().format("%Y-%m-%d"));
-    let dialog = handle.dialog().file().set_file_name(file).add_filter("xtermium", &["xtermium"]);
+    let dialog = file_dialog(&window).set_file_name(file).add_filter("xtermium", &["xtermium"]);
     let Some(path) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
     std::fs::write(&path, data).map_err(|e| e.to_string())?;
     Ok(Some(path.display().to_string()))
@@ -1317,11 +1316,18 @@ async fn complete_path(typed: String, dirs: bool, exec: bool) -> Vec<String> {
     tauri::async_runtime::spawn_blocking(move || paths::complete(&typed, dirs, exec)).await.unwrap_or_default()
 }
 
+/// A file dialog for `window`, the one that asked for it. macOS shows it as a sheet on that window:
+/// without a parent, rfd takes the app's main window or else the first in its list, which can be
+/// another one, the tray icon's among them. Windows and Linux keep it in front of that window.
+pub fn file_dialog(window: &tauri::Window) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry> {
+    use tauri_plugin_dialog::DialogExt;
+    window.dialog().file().set_parent(window)
+}
+
 /// The system's file or folder picker; None if cancelled.
 #[tauri::command]
-async fn pick_path(handle: AppHandle, dirs: bool, start: String) -> Option<String> {
-    use tauri_plugin_dialog::DialogExt;
-    let mut d = handle.dialog().file();
+async fn pick_path(window: tauri::Window, dirs: bool, start: String) -> Option<String> {
+    let mut d = file_dialog(&window);
     if let Some(dir) = paths::start_dir(&start) {
         d = d.set_directory(dir);
     }
@@ -1472,14 +1478,13 @@ fn open_rdp(app: State<App>, mut session: Session, out: Channel, width: u16, hei
 
 /// Saves a terminal's scrollback and screen as text; the path, or None if cancelled.
 #[tauri::command]
-async fn save_output(handle: AppHandle, id: u32) -> Res<Option<String>> {
-    use tauri_plugin_dialog::DialogExt;
+async fn save_output(handle: AppHandle, window: tauri::Window, id: u32) -> Res<Option<String>> {
     let (name, text) = match handle.state::<App>().tabs.lock().unwrap().get(&id) {
         Some(Tab::Term(t)) => (t.session.name.clone(), t.text(usize::MAX / 2)),
         _ => return Err("no such terminal".into()),
     };
     let file = clean::file_name(&format!("{} {name}.txt", chrono::Local::now().format("%Y-%m-%d %H-%M-%S")));
-    let dialog = handle.dialog().file().set_file_name(file).add_filter("txt", &["txt"]);
+    let dialog = file_dialog(&window).set_file_name(file).add_filter("txt", &["txt"]);
     let Some(path) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
     std::fs::write(&path, text + "\n").map_err(|e| e.to_string())?;
     Ok(Some(path.display().to_string()))

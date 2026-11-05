@@ -401,11 +401,8 @@ pub fn custom_css() -> Option<(String, String)> {
 /// shader files on some desktops): its kind, name and data as `fetch_background` gives them, or
 /// None when the dialog was cancelled.
 #[tauri::command]
-pub async fn pick_background(handle: AppHandle) -> Res<Option<(String, String, String)>> {
-    use tauri_plugin_dialog::DialogExt;
-    let dialog = handle
-        .dialog()
-        .file()
+pub async fn pick_background(window: tauri::Window) -> Res<Option<(String, String, String)>> {
+    let dialog = crate::file_dialog(&window)
         .add_filter("Pictures and shaders", &["png", "jpg", "jpeg", "gif", "webp", "svg", "glsl", "frag", "fs", "fsh", "shader", "txt"]);
     let Some(path) = dialog.blocking_pick_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
