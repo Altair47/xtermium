@@ -530,6 +530,11 @@ pub async fn sftp_alone(target: &Endpoint, jump: Option<&Endpoint>, prompt: &Pro
     Ok((s, conn))
 }
 
+/// SSH tabs signing in at once (a folder's Open all); the others wait their turn. OpenSSH's default
+/// `MaxStartups 10:30:100` starts dropping a server's connections past ten not yet signed in, which
+/// sessions through one jump host would reach.
+static CONNECTING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
+
 /// Interactive shell: pumps output into `sink` until the channel closes. `link` gets what was
 /// negotiated and the round trip, pinged every few seconds.
 pub async fn shell(
@@ -546,7 +551,10 @@ pub async fn shell(
     // then it stops, and the question goes away with it (main.rs `prompt-gone`). What comes
     // meanwhile (typing, a resize, the file panel) is kept for when the shell is up.
     let mut early = vec![];
-    let connecting = connect(&ssh.target, ssh.jump.as_ref(), &opts, prompt, None);
+    let connecting = async {
+        let _turn = CONNECTING.acquire().await;
+        connect(&ssh.target, ssh.jump.as_ref(), &opts, prompt, None).await
+    };
     tokio::pin!(connecting);
     let conn = loop {
         tokio::select! {
