@@ -1,7 +1,7 @@
 // App-wide state, loaded from the backend at start.
 
 import { invoke } from "@tauri-apps/api/core";
-import { keysOf } from "./actions";
+import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
 import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
@@ -393,10 +393,11 @@ export function tell(text: string, page: string) {
   app.statusLink = { text, page };
 }
 
-/** The keys an action is bound to, with your changes (Settings › Shortcuts); "" for none. */
-export const shortcut = (action: string) => keysOf(action, app.settings?.shortcuts ?? {});
+/** The keys an action is bound to, with your changes (Settings › Shortcuts), as this system
+ *  writes them ("⇧⌘S" on macOS); "" for none. */
+export const shortcut = (action: string) => shown(keysOf(action, app.settings?.shortcuts ?? {}));
 
-/** A tooltip with the action's shortcut after it: "Snippets (Ctrl+Shift+S)". tooltip.ts draws
+/** A tooltip with the action's shortcut after it: "Snippets (Ctrl+Shift+S)", "Snippets (⇧⌘S)". tooltip.ts draws
  *  that ending as key caps. */
 export function tip(text: string, action: string): string {
   const keys = shortcut(action);

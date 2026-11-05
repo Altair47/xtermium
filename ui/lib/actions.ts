@@ -1,68 +1,80 @@
 // App actions: what keyboard shortcuts and the command palette can do. App.svelte runs them.
 // Users rebind them in Settings > Shortcuts; only changes are stored (settings.shortcuts).
 
-export type Action = { id: string; label: string; keys: string };
+export type Os = "windows" | "macos" | "linux";
 
-const tabs: Action[] = Array.from({ length: 9 }, (_, i) => ({ id: `tab-${i + 1}`, label: `Go to tab ${i + 1}`, keys: `Alt+${i + 1}` }));
+/** This computer's system, from the webview's user agent (WKWebView says Macintosh, WebKitGTK X11
+ *  or Linux, WebView2 Windows); known before `boot`, and in every window. Elsewhere (tests): Windows. */
+export const OS: Os = ((ua: string) => (/Macintosh|Mac OS X/.test(ua) ? "macos" : /Linux|X11/.test(ua) ? "linux" : "windows"))(globalThis.navigator?.userAgent ?? "");
+
+/** `keys` is the default on Windows; `mac` and `linux` replace it there when the usual keys differ.
+ *  macOS keeps Ctrl for the terminal and gives the app ⌘, as its terminals do (⌘T, ⌘W, ⌘1…), with
+ *  ⌥ (Option) left alone: shells move by word with it. Linux keeps Windows' keys except where the
+ *  desktop takes them (GTK's Ctrl+Shift+U starts typing a Unicode character). */
+export type Action = { id: string; label: string; keys: string; mac?: string; linux?: string };
+
+const tabs: Action[] = Array.from({ length: 9 }, (_, i) => ({ id: `tab-${i + 1}`, label: `Go to tab ${i + 1}`, keys: `Alt+${i + 1}`, mac: `Meta+${i + 1}` }));
 
 export const ACTIONS: Action[] = [
-  { id: "palette", label: "Command palette", keys: "Ctrl+Shift+P" },
-  { id: "find", label: "Find a session", keys: "Ctrl+Shift+O" },
-  { id: "find-text", label: "Find in terminal", keys: "Ctrl+Shift+F" },
-  { id: "new-session", label: "New session", keys: "Ctrl+Shift+N" },
-  { id: "local-shell", label: "Open a local shell", keys: "Ctrl+Shift+T" },
-  { id: "close-tab", label: "Close tab", keys: "Ctrl+Shift+W" },
-  { id: "reconnect", label: "Reconnect tab", keys: "Ctrl+Shift+R" },
-  { id: "duplicate-tab", label: "Duplicate tab", keys: "Ctrl+Shift+D" },
+  { id: "palette", label: "Command palette", keys: "Ctrl+Shift+P", mac: "Shift+Meta+P" },
+  { id: "find", label: "Find a session", keys: "Ctrl+Shift+O", mac: "Shift+Meta+O" },
+  { id: "find-text", label: "Find in terminal", keys: "Ctrl+Shift+F", mac: "Meta+F" },
+  { id: "new-session", label: "New session", keys: "Ctrl+Shift+N", mac: "Meta+N" },
+  { id: "local-shell", label: "Open a local shell", keys: "Ctrl+Shift+T", mac: "Meta+T" },
+  { id: "close-tab", label: "Close tab", keys: "Ctrl+Shift+W", mac: "Meta+W" },
+  { id: "reconnect", label: "Reconnect tab", keys: "Ctrl+Shift+R", mac: "Shift+Meta+R" },
+  { id: "duplicate-tab", label: "Duplicate tab", keys: "Ctrl+Shift+D", mac: "Shift+Meta+D" },
   { id: "detach-tab", label: "Move tab to a new window", keys: "" },
   { id: "next-tab", label: "Next tab", keys: "Ctrl+Tab" },
   { id: "prev-tab", label: "Previous tab", keys: "Ctrl+Shift+Tab" },
   ...tabs,
   { id: "next-pane", label: "Focus the next pane", keys: "F6" },
-  { id: "focus-left", label: "Focus the pane to the left", keys: "Alt+ArrowLeft" },
-  { id: "focus-right", label: "Focus the pane to the right", keys: "Alt+ArrowRight" },
-  { id: "focus-up", label: "Focus the pane above", keys: "Alt+ArrowUp" },
-  { id: "focus-down", label: "Focus the pane below", keys: "Alt+ArrowDown" },
-  { id: "move-left", label: "Swap the pane with the one to the left", keys: "Ctrl+Shift+ArrowLeft" },
-  { id: "move-right", label: "Swap the pane with the one to the right", keys: "Ctrl+Shift+ArrowRight" },
-  { id: "move-up", label: "Swap the pane with the one above", keys: "Ctrl+Shift+ArrowUp" },
-  { id: "move-down", label: "Swap the pane with the one below", keys: "Ctrl+Shift+ArrowDown" },
-  { id: "edge-left", label: "Move the pane's edge left", keys: "Alt+Shift+ArrowLeft" },
-  { id: "edge-right", label: "Move the pane's edge right", keys: "Alt+Shift+ArrowRight" },
-  { id: "edge-up", label: "Move the pane's edge up", keys: "Alt+Shift+ArrowUp" },
-  { id: "edge-down", label: "Move the pane's edge down", keys: "Alt+Shift+ArrowDown" },
+  { id: "focus-left", label: "Focus the pane to the left", keys: "Alt+ArrowLeft", mac: "Alt+Meta+ArrowLeft" },
+  { id: "focus-right", label: "Focus the pane to the right", keys: "Alt+ArrowRight", mac: "Alt+Meta+ArrowRight" },
+  { id: "focus-up", label: "Focus the pane above", keys: "Alt+ArrowUp", mac: "Alt+Meta+ArrowUp" },
+  { id: "focus-down", label: "Focus the pane below", keys: "Alt+ArrowDown", mac: "Alt+Meta+ArrowDown" },
+  { id: "move-left", label: "Swap the pane with the one to the left", keys: "Ctrl+Shift+ArrowLeft", mac: "Shift+Meta+ArrowLeft" },
+  { id: "move-right", label: "Swap the pane with the one to the right", keys: "Ctrl+Shift+ArrowRight", mac: "Shift+Meta+ArrowRight" },
+  { id: "move-up", label: "Swap the pane with the one above", keys: "Ctrl+Shift+ArrowUp", mac: "Shift+Meta+ArrowUp" },
+  { id: "move-down", label: "Swap the pane with the one below", keys: "Ctrl+Shift+ArrowDown", mac: "Shift+Meta+ArrowDown" },
+  { id: "edge-left", label: "Move the pane's edge left", keys: "Alt+Shift+ArrowLeft", mac: "Ctrl+Meta+ArrowLeft" },
+  { id: "edge-right", label: "Move the pane's edge right", keys: "Alt+Shift+ArrowRight", mac: "Ctrl+Meta+ArrowRight" },
+  { id: "edge-up", label: "Move the pane's edge up", keys: "Alt+Shift+ArrowUp", mac: "Ctrl+Meta+ArrowUp" },
+  { id: "edge-down", label: "Move the pane's edge down", keys: "Alt+Shift+ArrowDown", mac: "Ctrl+Meta+ArrowDown" },
   { id: "layout-single", label: "Layout: single", keys: "" },
   { id: "layout-columns", label: "Layout: side by side", keys: "" },
   { id: "layout-rows", label: "Layout: stacked", keys: "" },
   { id: "layout-grid", label: "Layout: 2 × 2 grid", keys: "" },
   { id: "layout-tiles", label: "Layout: tiles", keys: "" },
-  { id: "toggle-sidebar", label: "Show or hide the sidebar", keys: "Ctrl+Shift+B" },
-  { id: "collapse-sidebar", label: "Collapse or expand the sidebar", keys: "Ctrl+Shift+L" },
-  { id: "toggle-files", label: "Show or hide the file panel", keys: "Ctrl+Shift+E" },
+  { id: "toggle-sidebar", label: "Show or hide the sidebar", keys: "Ctrl+Shift+B", mac: "Shift+Meta+B" },
+  { id: "collapse-sidebar", label: "Collapse or expand the sidebar", keys: "Ctrl+Shift+L", mac: "Shift+Meta+L" },
+  { id: "toggle-files", label: "Show or hide the file panel", keys: "Ctrl+Shift+E", mac: "Shift+Meta+E" },
   { id: "toggle-status", label: "Show or hide the status bar", keys: "" },
-  { id: "toggle-broadcast", label: "Turn broadcast on or off", keys: "Ctrl+Shift+A" },
-  { id: "tunnels", label: "Tunnels", keys: "Ctrl+Shift+U" },
-  { id: "snippets", label: "Snippets", keys: "Ctrl+Shift+S" },
-  { id: "coop", label: "Terminal Co-op", keys: "Ctrl+Shift+G" },
-  { id: "sync", label: "Sync the account now", keys: "Ctrl+Shift+J" },
+  { id: "toggle-broadcast", label: "Turn broadcast on or off", keys: "Ctrl+Shift+A", mac: "Shift+Meta+A" },
+  { id: "tunnels", label: "Tunnels", keys: "Ctrl+Shift+U", mac: "Shift+Meta+U", linux: "Ctrl+Shift+Y" },
+  { id: "snippets", label: "Snippets", keys: "Ctrl+Shift+S", mac: "Shift+Meta+S" },
+  { id: "coop", label: "Terminal Co-op", keys: "Ctrl+Shift+G", mac: "Shift+Meta+G" },
+  { id: "sync", label: "Sync the account now", keys: "Ctrl+Shift+J", mac: "Shift+Meta+J" },
   { id: "credentials", label: "Shared logins", keys: "" },
   { id: "import", label: "Import sessions", keys: "" },
   { id: "export", label: "Export all sessions", keys: "" },
-  { id: "settings", label: "Settings", keys: "Ctrl+," },
-  { id: "font-bigger", label: "Larger terminal font", keys: "Ctrl+=" },
-  { id: "font-smaller", label: "Smaller terminal font", keys: "Ctrl+-" },
-  { id: "font-reset", label: "Default terminal font size", keys: "Ctrl+0" },
-  { id: "wheel-zoom-tab", label: "Zoom the tab's text with the mouse wheel", keys: "Ctrl+Wheel" },
+  { id: "settings", label: "Settings", keys: "Ctrl+,", mac: "Meta+," },
+  { id: "font-bigger", label: "Larger terminal font", keys: "Ctrl+=", mac: "Meta+=" },
+  { id: "font-smaller", label: "Smaller terminal font", keys: "Ctrl+-", mac: "Meta+-" },
+  { id: "font-reset", label: "Default terminal font size", keys: "Ctrl+0", mac: "Meta+0" },
+  { id: "wheel-zoom-tab", label: "Zoom the tab's text with the mouse wheel", keys: "Ctrl+Wheel", mac: "Meta+Wheel" },
   { id: "wheel-zoom-all", label: "Zoom every terminal's text with the mouse wheel", keys: "" },
   { id: "theme", label: "Switch between light and dark", keys: "" },
-  { id: "fullscreen", label: "Full screen", keys: "F11" },
-  { id: "lock", label: "Lock xtermium", keys: "Ctrl+Shift+K" },
+  { id: "fullscreen", label: "Full screen", keys: "F11", mac: "Ctrl+Meta+F" },
+  { id: "lock", label: "Lock xtermium", keys: "Ctrl+Shift+K", mac: "Shift+Meta+K" },
 ];
 
 /** Chords the terminal itself uses; binding one to an action takes it away from the terminal. */
 export const TERMINAL_KEYS: Record<string, string> = {
   "Ctrl+Shift+C": "copy",
   "Ctrl+Shift+V": "paste",
+  "Meta+C": "copy",
+  "Meta+V": "paste",
   "Shift+Insert": "paste",
   "Shift+PageUp": "scroll back",
   "Shift+PageDown": "scroll forward",
@@ -111,17 +123,31 @@ export function wheelAction(e: WheelEvent, overrides: Record<string, string>): "
 /** A tab's font zoom `by` points further (0: back to none), within the limits of Ctrl+= and Ctrl+-. */
 export const zoomed = (zoom: number, by: number) => (by ? Math.max(-8, Math.min(24, zoom + by)) : 0);
 
-/** The chord bound to an action, with the user's changes applied. */
 /** Whether the interface may run here: xtermium's own windows (main.rs: `main`, detached tabs' `tab-<id>`), never framed. */
 export const ownWindow = (label: string, framed: boolean) => !framed && (label === "main" || label.startsWith("tab-"));
 
-export const keysOf = (id: string, overrides: Record<string, string>) => overrides[id] ?? ACTIONS.find((a) => a.id === id)?.keys ?? "";
+/** An action's chord before any change of yours: its own for macOS or Linux where those differ. */
+export const defaultKeys = (a: Action | undefined, os: Os = OS) => (a ? ((os === "macos" ? a.mac : os === "linux" ? a.linux : undefined) ?? a.keys) : "");
+
+/** The chord bound to an action, with the user's changes applied. */
+export const keysOf = (id: string, overrides: Record<string, string>, os: Os = OS) =>
+  overrides[id] ?? defaultKeys(ACTIONS.find((a) => a.id === id), os);
+
+/** Apple's signs for the modifiers (in its order, ⌃⌥⇧⌘, which chord() keeps too) and the arrows. */
+const SIGNS: Record<string, string> = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Meta: "⌘", ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" };
+
+/** A chord as this system writes it: "⇧⌘P" on macOS, as stored ("Ctrl+Shift+P") elsewhere. */
+export function shown(keys: string, os: Os = OS): string {
+  const m = /^((?:(?:Ctrl|Alt|Shift|Meta)\+)*)(.+)$/.exec(keys);
+  if (os !== "macos" || !m) return keys;
+  return [...m[1].split("+").filter(Boolean), m[2]].map((p) => SIGNS[p] ?? p).join("");
+}
 
 /** Chord → action, for every bound action. */
-export function bindings(overrides: Record<string, string>): Map<string, string> {
+export function bindings(overrides: Record<string, string>, os: Os = OS): Map<string, string> {
   const m = new Map<string, string>();
   for (const a of ACTIONS) {
-    const k = keysOf(a.id, overrides);
+    const k = keysOf(a.id, overrides, os);
     if (k && !m.has(k) && !isWheel(a.id)) m.set(k, a.id);
   }
   return m;

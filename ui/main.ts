@@ -18,10 +18,10 @@ window.addEventListener(
   "keydown",
   (e) => {
     const k = e.key.toLowerCase();
-    // Ctrl+Shift+arrows would select page text; outside text fields they belong to the terminal.
+    // Ctrl+Shift+arrows (⇧⌘ on macOS) would select page text; outside text fields they belong to the terminal.
     // a synthetic event aimed at the document has no element to ask
     const field = (e.target as HTMLElement).closest?.("input, select");
-    if (e.ctrlKey && e.shiftKey && e.key.startsWith("Arrow") && !field) e.preventDefault();
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.startsWith("Arrow") && !field) e.preventDefault();
     if (e.key === "F5" || e.key === "F7" || ((e.ctrlKey || e.metaKey) && ["r", "p", "f", "g", "j", "u"].includes(k))) {
       e.preventDefault();
     }

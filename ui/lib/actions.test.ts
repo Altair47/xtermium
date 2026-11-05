@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACTIONS, bindings, cell, chord, even, fill, neighbour, nudge, ownWindow, placeholders, quickConnect, resize, score, tile, wheelAction, wheelChord } from "./actions.ts";
+import { ACTIONS, bindings, cell, chord, defaultKeys, even, fill, keysOf, neighbour, nudge, type Os, ownWindow, placeholders, quickConnect, resize, score, shown, TERMINAL_KEYS, tile, wheelAction, wheelChord } from "./actions.ts";
 
 const key = (code: string, key: string, mods: Partial<KeyboardEvent> = {}) =>
   chord({ code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods } as KeyboardEvent);
@@ -36,6 +36,39 @@ test("default shortcuts don't collide, and overrides apply", () => {
   assert.equal(b.get("Ctrl+K"), "palette");
   assert.equal(b.get("Ctrl+Shift+P"), undefined);
   assert.equal([...b.values()].includes("find"), false);
+});
+
+test("each system's defaults are chords a key press makes, apart from each other and the terminal's", () => {
+  for (const os of ["windows", "macos", "linux"] as Os[]) {
+    const all = ACTIONS.map((a) => defaultKeys(a, os)).filter(Boolean);
+    assert.equal(new Set(all).size, all.length, `${os}: no two actions share keys`);
+    for (const k of all) {
+      // chord()'s order, Ctrl Alt Shift Meta, or bindings() never finds it
+      assert.match(k, /^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[^+]+$/, `${os}: ${k}`);
+      assert.equal(TERMINAL_KEYS[k], undefined, `${os}: ${k} is the terminal's`);
+    }
+  }
+  assert.equal(keysOf("palette", {}, "windows"), "Ctrl+Shift+P", "Windows keeps its keys");
+  assert.equal(bindings({}, "macos").get("Meta+T"), "local-shell");
+  assert.equal(bindings({}, "macos").get("Meta+1"), "tab-1");
+  assert.equal(keysOf("palette", { palette: "Ctrl+K" }, "macos"), "Ctrl+K", "your change wins on every system");
+});
+
+test("macOS leaves Ctrl and Option to the terminal; Linux leaves GTK its Unicode keys", () => {
+  for (const a of ACTIONS) {
+    const k = defaultKeys(a, "macos");
+    assert.ok(!k || k.includes("Meta") || ["Ctrl+Tab", "Ctrl+Shift+Tab", "F6"].includes(k), `${a.id}: ${k}`);
+  }
+  assert.ok(!ACTIONS.some((a) => defaultKeys(a, "linux") === "Ctrl+Shift+U"));
+});
+
+test("chords are written the macOS way there, as stored elsewhere", () => {
+  assert.equal(shown("Shift+Meta+P", "macos"), "⇧⌘P");
+  assert.equal(shown("Ctrl+Meta+ArrowLeft", "macos"), "⌃⌘←");
+  assert.equal(shown("Ctrl+Shift++", "macos"), "⌃⇧+", "the plus key");
+  assert.equal(shown("F6", "macos"), "F6");
+  assert.equal(shown("", "macos"), "");
+  assert.equal(shown("Ctrl+Shift+P", "windows"), "Ctrl+Shift+P");
 });
 
 test("fuzzy matching", () => {

@@ -143,7 +143,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 - **Status bar:** the focused tab's connection, how long it's been up, and for SSH the negotiated cipher and a live round trip; the terminal's size. Settings › General hides it.
 - **Tabs in their own window:** right-click a terminal or RDP tab › Move to a new window. The session goes on there, with nothing around it. Right-click in it (Ctrl+right-click on a remote desktop) or close the window to put it back. Ctrl+= / Ctrl+- zoom one tab's font.
 - **Terminal Co-op** (Pro; Ctrl+Shift+G, or Settings › Account and sync): start a ring, give its passcode to up to two other signed-in people, and say yes as they ask to join. Right-click one of your tabs › Share with the ring puts a terminal, a remote desktop (RDP or VNC) or, on Windows, a website in front of everyone in it; AI agent tabs can't be shared. A shared tab opens as a tab of its own for the others, shown at your size, and they can type and click in it. Everyone's pointer shows over a shared tab with their picture. You can take anyone out or end the ring at any time, and the passcode works for ten minutes before you need a new one. What you share goes straight between the computers, end-to-end encrypted; the sync server only introduces them and never sees a keystroke or a screen. A ring ends by itself if the owner's Pro does.
-- **Zoom with the mouse wheel:** Ctrl+wheel over a terminal zooms that tab's font like Ctrl+= / Ctrl+-. Ctrl+Shift+wheel, off until you turn it on, changes every terminal's font size (Settings › Terminal). Settings › Shortcuts rebinds both to any of Ctrl, Alt, Shift or Meta with the wheel.
+- **Zoom with the mouse wheel:** Ctrl+wheel (⌘+wheel on macOS) over a terminal zooms that tab's font like Ctrl+= / Ctrl+-. Ctrl+Shift+wheel, off until you turn it on, changes every terminal's font size (Settings › Terminal). Settings › Shortcuts rebinds both to any of Ctrl, Alt, Shift or Meta with the wheel.
 - **Open in VS Code:** right-click an SSH, local shell or AI agent tab › Open the folder in VS Code (its `code` command has to be on your PATH). A local folder opens as it is; an SSH session's opens on its host through VS Code's Remote-SSH extension, as the session's user and port. VS Code signs in by itself (keys and agent, or it asks for the password); a jump host or key file has to be in `~/.ssh/config` for it. The folder is the shell's: as the shell reports it (OSC 7, as for the SFTP panel), else on a Linux host the one it is in, asked over the same connection; else your home folder on the host, or the tab's starting folder.
 - **Scroll bar** on terminals (Settings › Terminal), to see and drag where you are in the scrollback. Scrolled back, new output leaves what you're reading where it is, or brings you to the bottom if you turn on "Scroll to the bottom on output".
 - **Clipboard behaviour** and the Websites mode are in Settings too.
@@ -240,20 +240,21 @@ The sync server is proprietary and not in this repository; the client talks to i
 - Double-click a session in the sidebar to open it. Right-click it to edit, duplicate or delete; right-click a folder to rename, tag, export or delete it.
 - Click a tab to show it in the focused pane. Middle-click a tab, or press its ×, to close it.
 - Point at a button to see what it does and its shortcut; menus show their items' shortcuts too (Settings › Shortcuts changes them).
+- Shortcuts follow the system. This README gives Windows' keys. On macOS ⌘ takes Ctrl's place in xtermium's own shortcuts and Ctrl stays the terminal's: ⇧⌘P the command palette, ⌘T a local shell, ⌘N a new session, ⌘W closes a tab, ⌘F finds in the terminal, ⌘1 … ⌘9 go to a tab, ⌥⌘ arrows focus the pane that way, ⌘, opens Settings, ⌃⌘F full screen, and ⇧⌘ with the same letter for the rest (⇧⌘A broadcast, ⇧⌘S snippets, ⇧⌘K lock). Linux uses Windows' keys, except Tunnels: Ctrl+Shift+Y, since GTK keeps Ctrl+Shift+U for typing a Unicode character.
 
 | In a terminal | |
 |---|---|
 | Select text | copies it (can be turned off in Settings) |
-| Right-click, Shift+Insert, Ctrl+Shift+V | paste |
-| Ctrl+Shift+C | copy the selection |
+| Right-click, Shift+Insert, Ctrl+Shift+V (⌘V on macOS) | paste |
+| Ctrl+Shift+C (⌘C on macOS) | copy the selection |
 | Shift+PgUp / Shift+PgDn, mouse wheel | scroll back |
 | Shift + drag | select even when the program captures the mouse |
-| Ctrl+click a link | opens it in your browser (web addresses in the text, and links programs print with OSC 8) |
-| Ctrl+Shift+F | find in the scrollback: Enter for older matches, Shift+Enter for newer, Esc closes |
+| Ctrl+click (⌘-click on macOS) a link | opens it in your browser (web addresses in the text, and links programs print with OSC 8) |
+| Ctrl+Shift+F (⌘F on macOS) | find in the scrollback: Enter for older matches, Shift+Enter for newer, Esc closes |
 | R (after a session ends) | reconnect, in the same terminal: the earlier output stays above |
 | Return, Esc, Backspace or Ctrl+C (after a session ends or fails to connect) | close the tab (also on a remote desktop that couldn't connect) |
-| Ctrl+Shift+←/→/↑/↓ | with several panes, swap the focused pane with the one that way |
-| Shift+Alt+←/→/↑/↓ | with several panes, move the focused pane's edge that way (the step is in Settings › Terminal) |
+| Ctrl+Shift+←/→/↑/↓ (⇧⌘ arrows on macOS) | with several panes, swap the focused pane with the one that way |
+| Shift+Alt+←/→/↑/↓ (⌃⌘ arrows on macOS) | with several panes, move the focused pane's edge that way (the step is in Settings › Terminal) |
 
 | In an RDP tab | |
 |---|---|
