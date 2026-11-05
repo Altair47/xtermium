@@ -8,8 +8,8 @@
 /** A pause before the first tooltip; after one, the next comes at once for a while. */
 const DELAY = 500;
 const WARM = 300;
-/** The shortcut at the end of a title: "(Ctrl+Shift+S)", "(F6)", "(Esc)". */
-const KEYS = / \(((?:(?:Ctrl|Alt|Shift|Meta)\+)+\S+|F\d{1,2}|Esc)\)$/;
+/** The shortcut at the end of a title: "(Ctrl+Shift+S)", "(⇧⌘S)" (macOS), "(F6)", "(Esc)". */
+const KEYS = / \(((?:(?:Ctrl|Alt|Shift|Meta)\+)+\S+|[⌃⌥⇧⌘]+\S+|F\d{1,2}|Esc)\)$/;
 
 let on: HTMLElement | null = null;
 let text = "";

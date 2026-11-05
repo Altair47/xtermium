@@ -11,7 +11,7 @@
   import { _ } from "./i18n.svelte";
   import { onDestroy, onMount, tick as nextTick, untrack } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
-  import { wheelAction } from "./actions";
+  import { OS, wheelAction } from "./actions";
   import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
   import { throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
@@ -427,7 +427,7 @@
   function keydown(e: KeyboardEvent) {
     // A dialog is open over the window: what's typed is its, never the server's.
     if (dialogTakesKeys()) return void e.preventDefault();
-    if (e.key === "Control" && !e.repeat) hoverLinks(true);
+    if (e.key === LINK_KEY && !e.repeat) hoverLinks(true);
     if (e.isComposing || IGNORED.has(e.key) || !id) return;
     blink();
     if (remote && clipboardChord(e)) return;
@@ -487,8 +487,10 @@
   /** Copy and paste belong to this computer's clipboard, which the owner's terminal must never read: a
    *  viewer's paste is typed there as text, and copying does nothing. True for those chords. */
   function clipboardChord(e: KeyboardEvent) {
-    const paste = (e.ctrlKey && e.shiftKey && e.code === "KeyV") || (e.shiftKey && e.code === "Insert");
-    if (!paste && !(e.ctrlKey && e.shiftKey && e.code === "KeyC")) return false;
+    // Ctrl+Shift or, on macOS, ⌘ with C or V: the chords term.rs `key` copies and pastes with.
+    const clip = (e.ctrlKey && e.shiftKey) || (e.metaKey && !e.ctrlKey && !e.altKey);
+    const paste = (clip && e.code === "KeyV") || (e.shiftKey && e.code === "Insert");
+    if (!paste && !(clip && e.code === "KeyC")) return false;
     e.preventDefault();
     if (paste)
       navigator.clipboard
@@ -588,6 +590,9 @@
 
   // ---- mouse ----
 
+  /** The key held to open links with a click: Ctrl, or ⌘ on macOS, where Ctrl+click is the right button. */
+  const LINK_KEY = OS === "macos" ? "Meta" : "Control";
+
   /** Where the pointer last was over the grid (CSS pixels), for showing links when Ctrl changes. */
   let pointer: { x: number; y: number } | null = null;
 
@@ -596,7 +601,7 @@
     if (remote && e.button > 0) return;
     pointer = { x: e.offsetX, y: e.offsetY };
     // Moves report button -1; the backend takes 0 (left), 1 (middle) or 2 (right).
-    report({ kind, button: Math.max(0, e.button), x: e.offsetX, y: e.offsetY, lines, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, clicks });
+    report({ kind, button: Math.max(0, e.button), x: e.offsetX, y: e.offsetY, lines, ctrl: LINK_KEY === "Meta" ? e.metaKey || e.ctrlKey : e.ctrlKey, alt: e.altKey, shift: e.shiftKey, clicks });
   }
 
   /** `clicks`: 2 selects the word under the pointer, 3 its line. */
@@ -815,7 +820,7 @@
     autocomplete="off"
     spellcheck="false"
     onkeydown={keydown}
-    onkeyup={(e) => e.key === "Control" && hoverLinks(false)}
+    onkeyup={(e) => e.key === LINK_KEY && hoverLinks(false)}
     oninput={(e) => !(e as unknown as InputEvent).isComposing && text()}
     oncompositionend={text}
     onfocus={() => !dialogTakesKeys() && ((focused = true), blink(), onfocus())}

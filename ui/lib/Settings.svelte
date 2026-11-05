@@ -18,7 +18,7 @@
   // App.svelte watches them.
   import { onDestroy, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { ACTIONS, chord, isWheel, keysOf, score, TERMINAL_KEYS, wheelChord } from "./actions";
+  import { ACTIONS, chord, defaultKeys, isWheel, keysOf, OS, score, shown, TERMINAL_KEYS, wheelChord } from "./actions";
   import { ACCENTS, COLORS, css, openUrl, OUTLINES, type CursorShape, type Login, type Scheme, type Settings } from "./api";
   import About from "./About.svelte";
   import BackgroundPicker from "./BackgroundPicker.svelte";
@@ -404,7 +404,7 @@
   let hint = $state("");
 
   function bind(id: string, keys: string) {
-    if (keys === ACTIONS.find((a) => a.id === id)?.keys) delete s.shortcuts[id];
+    if (keys === defaultKeys(ACTIONS.find((a) => a.id === id))) delete s.shortcuts[id];
     else s.shortcuts[id] = keys;
   }
 
@@ -418,7 +418,7 @@
     // A wheel action's chord is a turn of the wheel with keys held (recordWheel), not a key press.
     if (!c || isWheel(id)) return;
     // A plain key would be taken from everything you type, the terminal included.
-    if (!/^(Ctrl|Alt|Meta)\+|^(Shift\+)?F\d+$/.test(c)) return void (hint = _("Use Ctrl, Alt or a function key (F1–F12)."));
+    if (!/^(Ctrl|Alt|Meta)\+|^(Shift\+)?F\d+$/.test(c)) return void (hint = OS === "macos" ? _("Use ⌘, ⌃, ⌥ or a function key (F1–F12).") : _("Use Ctrl, Alt or a function key (F1–F12)."));
     [recording, hint] = [null, ""];
     bind(id, c);
   }
@@ -847,7 +847,7 @@
         {@const keys = keysOf(a.id, s.shortcuts)}
         {@const why = clash(a.id, keys)}
         <div class="row shortcut">
-          <span class="grow">{_(a.label)}{#if why}<span class="warn note">{why}</span>{/if}{#if recording === a.id && isWheel(a.id)}<span class="weak note">{_("Hold Ctrl, Alt, Shift or Meta and turn the mouse wheel.")}</span>{/if}</span>
+          <span class="grow">{_(a.label)}{#if why}<span class="warn note">{why}</span>{/if}{#if recording === a.id && isWheel(a.id)}<span class="weak note">{OS === "macos" ? _("Hold ⌘, ⌃, ⌥ or ⇧ and turn the mouse wheel.") : _("Hold Ctrl, Alt, Shift or Meta and turn the mouse wheel.")}</span>{/if}</span>
           <button
             class="flat chord"
             class:on={recording === a.id}
@@ -857,9 +857,9 @@
             onwheel={(e) => recording === a.id && recordWheel(e, a.id)}
             onblur={() => recording === a.id && (recording = null)}
           >
-            {#if recording === a.id}{isWheel(a.id) ? _("Turn the wheel…") : _("Press keys…")}{:else if keys}<kbd>{keys}</kbd>{:else}<span class="weak">{_("none")}</span>{/if}
+            {#if recording === a.id}{isWheel(a.id) ? _("Turn the wheel…") : _("Press keys…")}{:else if keys}<kbd>{shown(keys)}</kbd>{:else}<span class="weak">{_("none")}</span>{/if}
           </button>
-          <button class="flat icon-only" title={_("Reset to {keys}", { keys: a.keys || _("none") })} disabled={!(a.id in s.shortcuts)} onclick={() => delete s.shortcuts[a.id]}><Icon name="refresh" /></button>
+          <button class="flat icon-only" title={_("Reset to {keys}", { keys: shown(defaultKeys(a)) || _("none") })} disabled={!(a.id in s.shortcuts)} onclick={() => delete s.shortcuts[a.id]}><Icon name="refresh" /></button>
         </div>
       {/each}
     </div>
@@ -1558,7 +1558,7 @@ xtermium close 3`}</pre>
     <h3>{_("Lock")}</h3>
     <p class="weak">
       {_("For when you step away: the lock hides every xtermium window until you unlock it, and your sessions keep running. It locks when xtermium starts, when you press {keys} or click the lock beside Settings, and after the time below without input.", {
-        keys: keysOf("lock", s.shortcuts) || _("its shortcut"),
+        keys: shortcut("lock") || _("its shortcut"),
       })}
     </p>
     <p class="weak"><button class="link quiet" onclick={() => (page = "automation")}>{_("Locking xtermium also locks the MCP server and the command line until you unlock it.")}</button></p>
