@@ -882,6 +882,38 @@ impl Store {
         write("sessions", &toml::to_string_pretty(self)?)
     }
 
+    /// Moves folder `from` to path `to`, its subfolders and sessions along, as the sidebar's
+    /// rename does: folders that end up on the same path become one (tags joined, the first
+    /// colour and icon kept).
+    pub fn move_folder(&mut self, from: &str, to: &str) {
+        let inside = |p: &str| p == from || p.starts_with(&format!("{from}/"));
+        let moved = |p: &str| if inside(p) { format!("{to}{}", &p[from.len()..]) } else { p.to_string() };
+        for s in &mut self.sessions {
+            s.folder = moved(&s.folder);
+        }
+        let mut folders: Vec<Folder> = vec![];
+        for mut f in std::mem::take(&mut self.folders) {
+            f.path = moved(&f.path);
+            match folders.iter_mut().find(|m| m.path == f.path) {
+                Some(m) => {
+                    for t in f.tags {
+                        if !m.tags.contains(&t) {
+                            m.tags.push(t);
+                        }
+                    }
+                    if m.color.is_empty() {
+                        m.color = f.color;
+                    }
+                    if m.icon.is_empty() {
+                        m.icon = f.icon;
+                    }
+                }
+                None => folders.push(f),
+            }
+        }
+        self.folders = folders;
+    }
+
     /// Adds sessions, tunnels and folder tags that aren't there yet. Returns (sessions, tunnels) added.
     pub fn merge(&mut self, other: Store) -> (usize, usize) {
         let before = (self.sessions.len(), self.tunnels.len());
@@ -1617,4 +1649,26 @@ mod tests {
         assert_eq!(dst.sessions[0].folder, "Prod/DB");
         assert_eq!(dst.folders, src.folders);
     }
+
+    #[test]
+    fn moving_a_folder_takes_everything_inside_and_merges() {
+        let s = |name: &str, folder: &str| Session::new(name, folder, Kind::Shell { program: String::new(), dir: String::new() });
+        let mut store = Store {
+            sessions: vec![s("a", "Prod"), s("b", "Prod/Web"), s("c", "Production"), s("d", "Lab")],
+            folders: vec![
+                Folder { path: "Prod".into(), tags: vec!["eu".into()], ..Default::default() },
+                Folder { path: "Prod/Web".into(), color: "#ff0000".into(), ..Default::default() },
+                Folder { path: "Lab".into(), tags: vec!["test".into()], icon: "server".into(), ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        store.move_folder("Prod", "Lab");
+        let folders: Vec<&str> = store.sessions.iter().map(|s| s.folder.as_str()).collect();
+        assert_eq!(folders, ["Lab", "Lab/Web", "Production", "Lab"], "a name that only starts the same stays");
+        assert_eq!(store.folders.len(), 2);
+        assert_eq!(store.folders[0].path, "Lab");
+        assert_eq!((store.folders[0].tags.clone(), store.folders[0].icon.as_str()), (vec!["eu".to_string(), "test".to_string()], "server"));
+        assert_eq!((store.folders[1].path.as_str(), store.folders[1].color.as_str()), ("Lab/Web", "#ff0000"));
+    }
+
 }

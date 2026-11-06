@@ -187,7 +187,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 
 ### Agents and scripts
 
-- **An MCP server and a command line.** Settings › MCP turns on a local MCP server behind a token for AI assistants; the `xtermium` command drives the same tools from scripts (`xtermium help`).
+- **An MCP server and a command line.** Settings › MCP turns on a local MCP server behind a token for AI assistants; the `xtermium` command drives the same tools from scripts (`xtermium help`). An assistant can also rename, move, recolour and re-icon sessions and folders, seeing their colours and icons first.
 - **They work the way you do.** Open sessions, run commands and read terminals, drive remote desktops and website tabs, start tunnels, switch workspaces and detach tabs.
 - **Agents in a tab.** Save AI agents as sessions, pick each one's folder and how often it asks first. With the MCP server on, most get xtermium's tools without setup. Each session lists the MCP servers its tool would start there (xtermium's among them) and leaves the ones you untick off in that session only, without changing the tool's own settings (Claude Code, Codex, OpenCode and Copilot; Cursor's CLI has no way to).
 - **Fewer tokens per agent.** A server turned off in a session isn't started, so its tools' descriptions never reach the model; skills work the same way: each session lists the skills its tool would load there and leaves the ones you untick unlisted (Claude Code, Codex and OpenCode). Turning off what a session doesn't need cuts what its agent spends on every turn.
