@@ -663,8 +663,24 @@ the preview in Settings › Appearance holds still while it is scrolled out of v
 ### Co-op Ring and Pointers
 A tab shared in a Terminal Co-op ring wears a small ring (8px, 2px stroke in `ok`) after its name;
 a tab shared with you is a `k-coop` tab. The ring's dialog is a 377px `Modal`: the passcode in
-`--t-xxl` mono, people as 21px round pictures (the first letter when there is none), and "End the
-ring" last, in `error`. Over a shared or remote pane, each other person's pointer is an 8px ring in
+`--t-xxl` mono, people asking to join as 21px round pictures (the first letter when there is none),
+and "End the ring" last, in `error`. Up to three people are drawn as a ring (`CoopRing.svelte`): a
+flat ellipse with the owner's 34px picture in its middle, where everyone's connection meets, the
+second person's at its left end and the third's at its right, and clear of it (over it for the
+owner, under it for the others) their name (`--t`) and what they send and receive a second: two
+figures in `--t-s` mono, an arrow, the number in `fg` and the unit in `weak` (b, Kb, Mb, Gb, Tb),
+each in a room of fixed width so a changing figure moves nothing beside it; they are read over the
+last 3 seconds, so they move calmly. Alone, it is a
+dashed `line`; with two people connected an amber line comes up over it in 0.3s (as a running
+tunnel's tube is amber) and amber packets go round: one while it is quiet, two from a kilobyte a
+second, four from a megabyte, a lap in 20 to 4 seconds. A packet fades in and out where it is and
+the speed eases to its new value, so nothing jumps; under reduced motion there are no packets and
+the lit ring alone says people are connected. A seat fades in (0.2s), and the third person
+glides to the left end when the second leaves (0.3s, `--ease-out`). Someone let in but not connected is dimmed.
+For the owner the others' pictures are buttons: a click or a right-click opens a menu with Rename…
+and, last and in `error`, Kick; the seat whose menu is open wears the focus outline. A ring of more than three has no
+room for all that: it is a plain list of pictures and names, with Rename… and Kick as quiet
+buttons on each row for the owner, and no traffic. Over a shared or remote pane, each other person's pointer is an 8px ring in
 a mark colour (`COLORS`, held per person) with their 13px picture beside it, the name on hover. It
 moves in 80ms and stands still under reduced motion.
 
