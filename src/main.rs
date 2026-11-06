@@ -4,6 +4,7 @@
 //! The backend: sessions, terminals, SSH/SFTP/RDP and tunnels, exposed to the UI (`ui/`) as
 //! Tauri commands. Terminal and RDP output streams to the UI over per-tab channels.
 
+mod agent_mcp;
 mod automation;
 mod clean;
 mod cli;
@@ -1324,6 +1325,12 @@ pub fn file_dialog(window: &tauri::Window) -> tauri_plugin_dialog::FileDialogBui
     window.dialog().file().set_parent(window)
 }
 
+/// The MCP servers an AI agent session's tool would start in `dir`, by name (agent_mcp.rs).
+#[tauri::command]
+async fn agent_mcp_servers(tool: String, dir: String) -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(move || agent_mcp::servers(&tool, &dir)).await.unwrap_or_default()
+}
+
 /// The system's file or folder picker; None if cancelled.
 #[tauri::command]
 async fn pick_path(window: tauri::Window, dirs: bool, start: String) -> Option<String> {
@@ -1915,6 +1922,7 @@ fn main() {
             open_logs,
             complete_path,
             pick_path,
+            agent_mcp_servers,
             save_settings,
             save_tabs,
             regex_error,

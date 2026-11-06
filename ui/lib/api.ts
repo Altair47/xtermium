@@ -43,7 +43,7 @@ export type Kind =
   | { type: "kvm"; vendor: string; host: string; port: number; credential?: string }
   /** An AI agent's command line in folder `dir` ("" = home): `tool` from AGENTS, run with the flags for `mode`
    *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command. */
-  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string }
+  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[] }
   /** A tab someone in your Terminal Co-op ring shares with you (App.svelte `openRemote`): `tab` is its
    *  number at the owner, `picture` a remote desktop rather than a terminal. Never stored or saved. */
   | { type: "coop"; tab: number; picture: boolean; owner: string };
@@ -77,6 +77,8 @@ export const AGENT_MODES: [string, string][] = [
 /** Reasoning effort (`AGENT_EFFORTS`), for the tools that take it. */
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 export const EFFORT_TOOLS = ["claude", "codex"];
+/** The agent tools whose sessions can turn MCP servers off (src/agent_mcp.rs `TOOLS`); Cursor's CLI has no way to. */
+export const MCP_TOOLS = ["claude", "codex", "opencode", "copilot"];
 /** `color`: `#rrggbb` or "" (folder's, else the kind's). `icon`: a built-in icon name, a `data:` image, or "". */
 export type Session = { name: string; folder: string; kind: Kind; style: Style; color: string; icon: string; /** A built-in icon doesn't move on hover. */ still?: boolean; notes: string };
 export type TunnelKind = "Local" | "Remote" | "Dynamic";
@@ -417,7 +419,7 @@ export function newKind(t: KindName): Kind {
     case "kvm":
       return { type: "kvm", vendor: "supermicro", host: "", port: 443, credential: "" };
     case "agent":
-      return { type: "agent", tool: "claude", args: "", dir: "", mode: "", effort: "", model: "" };
+      return { type: "agent", tool: "claude", args: "", dir: "", mode: "", effort: "", model: "", mcp_off: [] };
     case "coop":
       return { type: "coop", tab: 0, picture: false, owner: "" };
   }

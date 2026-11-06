@@ -321,6 +321,10 @@ pub enum Kind {
         /// The model, as the tool names it; "" leaves its default.
         #[serde(default)]
         model: String,
+        /// MCP servers turned off for this session, by name (`agent_mcp::turn_off`); any other,
+        /// a new one too, stays on.
+        #[serde(default)]
+        mcp_off: Vec<String>,
     },
     Vnc {
         host: String,
