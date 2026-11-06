@@ -123,6 +123,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 - **Open in VS Code** opens the folder you're in, on this computer or on the SSH host.
 - **Pictures in the terminal**: kitty, sixel and OSC 1337 images.
 - **The command palette** finds sessions, tabs, tunnels, snippets and layouts by name.
+- **One title bar on every system:** xtermium draws its own, so Windows, Linux and macOS look alike (macOS keeps its three buttons). Its centre names the focused tab, where your typing goes, and a click on it opens the command palette.
 - **Terminal Co-op** (Pro, Ctrl+Shift+G): share tabs with up to two other people, who type and click in them. Everything goes straight between your computers, end-to-end encrypted.
 
 ![htop on web-01 in one pane, a VNC desktop beside it](https://xtermium.com/assets/shots/split.webp)

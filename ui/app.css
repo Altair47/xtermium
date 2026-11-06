@@ -33,6 +33,8 @@
   --row: 21px;
   --control: 26px;
   --bar: 34px;
+  /* The window's own title bar (TitleBar.svelte); the page, dialogs and the lock start under it. */
+  --titlebar: var(--control);
   --t-s: 11.5px;
   --t: 13px;
   --t-l: 14.5px;
@@ -141,6 +143,13 @@ body,
   margin: 0;
   height: 100%;
   overflow: hidden;
+}
+#app {
+  padding-top: var(--titlebar);
+}
+/* Full screen has no title bar. */
+:root.fullscreen {
+  --titlebar: 0px;
 }
 
 body {

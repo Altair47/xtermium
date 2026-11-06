@@ -15,12 +15,16 @@
   import LockScreen from "./LockScreen.svelte";
   import Rdp from "./Rdp.svelte";
   import Terminal from "./Terminal.svelte";
+  import TitleBar from "./TitleBar.svelte";
 
   /** Set by the backend before the page loads (src/main.rs `detach_tab`). */
   const tab = (window as unknown as { __DETACHED__: { id: number; title: string; zoom: number; session: Session } }).__DETACHED__;
 
   let ready = $state(false);
   let zoom = $state(tab.zoom);
+  /** The window's name, in its title bar and on the taskbar: the terminal's title once it has one. */
+  let title = $state(tab.title);
+  $effect(() => void getCurrentWindow().setTitle(title).catch(() => {}));
   let view = $state<Terminal | Rdp>();
   const desktop = tab.session.kind.type === "rdp";
   /** A remote desktop's window says once how to reach the menu. */
@@ -99,7 +103,7 @@
         active
         visible
         onid={() => {}}
-        onmeta={(m) => getCurrentWindow().setTitle(m.title || tab.title).catch(() => {})}
+        onmeta={(m) => (title = m.title || tab.title)}
         onfocus={() => {}}
         onexit={close}
         onzoom={(scope, by) => (scope === "tab" ? (zoom = zoomed(zoom, by)) : emitTo("main", "font-step", by))}
@@ -115,12 +119,13 @@
     </div>
   {/if}
 {/if}
+<TitleBar title={lock.locked ? "" : title} />
 <LockScreen />
 
 <style>
   .detached {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar) 0 0;
     background: rgba(var(--panel-rgb), var(--solid));
   }
   .hint {

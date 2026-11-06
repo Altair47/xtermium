@@ -22,6 +22,12 @@ README.md lists the features for users; this file is how it's built and how the 
   loses the keyboard and lock-key states as `sync`.
   VNC is in-process (`src/vnc.rs`). Websites and BMC consoles are native child webviews laid over
   the tab (`src/web.rs`, `src/kvm/`), hidden while a dialog/menu overlaps them.
+- **Windows have no system title bar** (`own_bar` in main.rs: no decorations on Windows and Linux,
+  the overlay style with its own three buttons on macOS). `ui/lib/TitleBar.svelte` draws the bar
+  in the main window and detached ones: Tauri's `data-tauri-drag-region` moves the window, the
+  buttons call the window API (`capabilities/default.json`), and its centre (App.svelte `.where`)
+  names the focused tab and opens the palette, empty while locked. The page, dialogs and the lock start
+  under it (`--titlebar` in app.css, 0 in full screen).
 - **Tabs moving between windows**: a terminal or RDP tab's output channel can be swapped
   (`Tab::attach`, command `tab_attach`), so `detach_tab` opens a window `tab-<id>`
   (`ui/lib/Detached.svelte`, chosen in `ui/main.ts` by `window.__DETACHED__`) that attaches to the

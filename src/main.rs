@@ -1510,6 +1510,16 @@ fn close_tab(app: State<App>, handle: AppHandle, id: u32) {
     std::thread::spawn(move || drop(tab));
 }
 
+/// A window with xtermium's own title bar (ui/lib/TitleBar.svelte) instead of the system's, so it
+/// looks the same everywhere: Windows and Linux lose the system's bar and get drawn buttons; macOS
+/// keeps its own three buttons, laid over the page.
+fn own_bar(b: tauri::WebviewWindowBuilder<'_, tauri::Wry, AppHandle>) -> tauri::WebviewWindowBuilder<'_, tauri::Wry, AppHandle> {
+    #[cfg(target_os = "macos")]
+    return b.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    #[cfg(not(target_os = "macos"))]
+    b.decorations(false)
+}
+
 /// The window a terminal tab was detached to.
 fn detached_label(id: u32) -> String {
     format!("tab-{id}")
@@ -1520,7 +1530,7 @@ fn detached_label(id: u32) -> String {
 /// Async: making a window from a synchronous command deadlocks on Windows.
 #[tauri::command]
 async fn detach_tab(handle: AppHandle, id: u32, title: String, state: serde_json::Value, width: f64, height: f64) -> Res<()> {
-    let w = tauri::WebviewWindowBuilder::new(&handle, detached_label(id), tauri::WebviewUrl::App("index.html".into()))
+    let w = own_bar(tauri::WebviewWindowBuilder::new(&handle, detached_label(id), tauri::WebviewUrl::App("index.html".into())))
         .title(title)
         .inner_size(width.max(320.0), height.max(200.0))
         .min_inner_size(320.0, 200.0)
@@ -1856,7 +1866,7 @@ fn main() {
         .setup(move |a| {
             // The main window (tauri.conf.json), made here so its browser data is in the data
             // folder too: Tauri's default is the OS's local app data.
-            tauri::WebviewWindowBuilder::from_config(a.handle(), &a.config().app.windows[0])?.data_directory(config::webview_dir()).build()?;
+            own_bar(tauri::WebviewWindowBuilder::from_config(a.handle(), &a.config().app.windows[0])?).data_directory(config::webview_dir()).build()?;
             apply_automation(&a.state::<App>(), a.handle());
             support::setup(a.handle());
             std::thread::spawn(config::sweep_temp);
