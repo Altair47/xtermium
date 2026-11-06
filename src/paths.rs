@@ -19,6 +19,45 @@ pub fn expand(typed: &str) -> PathBuf {
     }
 }
 
+/// A file path saved on any system (a key path imported from MobaXterm on Windows, or synced from
+/// another computer) as a path on this one: `~` and a home folder (`C:\Users\me\`, `/Users/me/`,
+/// `/home/me/`) become this computer's home folder, and the separators this system's. A path that
+/// is there as written stays as it is.
+pub fn local(saved: &str) -> PathBuf {
+    let given = expand(saved);
+    if given.exists() {
+        return given;
+    }
+    let unix = saved.replace('\\', "/");
+    match (home_relative(&unix), home()) {
+        (Some(rest), Some(h)) => rest.split('/').fold(h, |p, part| p.join(part)),
+        // Not under a home folder: only the separators can be made right, and only away from Windows.
+        _ if cfg!(windows) => given,
+        _ => PathBuf::from(unix),
+    }
+}
+
+/// What follows the home folder in a `/`-separated path: `~/…`, `C:/Users/<name>/…`,
+/// `/Users/<name>/…` or `/home/<name>/…`.
+fn home_relative(p: &str) -> Option<&str> {
+    if let Some(rest) = p.strip_prefix("~/") {
+        return Some(rest);
+    }
+    let lower = p.to_ascii_lowercase();
+    let after = if lower.get(1..9) == Some(":/users/") {
+        9
+    } else if lower.starts_with("/users/") {
+        7
+    } else if lower.starts_with("/home/") {
+        6
+    } else {
+        return None;
+    };
+    // past the user's own folder name
+    let at = p[after..].find('/')? + after + 1;
+    Some(&p[at..]).filter(|r| !r.is_empty())
+}
+
 /// The folder a picker opens in for `typed`: itself if it's a folder, else its parent.
 pub fn start_dir(typed: &str) -> Option<PathBuf> {
     let p = expand(typed.trim());
@@ -135,4 +174,25 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    #[test]
+    fn saved_paths_land_in_this_home() {
+        let h = home().unwrap();
+        let key = h.join(".ssh").join("xtermium-test-no-such-key");
+        for saved in [
+            "~/.ssh/xtermium-test-no-such-key",
+            "~\\.ssh\\xtermium-test-no-such-key",
+            "C:\\Users\\bob\\.ssh\\xtermium-test-no-such-key",
+            "/Users/bakdim\\.ssh\\xtermium-test-no-such-key",
+            "/home/bob/.ssh/xtermium-test-no-such-key",
+        ] {
+            assert_eq!(local(saved), key, "{saved}");
+        }
+        assert_eq!(home_relative("/Users/bob"), None, "the home folder itself names no file");
+        assert_eq!(home_relative("/opt/keys/id"), None);
+        if !cfg!(windows) {
+            assert_eq!(local("D:\\keys\\id"), PathBuf::from("D:/keys/id"));
+        }
+    }
+
 }
