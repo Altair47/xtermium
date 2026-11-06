@@ -722,7 +722,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 5px;
+    /* the first row's middle on the tab strip's middle, beside it */
+    padding: calc((var(--bar) - var(--row)) / 2) 5px 5px;
   }
   .list {
     flex: 1;

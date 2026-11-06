@@ -2012,6 +2012,15 @@
   .bar-tool:not(.on, :hover) {
     color: inherit;
   }
+  /* every control in the bar is a square as tall as the field, so the row shares one top and
+     bottom edge */
+  .bar-tool {
+    width: var(--control);
+    height: var(--control);
+    min-height: 0;
+    padding: 0;
+    justify-content: center;
+  }
   /* a new session is the bar's one standing action: a filled key, set a little apart */
   .new {
     margin-inline-start: 13px;
@@ -2085,7 +2094,7 @@
   }
   .layouts {
     display: flex;
-    gap: 2px;
+    gap: 3px;
   }
 
   /* ---- tabs and view tools share one strip ---- */
@@ -2144,6 +2153,11 @@
     background: rgba(var(--bg-rgb), var(--solid));
     box-shadow: none;
     color: var(--fg);
+  }
+  /* where typing goes reads as the title bar's field says it: the mono's widths don't change
+     with its weight, so the strip doesn't shift */
+  .tab.active .title {
+    font-weight: 500;
   }
   .tab.visible::before {
     opacity: 0.5;
