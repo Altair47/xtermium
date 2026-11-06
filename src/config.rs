@@ -568,12 +568,13 @@ fn localhost() -> String {
 /// The data folder, which holds everything xtermium keeps: `XTERMIUM_HOME` (portable installs),
 /// or `~/.xtermium`. What older versions kept in the OS config folder moves there on first use.
 pub fn dir() -> PathBuf {
+    if cfg!(test) {
+        // Tests never touch the real data folder, not even where XTERMIUM_HOME names it (the Scoop
+        // install sets it for the user); ssh.rs `test_home` uses this one too.
+        return std::env::temp_dir().join(format!("xtermium-test-{}", std::process::id()));
+    }
     if let Some(d) = std::env::var_os("XTERMIUM_HOME") {
         return d.into();
-    }
-    if cfg!(test) {
-        // Tests never touch the real data folder (ssh.rs `test_home` uses this one too).
-        return std::env::temp_dir().join(format!("xtermium-test-{}", std::process::id()));
     }
     static HOME: OnceLock<PathBuf> = OnceLock::new();
     HOME.get_or_init(|| {
