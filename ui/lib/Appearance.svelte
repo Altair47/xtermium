@@ -222,10 +222,6 @@
   .swatch.selected {
     box-shadow: 0 0 0 2px var(--gold-soft);
   }
-  /* "default": the colour it would have anyway (a folder's, the kind's), struck through */
-  .swatch.auto {
-    background: linear-gradient(135deg, transparent 45%, var(--weak) 45% 55%, transparent 55%), color-mix(in srgb, var(--c) 35%, transparent);
-  }
   .swatch.custom {
     display: inline-block;
     background: conic-gradient(#ec6a6a, #d8a84e, #b5c14a, #33b8a6, #5c8df0, #9c70e6, #dd6b9c, #ec6a6a);

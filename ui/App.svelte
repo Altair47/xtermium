@@ -977,6 +977,8 @@
     return withFiles.filter((t) => keep.includes(t));
   });
   const canFiles = $derived(fileTabs.length > 0);
+  /** A text tab is open (a terminal, not a desktop or a page): the file panel and snippets are for those. */
+  const hasText = $derived(strip.some((t) => broadcasts(t.session.kind)));
 
   /** The layout to go back to when broadcast stops tiling every tab. */
   let untiled: Layout = "single";
@@ -1279,8 +1281,6 @@
         <Backdrop place="sidebar" tint={(a) => `rgba(var(--panel-rgb), ${a})`} />
         <button class="flat icon-only" onclick={() => expandSidebar(true)} title={tip(_("Search sessions"), "find")} aria-label={_("Search sessions")}><Icon name="search" size={16} /></button>
         <button class="flat icon-only" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={16} /></button>
-        <button class="flat icon-only" onclick={localShell} title={tip(_("Open a local shell"), "local-shell")} aria-label={_("Open a local shell")}><Icon name="terminal" size={16} /></button>
-        <button class="flat icon-only" class:on={showTunnels} onclick={() => (showTunnels = !showTunnels)} title={tip(_("SSH tunnels"), "tunnels")} aria-label={_("SSH tunnels")}><Icon name="transfer-alt" size={16} /></button>
         <button class="flat icon-only flip" onclick={() => expandSidebar()} title={tip(_("Expand the sidebar"), "collapse-sidebar")} aria-label={_("Expand the sidebar")}><Icon name="chevrons-right" size={16} /></button>
         <!-- The sidebar shows messages; collapsed, they wait behind this. -->
         {#if app.status}
@@ -1302,8 +1302,6 @@
               <option value={MANAGE}>{_("Manage workspaces…")}</option>
             </select>
             <button class="flat icon-only" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={16} /></button>
-            <button class="flat icon-only" onclick={localShell} title={tip(_("Open a local shell"), "local-shell")} aria-label={_("Open a local shell")}><Icon name="terminal" size={16} /></button>
-            <button class="flat icon-only" class:on={showTunnels} onclick={() => (showTunnels = !showTunnels)} title={tip(_("SSH tunnels"), "tunnels")} aria-label={_("SSH tunnels")}><Icon name="transfer-alt" size={16} /></button>
             <button class="flat icon-only flip" onclick={() => (app.settings!.sidebar_collapsed = true)} title={tip(_("Collapse the sidebar"), "collapse-sidebar")} aria-label={_("Collapse the sidebar")}>
               <Icon name="chevrons-left" size={16} />
             </button>
@@ -1395,7 +1393,7 @@
             </div>
           {/each}
         </div>
-        <!-- the tools act on tabs, so they come as the tabs do: files and snippets with one, broadcast and the layouts with two -->
+        <!-- the tools act on tabs, so they come as the tabs do: files and snippets with a terminal tab, broadcast with two tabs; the layouts are always there -->
         <div class="tools row">
           {#if tasks.length}
             <button
@@ -1409,7 +1407,7 @@
               }}><Icon name="layers" />{tasks.length}</button
             >
           {/if}
-          {#if strip.length}
+          {#if hasText}
             <button
               class="flat icon-only"
               class:on={showFiles && canFiles}
@@ -1450,13 +1448,11 @@
               layoutsMenu = layoutsMenu ? null : { x: r.right, y: r.bottom + 4 };
             }}><Icon name="grid-alt" /></button
           >
-          {#if strip.length > 1}
-            <div class="segmented" role="group" aria-label={_("Layout")}>
-              {#each LAYOUTS as [l, name] (l)}
-                <button class="flat icon-only" class:on={layout === l} title={tip(_(name), `layout-${l}`)} aria-label={_(name)} onclick={() => setLayout(l)}>{@render layoutGlyph(l)}</button>
-              {/each}
-            </div>
-          {/if}
+          <div class="segmented" role="group" aria-label={_("Layout")}>
+            {#each LAYOUTS as [l, name] (l)}
+              <button class="flat icon-only" class:on={layout === l} title={tip(_(name), `layout-${l}`)} aria-label={_(name)} onclick={() => setLayout(l)}>{@render layoutGlyph(l)}</button>
+            {/each}
+          </div>
         </div>
       </header>
 
@@ -1903,6 +1899,13 @@
 
 <!-- The bar's centre says where the keyboard goes, the focused tab, and opens the palette, which goes anywhere else. Locked, it says nothing. -->
 <TitleBar>
+  <!-- The local shell and tunnels reach past any one session, so they stand by the mark rather than in the sidebar. -->
+  {#snippet tools()}
+    {#if ready && app.locked === null && !lock.locked}
+      <button class="flat icon-only bar-tool" tabindex="-1" onclick={localShell} title={tip(_("Open a local shell"), "local-shell")} aria-label={_("Open a local shell")}><Icon name="terminal" size={18} /></button>
+      <button class="flat icon-only bar-tool" tabindex="-1" class:on={showTunnels} onclick={() => (showTunnels = !showTunnels)} title={tip(_("SSH tunnels"), "tunnels")} aria-label={_("SSH tunnels")}><Icon name="transfer-alt" size={18} /></button>
+    {/if}
+  {/snippet}
   {#if ready && app.locked === null && !lock.locked}
     <button class="flat where" tabindex="-1" title={tip(_("Command palette"), "palette")} onclick={() => run("palette")}>
       {#if activeTab}
@@ -2040,6 +2043,10 @@
   }
   .where:hover {
     color: var(--fg);
+  }
+  /* the bar's own tools step back like its text until pointed at */
+  .bar-tool:not(.on, :hover) {
+    color: inherit;
   }
   .where span {
     min-width: 0;
