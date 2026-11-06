@@ -70,7 +70,7 @@ The page shows a ready command per assistant, with Copy and Run buttons (Run sta
 
 | Family | MCP tools | CLI words |
 |---|---|---|
-| Sessions | `sessions`, `session_save`, `session_delete`, `logins` | `sessions`, `logins` |
+| Sessions | `sessions`, `session_save`, `session_delete`, `folders`, `folder_save`, `logins` | `sessions`, `logins` |
 | Tabs | `tabs`, `open` (`session`, `shell` + `dir`, `url`, or `address` like `user@host`, `ssh user@host:2222`, `rdp://host`, `vnc host:5901`, `telnet switch1`), `close` | `tabs`, `open <session>`, `open --shell [program] [--dir <folder>]`, `open --address <address>`, `open --url <address>`, `close <tab>` |
 | Run and read | `run` (`until`, `wait_ms`, `lines`), `read`, `wait_for`, `type`, `key` | `run <tab> <command>`, `read <tab> [--lines <n>]`, `wait <tab> <regex> [--timeout <ms>]`, `type <tab> <text>`, `key <tab> <keys>` (`ctrl+c`, `Enter`, `"up up Enter"`, `alt+F4`, `meta`) |
 | Remote desktops (RDP, VNC, BMC consoles) | `screenshot`, `click`, `move`, `drag`, `scroll`, plus `type` and `key` | `screenshot <tab> [--out <file.png>] [--max-width <px>] [--region <x,y,w,h>]`, `click <tab> <x> <y> [--right\|--middle] [--double]`, `move`, `drag`, `scroll <tab> <lines> [--at <x,y>]` |
@@ -81,7 +81,8 @@ The page shows a ready command per assistant, with Copy and Run buttons (Run sta
 | Detach | `detach`, `attach` (terminal and RDP tabs) | `detach <tab>`, `attach <tab>` |
 | Restore points | `restore_points`, `restore_point_take` | `restore-points`, `restore-point` |
 
-- `session_save` and `session_delete` have no CLI word.
+- `session_save`, `session_delete`, `folders` and `folder_save` have no CLI word.
+- Looks: `sessions` and `folders` list each one's name colour, icon (a picture shows as `"picture"`), and for sessions the terminal style and notes, so a change can see what was there first. `session_save` and `folder_save` take `color` (`#rrggbb`, `""` for none), `icon` (a built-in name, an `https://` picture link fetched once, `""` for the default, `"picture"` to keep it) and `still`; `folder_save` also renames or moves a folder with everything inside (`to`) and sets its `tags`.
 - Screenshots are scaled to `max_width` (default 1568); the result gives the desktop's size and the scale, and every x and y is in desktop pixels: divide what you measure on the picture by `scale`. In terminals, `click` takes a column and a row.
 - Website tabs are driven through the tab itself (no browser or DevTools of their own); elements are a number from `web_read`, a CSS selector, or `--text` and the name the element shows. Website screenshots work on Windows only.
 - `workspace_sync` updates and adds, never removes, and keeps a restore point first. `""` is the default workspace. `sessions`, `logins`, `tunnels`, `open` and `session_save` work in the workspace in use.

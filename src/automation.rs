@@ -27,8 +27,26 @@ pub fn tools() -> Value {
     let name = json!({ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] });
     let int = |d: &str| json!({ "type": "integer", "description": d });
     let button = json!({ "type": "string", "enum": ["left", "right", "middle"], "description": "Default left" });
-    json!([
-        { "name": "sessions", "description": "List the saved sessions: name, folder and connection details, each in the shape session_save takes.", "inputSchema": none },
+    // Added after: more entries in the one json! go past the macro's recursion limit.
+    let folders = json!({ "name": "folders", "description": "List the session folders: path, how many sessions are in it (subfolders included), its name colour (sessions without their own take it), icon and search tags. An icon that is a picture shows as \"picture\".", "inputSchema": none });
+    let folder_save = json!({
+        "name": "folder_save",
+        "description": "Change a folder (or make an empty one): rename or move it with everything inside, set its name colour, icon and tags. Only the fields given change.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "folder": { "type": "string", "description": "The folder's path, like \"Prod/Web\"" },
+                "to": { "type": "string", "description": "A new path, to rename or move it (\"Prod/Frontend\", \"Frontend\" for the top level); a folder already there takes its contents" },
+                "color": { "type": "string", "description": "#rrggbb, or \"\" for none" },
+                "icon": { "type": "string", "description": ICON },
+                "still": { "type": "boolean", "description": "true: a built-in icon doesn't move on hover" },
+                "tags": { "type": "array", "items": { "type": "string" }, "description": "Search terms for the folder and everything in it (replaces the list)" }
+            },
+            "required": ["folder"]
+        }
+    });
+    let mut list = json!([
+        { "name": "sessions", "description": "List the saved sessions: name, folder, connection details, name colour, icon, terminal style and notes, each in the shape session_save takes. An icon that is a picture shows as \"picture\"; folders' own colours and icons are in `folders`.", "inputSchema": none },
         {
             "name": "session_save",
             "description": SESSION_SAVE,
@@ -230,11 +248,45 @@ pub fn tools() -> Value {
         { "name": "tunnels", "description": "List the SSH tunnels (port forwards) and whether each is running.", "inputSchema": none },
         { "name": "tunnel_start", "description": "Start a tunnel by name.", "inputSchema": name },
         { "name": "tunnel_stop", "description": "Stop a tunnel by name.", "inputSchema": name },
-    ])
+    ]);
+    if let Some(a) = list.as_array_mut() {
+        // beside the session tools, after session_save
+        a.insert(2, folder_save);
+        a.insert(2, folders);
+    }
+    list
+}
+
+/// What an `icon` may be, for sessions and folders (`icon_arg`).
+/// The built-in icons (ui/lib/api.ts `ICONS`; `icons_match_the_ui` keeps them in step).
+const ICONS: &[&str] = &["server", "desktop", "laptop", "terminal", "lock-alt", "chip", "globe", "world", "folder", "target-lock", "transfer-alt", "broadcast", "cog", "file", "grid-alt", "palette", "radio-circle-marked", "github", "bot", "storage", "database", "router", "switch", "access-point", "firewall", "waf", "proxy", "load-balancer", "network", "vpn", "directory", "identity", "key", "container", "cluster", "layers", "cloud", "monitor", "pipeline", "git", "backup", "queue", "power", "tv"];
+
+/// What an `icon` may be, for sessions and folders (`icon_arg`).
+const ICON: &str = "A built-in icon name (server, desktop, laptop, terminal, lock-alt, chip, globe, world, folder, target-lock, \
+transfer-alt, broadcast, cog, file, grid-alt, palette, radio-circle-marked, github, bot, storage, database, router, switch, \
+access-point, firewall, waf, proxy, load-balancer, network, vpn, directory, identity, key, container, cluster, layers, cloud, \
+monitor, pipeline, git, backup, queue, power, tv), an https:// link to a PNG, GIF, JPEG, WebP, ICO or SVG picture (fetched once \
+and kept inside xtermium; Dashboard Icons, for example: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/proxmox.svg), \
+\"\" for the default, or \"picture\" to keep the picture it has";
+
+/// An `icon` argument as stored: a link's picture fetched as a `data:` URL; None to leave the icon as it is.
+async fn icon_arg(v: Option<&Value>) -> Result<Option<String>, String> {
+    match v.and_then(Value::as_str).map(str::trim) {
+        None | Some("picture") => Ok(None),
+        Some(url) if url.starts_with("https://") || url.starts_with("http://") => crate::fetch_icon(url.to_string()).await.map(Some),
+        Some(name) if name.is_empty() || ICONS.contains(&name) => Ok(Some(name.to_string())),
+        Some(name) => Err(format!("no built-in icon named {name}: use one of {}, or an https:// picture link", ICONS.join(", "))),
+    }
+}
+
+/// An icon as listed: a picture's bytes would flood the answer.
+fn icon_shown(icon: &str) -> &str {
+    if icon.starts_with("data:") { "picture" } else { icon }
 }
 
 const SESSION_SAVE: &str = "Create a saved session, or change one. A new session needs `name` and `kind`; \
-`folder` (\"Prod/Web\"), `color` (#rrggbb), `icon`, `notes` and `style` are optional. An existing one \
+`folder` (\"Prod/Web\"), `color` (#rrggbb, \"\" for the folder's), `icon` (a built-in name, an https:// picture link, \"\" for the kind's own; \
+see folder_save), `still`, `notes` and `style` are optional. An existing one \
 (same folder and name) gets only the fields given, nested ones included. `kind` is one of: \
 {type: \"ssh\", host, port, user, key (private key path), credential (a login id), jump: {host, port, user, key, credential} or null, \
 command (typed after login), ciphers: [], keepalive (seconds) or null, compression or null, agent_forward}; \
@@ -494,12 +546,96 @@ pub async fn call(handle: &AppHandle, tool: &str, args: &Value) -> Result<Value,
     match tool {
         "sessions" => {
             let store = app.store.lock().unwrap();
-            let list: Vec<Value> =
-                store.sessions.iter().filter(|s| !agent(s)).map(|s| json!({ "name": s.name, "folder": s.folder, "kind": s.kind })).collect();
+            let list: Vec<Value> = store
+                .sessions
+                .iter()
+                .filter(|s| !agent(s))
+                .map(|s| {
+                    json!({
+                        "name": s.name, "folder": s.folder, "kind": s.kind, "color": s.color, "icon": icon_shown(&s.icon),
+                        "still": s.still, "notes": s.notes, "style": s.style
+                    })
+                })
+                .collect();
             Ok(json!({ "sessions": list }))
         }
+        "folders" => {
+            let store = app.store.lock().unwrap();
+            let sessions: Vec<&str> = store.sessions.iter().filter(|s| !agent(s)).map(|s| s.folder.as_str()).collect();
+            // Every folder there is: the stored ones, and those that exist through their sessions (parents too).
+            let mut paths = std::collections::BTreeSet::new();
+            for p in sessions.iter().copied().chain(store.folders.iter().map(|f| f.path.as_str())) {
+                let parts: Vec<&str> = p.split('/').filter(|x| !x.is_empty()).collect();
+                for i in 1..=parts.len() {
+                    paths.insert(parts[..i].join("/"));
+                }
+            }
+            let list: Vec<Value> = paths
+                .into_iter()
+                .map(|p| {
+                    let count = sessions.iter().filter(|f| **f == p || f.starts_with(&format!("{p}/"))).count();
+                    let f = store.folders.iter().find(|f| f.path == p).cloned().unwrap_or_default();
+                    json!({ "path": p, "sessions": count, "color": f.color, "icon": icon_shown(&f.icon), "still": f.still, "tags": f.tags })
+                })
+                .collect();
+            Ok(json!({ "folders": list }))
+        }
+        "folder_save" => {
+            let from = crate::clean::folder(text("folder")?);
+            if from.is_empty() {
+                return Err("name the folder, like \"Prod/Web\" (the top level isn't one)".into());
+            }
+            let icon = icon_arg(args.get("icon")).await?;
+            let mut store = app.store.lock().unwrap().clone();
+            let to = match args.get("to").and_then(Value::as_str) {
+                Some(t) => crate::clean::folder(t),
+                None => from.clone(),
+            };
+            if to.is_empty() {
+                return Err("\"to\" needs a folder name".into());
+            }
+            if to.starts_with(&format!("{from}/")) {
+                return Err("a folder can't move into itself".into());
+            }
+            store.move_folder(&from, &to);
+            let at = match store.folders.iter().position(|f| f.path == to) {
+                Some(i) => i,
+                None => {
+                    store.folders.push(crate::config::Folder { path: to.clone(), ..Default::default() });
+                    store.folders.len() - 1
+                }
+            };
+            let f = &mut store.folders[at];
+            if let Some(c) = args.get("color").and_then(Value::as_str) {
+                f.color = c.into();
+            }
+            if let Some(i) = icon {
+                f.icon = i;
+            }
+            if let Some(s) = args.get("still").and_then(Value::as_bool) {
+                f.still = s;
+            }
+            if let Some(t) = args.get("tags").and_then(Value::as_array) {
+                f.tags = t.iter().filter_map(Value::as_str).map(String::from).collect();
+            }
+            // As the sidebar keeps them: only folders with something to remember, or nothing in them.
+            let used = |p: &str| store.sessions.iter().any(|s| s.folder == p || s.folder.starts_with(&format!("{p}/")));
+            let keep: Vec<bool> = store.folders.iter().map(|f| !f.tags.is_empty() || !f.color.is_empty() || !f.icon.is_empty() || f.order > 0 || !used(&f.path)).collect();
+            let mut keep = keep.into_iter();
+            store.folders.retain(|_| keep.next().unwrap_or(true));
+            store_changed(&app, handle, store)?;
+            let store = app.store.lock().unwrap();
+            let f = store.folders.iter().find(|f| f.path == to).cloned().unwrap_or_else(|| crate::config::Folder { path: to.clone(), ..Default::default() });
+            Ok(json!({ "saved": { "path": f.path, "color": f.color, "icon": icon_shown(&f.icon), "still": f.still, "tags": f.tags }, "moved": to != from }))
+        }
         "session_save" => {
-            let patch = args.get("session").filter(|v| v.is_object()).ok_or("missing \"session\" (an object)")?;
+            let mut patch = args.get("session").filter(|v| v.is_object()).ok_or("missing \"session\" (an object)")?.clone();
+            // A picture link is fetched and kept; "picture" (as listed) keeps the one there is.
+            match icon_arg(patch.get("icon")).await? {
+                Some(i) => patch["icon"] = json!(i),
+                None => drop(patch.as_object_mut().and_then(|o| o.remove("icon"))),
+            }
+            let patch = &patch;
             let name = patch.get("name").and_then(Value::as_str).ok_or("the session needs a \"name\"")?;
             let folder = crate::clean::folder(patch.get("folder").and_then(Value::as_str).unwrap_or(""));
             let mut store = app.store.lock().unwrap().clone();
@@ -532,7 +668,11 @@ pub async fn call(handle: &AppHandle, tool: &str, args: &Value) -> Result<Value,
             store_changed(&app, handle, store)?;
             // As stored: cleaned, defaults filled in.
             let store = app.store.lock().unwrap();
-            let saved = store.sessions.iter().find(|s| s.name == name && s.folder == folder);
+            let saved = store.sessions.iter().find(|s| s.name == name && s.folder == folder).map(|s| {
+                let mut v = serde_json::to_value(s).unwrap_or_default();
+                v["icon"] = json!(icon_shown(&s.icon));
+                v
+            });
             Ok(json!({ "saved": saved, "created": at.is_none() }))
         }
         "session_delete" => {
@@ -1359,6 +1499,17 @@ mod tests {
         let crate::Kind::Ssh(ssh) = &s.kind else { panic!("not ssh") };
         assert_eq!((ssh.target.host.as_str(), ssh.target.port, ssh.keepalive), ("192.0.2.15", 2222, None));
         assert_eq!((s.folder.as_str(), s.notes.as_str()), ("Prod", "primary"));
+    }
+
+    /// The icons `session_save` and `folder_save` take are the ones the interface draws.
+    #[test]
+    fn icons_match_the_ui() {
+        let ts = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/ui/lib/api.ts")).unwrap();
+        let list = ts.split("export const ICONS = [").nth(1).and_then(|r| r.split("];").next()).unwrap();
+        let names: Vec<&str> = list.lines().filter(|l| !l.trim_start().starts_with("//")).flat_map(|l| l.split('"').skip(1).step_by(2)).collect();
+        assert_eq!(names, ICONS);
+        assert_eq!(icon_shown("data:image/png;base64,AAAA"), "picture");
+        assert_eq!(icon_shown("server"), "server");
     }
 
     /// Agents get xtermium's server their own way; the token stays in the environment.
