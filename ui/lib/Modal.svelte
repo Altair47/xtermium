@@ -121,6 +121,15 @@
     box-shadow: var(--shadow-dialog);
     animation: float-in 0.16s var(--ease-out);
   }
+  /* A dialog opened over another (they're on the page in the order they opened) reads solid
+     whatever the Opacity, and the ones under it step back behind a blur: the last opened has
+     the focus. */
+  :global(.backdrop) ~ .backdrop {
+    backdrop-filter: blur(3px);
+  }
+  :global(.backdrop) ~ .backdrop .window {
+    background: rgba(var(--panel-rgb), 0.98);
+  }
   /* focused only to hold the keyboard: no ring */
   .window:focus {
     outline: none;
