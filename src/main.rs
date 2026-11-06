@@ -554,6 +554,10 @@ fn commit_settings(app: &App, handle: &AppHandle, settings: Settings) -> Res<Set
     apply_defaults(&settings);
     apply_automation(app, handle);
     tray::apply(handle, settings.keep_running);
+    if settings.app_icon != old.app_icon {
+        let h = handle.clone();
+        let _ = handle.run_on_main_thread(move || tray::show_theme(&h));
+    }
     if settings.restyles(&old) {
         app.restyle();
     }

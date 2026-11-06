@@ -23,6 +23,8 @@
   import About from "./About.svelte";
   import BackgroundPicker from "./BackgroundPicker.svelte";
   import Icon from "./Icon.svelte";
+  import { appIcon } from "./images";
+  import Logo from "./Logo.svelte";
   import Modal from "./Modal.svelte";
   import Ciphers from "./Ciphers.svelte";
   import Export from "./Export.svelte";
@@ -38,6 +40,20 @@
   /** `onrun`: runs a command in a new local shell (the MCP page's Run buttons; App.svelte). */
   let { onclose, onrun }: { onclose: () => void; onrun: (command: string) => void } = $props();
   const s = $derived(app.settings!);
+
+  // ---- the app icon (Appearance): any picture, drawn into a square PNG ----
+  let iconFile = $state<HTMLInputElement>();
+  async function pickAppIcon() {
+    const f = iconFile?.files?.[0];
+    if (iconFile) iconFile.value = ""; // the same file again is a change too
+    if (!f) return;
+    if (f.size > 8 << 20) return toast(_("Pick a picture under 8 MB."));
+    try {
+      s.app_icon = await appIcon(f);
+    } catch {
+      toast(_("That file isn't a picture xtermium can read."));
+    }
+  }
   const transparent = $derived(s.effect !== "None");
 
   // Everyday first, then how connections behave, then accounts and safety; automation last.
@@ -1070,6 +1086,16 @@ xtermium close 3`}</pre>
         {/each}
         <input type="color" title={_("Any colour")} value={s.accent || "#ffb000"} oninput={(e) => (s.accent = (e.target as HTMLInputElement).value)} />
       </div>
+      <span>{_("App icon")}</span>
+      <div class="col">
+        <div class="row wrap">
+          <span class="app-icon"><Logo mark /></span>
+          <button onclick={() => iconFile?.click()}>{_("Choose a picture…")}</button>
+          {#if s.app_icon}<button onclick={() => (s.app_icon = "")}>{_("Use the xtermium mark")}</button>{/if}
+          <input bind:this={iconFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon" hidden onchange={pickAppIcon} />
+        </div>
+        <p class="weak">{_("Shown on the window, the taskbar, the tray, the title bar and the start screen. Shortcuts and the program's file keep the mark.")}</p>
+      </div>
     </div>
     <h3>{_("Terminal colours")}</h3>
     <div><button class:selected={s.scheme === "Auto"} onclick={() => (s.scheme = "Auto")}>{_("Auto (follows theme)")}</button></div>
@@ -1770,6 +1796,13 @@ xtermium close 3`}</pre>
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  /* the icon in use, at the size of the fields beside it */
+  .app-icon {
+    width: var(--control);
+  }
+  .col p {
+    margin: 0;
   }
   .schemes {
     display: grid;

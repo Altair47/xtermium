@@ -301,6 +301,9 @@ impl Store {
 /// Pane arrangements a saved layout can have (ui/App.svelte `Layout`).
 const LAYOUTS: [&str; 5] = ["single", "columns", "rows", "grid", "tiles"];
 
+/// The app icon's largest `data:` URL: a 256px PNG is far smaller.
+const APP_ICON_MAX: usize = 512 * 1024;
+
 impl Settings {
     pub fn sanitize(&mut self) {
         let d = Settings::default();
@@ -388,6 +391,12 @@ impl Settings {
             i.data.starts_with("data:image/") && i.data.len() <= 1024 * 1024 && seen.insert(i.data.clone())
         });
         self.custom_icons.truncate(100);
+        // The app icon is a PNG the UI drew at 256px, base64 and nothing else (the UI writes it
+        // into the logo's markup): anything else, or far bigger, is dropped.
+        let png = self.app_icon.strip_prefix("data:image/png;base64,");
+        if !png.is_some_and(|b| b.bytes().all(|c| c.is_ascii_alphanumeric() || b"+/=".contains(&c))) || self.app_icon.len() > APP_ICON_MAX {
+            self.app_icon.clear();
+        }
         if self.broadcast_outline_color.is_empty() {
             self.broadcast_outline_color = d.broadcast_outline_color;
         }
@@ -458,5 +467,19 @@ mod tests {
         st.sanitize();
         assert_eq!((st.font_size, st.scrollback, st.automation_port), (14.0, 100, 8721));
         assert!(!st.ssh_ciphers.is_empty());
+    }
+
+    /// The app icon reaches the logo's markup, so only a plain base64 PNG is kept.
+    #[test]
+    fn app_icon_is_a_plain_png_or_nothing() {
+        let kept = "data:image/png;base64,iVBORw0KGgo+/=";
+        let mut st = Settings { app_icon: kept.into(), ..Settings::default() };
+        st.sanitize();
+        assert_eq!(st.app_icon, kept);
+        for bad in ["data:image/svg+xml;base64,PHN2Zz4=", "data:image/png;base64,AA\"/><script>", "https://example.com/i.png"] {
+            let mut st = Settings { app_icon: bad.into(), ..Settings::default() };
+            st.sanitize();
+            assert_eq!(st.app_icon, "", "{bad}");
+        }
     }
 }
