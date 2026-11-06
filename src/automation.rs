@@ -952,12 +952,12 @@ pub async fn call(handle: &AppHandle, tool: &str, args: &Value) -> Result<Value,
 pub static ENDPOINT: std::sync::Mutex<Option<(u16, String)>> = std::sync::Mutex::new(None);
 
 /// An agent tab's command line and environment: the agent's command line (`Kind::agent_argv`),
-/// the servers the session turned off (`off`, `agent_mcp::turn_off`) and, while automation runs
+/// the servers and skills the session turned off (`off`, `skills_off`: `agent_mcp::turn_off`) and, while automation runs
 /// and unless it's among them, xtermium's MCP server, so the agent can drive xtermium whether or
 /// not it was set up with it.
-pub fn agent_launch(tool: &str, argv: Vec<String>, off: &[String]) -> (Vec<String>, Vec<(String, String)>) {
+pub fn agent_launch(tool: &str, argv: Vec<String>, off: &[String], skills_off: &[String]) -> (Vec<String>, Vec<(String, String)>) {
     let (mut argv, mut env) = if off.iter().any(|n| n == crate::agent_mcp::OWN) { (argv, vec![]) } else { with_own_server(tool, argv) };
-    crate::agent_mcp::turn_off(tool, off, &mut argv, &mut env);
+    crate::agent_mcp::turn_off(tool, off, skills_off, &mut argv, &mut env);
     (argv, env)
 }
 
@@ -1365,26 +1365,26 @@ mod tests {
     #[test]
     fn agents_get_the_server() {
         *ENDPOINT.lock().unwrap() = Some((7071, "tok".into()));
-        let (argv, env) = agent_launch("claude", crate::Kind::agent_argv("claude", "--model x", "", "", ""), &[]);
+        let (argv, env) = agent_launch("claude", crate::Kind::agent_argv("claude", "--model x", "", "", ""), &[], &[]);
         assert_eq!(argv[..4], ["claude", "--model", "x", "--mcp-config"]);
         assert!(std::path::Path::new(&argv[4]).starts_with(crate::config::dir()), "in the data folder: {}", argv[4]);
         let config = std::fs::read_to_string(&argv[4]).unwrap();
         assert!(config.contains("127.0.0.1:7071/mcp") && config.contains("${XTERMIUM_TOKEN}") && !config.contains("tok\""), "{config}");
         let _ = std::fs::remove_file(&argv[4]);
         assert_eq!(env, [("XTERMIUM_TOKEN".to_string(), "tok".to_string())]);
-        let (argv, _) = agent_launch("codex", vec!["codex".into()], &[]);
+        let (argv, _) = agent_launch("codex", vec!["codex".into()], &[], &[]);
         assert_eq!(argv.first().map(String::as_str), Some("codex"));
         assert!(argv.contains(&r#"mcp_servers.xtermium.url="http://127.0.0.1:7071/mcp""#.to_string()));
-        let (argv, env) = agent_launch("opencode", vec!["opencode".into()], &[]);
+        let (argv, env) = agent_launch("opencode", vec!["opencode".into()], &[], &[]);
         assert_eq!(argv, ["opencode"]);
         assert!(env[1].1.contains("{env:XTERMIUM_TOKEN}"));
         // xtermium's server turned off for the session: not added, and off in case the tool has its own.
-        let (argv, env) = agent_launch("codex", vec!["codex".into()], &["xtermium".into()]);
+        let (argv, env) = agent_launch("codex", vec!["codex".into()], &["xtermium".into()], &[]);
         assert_eq!(argv, ["codex", "-c", "mcp_servers.xtermium.enabled=false"]);
         assert!(env.is_empty(), "no token for a session without xtermium's server");
         *ENDPOINT.lock().unwrap() = None;
         // Automation off: the agent's own command line, nothing added.
-        assert_eq!(agent_launch("claude", vec!["claude".into()], &[]).0, ["claude"]);
+        assert_eq!(agent_launch("claude", vec!["claude".into()], &[], &[]).0, ["claude"]);
     }
 
     /// Each tool spells its mode, effort and model its own way; the user's arguments come last.

@@ -1331,6 +1331,12 @@ async fn agent_mcp_servers(tool: String, dir: String) -> Vec<String> {
     tauri::async_runtime::spawn_blocking(move || agent_mcp::servers(&tool, &dir)).await.unwrap_or_default()
 }
 
+/// The skills an AI agent session's tool would list in `dir`, by name (agent_mcp.rs).
+#[tauri::command]
+async fn agent_skills(tool: String, dir: String) -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(move || agent_mcp::skills(&tool, &dir)).await.unwrap_or_default()
+}
+
 /// The system's file or folder picker; None if cancelled.
 #[tauri::command]
 async fn pick_path(window: tauri::Window, dirs: bool, start: String) -> Option<String> {
@@ -1933,6 +1939,7 @@ fn main() {
             complete_path,
             pick_path,
             agent_mcp_servers,
+            agent_skills,
             save_settings,
             save_tabs,
             regex_error,
