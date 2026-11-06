@@ -1,15 +1,11 @@
 <script lang="ts">
-  // Sessions: a folder tree (or a flat list while searching). Double-click opens (one click, if
-  // set), right-click for more. Folders can be renamed, tagged (tags are searchable), coloured,
-  // exported and deleted. Search is a button that opens into a field: arrow keys pick a result,
-  // Enter closes the search and puts the keyboard on it in the tree, Escape just closes it. The
-  // list is one stop for Tab; arrow keys walk it.
+  // Sessions: a folder tree. Double-click opens (one click, if set), right-click for more.
+  // Folders can be renamed, tagged, coloured, exported and deleted. Finding a session is the
+  // command palette's job (the title bar's search). The list is one stop for Tab; arrow keys walk it.
   // Sessions with a tab open have a dot on their icon. Ctrl+click (Cmd on macOS) and Shift+click
   // pick several sessions and folders, to drag, colour, delete or move to another workspace together.
-  import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { _, N_ } from "./i18n.svelte";
-  import type { Snippet } from "svelte";
   import { COLORS, host, KVM_VENDORS, newSession, openUrl, type Folder, type Session, type Workspaces } from "./api";
   import Appearance from "./Appearance.svelte";
   import Export from "./Export.svelte";
@@ -77,40 +73,21 @@
   let {
     onopen,
     onedit,
-    actions,
-    searching = $bindable(false),
     live = new Map(),
   }: {
     onopen: (s: Session) => void;
     onedit: (s: Session, index: number | null) => void;
-    actions?: Snippet;
-    searching?: boolean;
     /** Sessions with a tab, by `sessionKey`: true while one is connected. */
     live?: Map<string, boolean>;
   } = $props();
 
   /** `path`: `/`-separated like a session's folder; `count`: sessions in it and below. */
   type Node = { path: string; children: Map<string, Node>; items: number[]; count: number };
-  let filter = $state("");
   /** Open folders; they come back next time (Settings > General). */
   let open = $state<Record<string, boolean>>(Object.fromEntries((app.settings?.remember_folders ? app.settings.open_folders : []).map((p) => [p, true])));
   /** `root`: the empty space around the sessions; `many`: on one of several picked rows. */
   let menu = $state<{ x: number; y: number; i?: number; folder?: string; root?: boolean; many?: boolean } | null>(null);
-  /** The search result Enter opens. */
-  let sel = $state(0);
-  let search = $state<HTMLInputElement>();
   let list: HTMLDivElement;
-
-  export async function focusSearch() {
-    searching = true;
-    await tick();
-    search?.focus();
-    search?.select();
-  }
-
-  function closeSearch() {
-    [filter, searching] = ["", false];
-  }
 
   const folderOf = (path: string) => app.store.folder.find((f) => f.path === path);
   /** Every folder there is, stored or there through a session (Prod/Web counts Prod too). */
@@ -149,55 +126,6 @@
     });
     return sort(root);
   });
-
-  /** Sessions whose name, host or folder matches, or whose folder (or a parent) has a matching tag. */
-  const matches = $derived.by(() => {
-    const f = filter.trim().toLowerCase().replace(/^#/, "");
-    const tagged = app.store.folder.filter((d) => d.tags.some((t) => t.toLowerCase().includes(f))).map((d) => d.path);
-    return app.store.session
-      .map((s, i) => [s, i] as const)
-      .filter(
-        ([s]) =>
-          s.name.toLowerCase().includes(f) ||
-          host(s.kind).toLowerCase().includes(f) ||
-          s.folder.toLowerCase().includes(f) ||
-          tagged.some((p) => inside(s.folder, p)),
-      )
-      .map(([, i]) => i);
-  });
-
-  /** Search shows this many matches at most: more is a wall to scroll through, and slow to draw. */
-  const SHOWN = 200;
-
-  function searchKey(e: KeyboardEvent) {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      sel = Math.max(0, Math.min(Math.min(matches.length, SHOWN) - 1, sel + (e.key === "ArrowDown" ? 1 : -1)));
-      requestAnimationFrame(() => list.querySelector(".hit")?.scrollIntoView({ block: "nearest" }));
-    } else if (e.key === "Enter" && filter && matches[sel] !== undefined) {
-      // The search closes and the hit is shown in the tree with the keyboard on it: Enter again
-      // opens it. Not this Enter, which stops here.
-      e.preventDefault();
-      const i = matches[sel];
-      closeSearch();
-      reveal(i);
-    } else if (e.key === "Escape") {
-      e.stopPropagation();
-      closeSearch();
-      // The field goes away: the keyboard goes on to the tree it was searching, not nowhere.
-      tick().then(() => list.focus());
-    }
-  }
-
-  /** Shows session `i` in the tree, its folders opened, and puts the keyboard on its row. */
-  async function reveal(i: number) {
-    const parts = app.store.session[i].folder.split("/").filter(Boolean);
-    for (let n = 1; n <= parts.length; n++) open[parts.slice(0, n).join("/")] = true;
-    await tick();
-    const row = list.querySelector<HTMLElement>(`[data-session="${i}"]`);
-    row?.scrollIntoView({ block: "nearest" });
-    row?.focus();
-  }
 
   /** Deletes one session at once (it was picked by name from its menu), with Undo for a while. */
   function remove(i: number) {
@@ -425,7 +353,7 @@
   /** Follows a drag that starts at `e` once it has moved a little: `over` on each move, then
    *  `done(true)` on release, `done(false)` if cancelled. */
   function follow(e: PointerEvent, over: (m: PointerEvent) => void, done: (dropped: boolean) => void) {
-    if (e.button !== 0 || filter) return;
+    if (e.button !== 0) return;
     const el = e.currentTarget as HTMLElement;
     const [x0, y0] = [e.clientX, e.clientY];
     let moving = false;
@@ -559,7 +487,7 @@
     else if (key === "Home") go(0);
     else if (key === "End") go(all.length - 1);
     else if (key === "ArrowRight" && p !== undefined) open[p] ? go(at + 1) : (open[p] = true);
-    else if (key === "ArrowLeft" && !filter) {
+    else if (key === "ArrowLeft") {
       const up = p === undefined ? s!.folder : open[p] ? null : parentOf(p);
       if (up === null) open[p!] = false;
       else if (up) list.querySelector<HTMLElement>(`[data-folder="${CSS.escape(up)}"]`)?.focus();
@@ -584,15 +512,13 @@
 
 <svelte:window onclick={() => (menu = null)} />
 
-{#snippet row(i: number, searching = false)}
+{#snippet row(i: number)}
   {@const s = app.store.session[i]}
   {@const look = lookOf(s)}
   {@const one = app.settings?.single_click_open}
   {@const on = live.get(sessionKey(s))}
   <button
-    class="flat item"
-    class:leaf={!searching}
-    class:hit={searching && matches[sel] === i}
+    class="flat item leaf"
     class:before={drag?.row === i && !drag.after}
     class:after={drag?.row === i && drag.after}
     class:live={on === true}
@@ -607,7 +533,6 @@
     oncontextmenu={(e) => contextMenu(e, { i })}
   >
     <SessionIcon icon={look.icon} color={look.color} still={look.still} /><span class="name" class:tinted={!!look.tint} style:--tint={look.tint || null}>{s.name}</span>
-    {#if searching && s.folder}<span class="where">{s.folder}</span>{/if}
   </button>
 {/snippet}
 
@@ -649,30 +574,6 @@
 {/snippet}
 
 <nav>
-  <!-- Searching, the field takes the buttons' place; it closes when left empty. -->
-  <div class="top">
-    {#if searching}
-      <label class="search">
-        <Icon name="search" />
-        <input
-          bind:this={search}
-          bind:value={filter}
-          oninput={() => (sel = 0)}
-          onkeydown={searchKey}
-          onblur={() => !filter && closeSearch()}
-          aria-label={_("Search sessions")}
-          placeholder={_("Name, address, folder or tag")}
-          title={_("Find a session by name, address, folder or tag")}
-        />
-      </label>
-    {:else}
-      <div class="actions">
-        <button class="flat icon-only find" onclick={focusSearch} title={tip(_("Search sessions"), "find")} aria-label={_("Search sessions")}><Icon name="search" size={16} /></button>
-        {@render actions?.()}
-      </div>
-    {/if}
-  </div>
-  {#if filter && !matches.length}<p class="weak none">{_("Nothing matches “{text}”.", { text: filter })}</p>{/if}
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_tabindex -->
   <div
     class="list"
@@ -685,12 +586,7 @@
     onkeydown={walk}
     oncontextmenu={(e) => contextMenu(e, { root: true })}
   >
-    {#if filter}
-      {#each matches.slice(0, SHOWN) as i (i)}{@render row(i, true)}{/each}
-      {#if matches.length > SHOWN}<p class="weak none">{_("{n} more: type more to narrow it down.", { n: matches.length - SHOWN })}</p>{/if}
-    {:else}
-      {@render folder(tree)}
-    {/if}
+    {@render folder(tree)}
   </div>
 </nav>
 
@@ -756,7 +652,7 @@
       <Appearance bind:color={ed.color} bind:icon={ed.icon} bind:still={ed.still} fallbackIcon="folder" fallbackColor={folderColor(ed.parent) || "var(--fg)"} name={ed.name} />
     </div>
     <p class="weak">
-      {_("Separate tags with commas. Searching for a tag finds every session in the folder, including subfolders. Sessions without a colour of their own take the folder's.")}
+      {_("Separate tags with commas. Searching the command palette for a tag finds every session in the folder, including subfolders. Sessions without a colour of their own take the folder's.")}
     </p>
     <div class="row">
       <button class="primary" disabled={clash} onclick={saveFolder}>{ed.fresh ? _("Create") : _("Save")}</button>
@@ -826,60 +722,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding: 0 5px 5px;
-  }
-  /* as tall as the tab strip beside it, so the two rows of tools share a line */
-  .top {
-    flex: none;
-    height: var(--bar);
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    margin: 0 5px;
-  }
-  .search {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    color: var(--weak);
-  }
-  /* search on its own at the start, the other buttons at the end */
-  .actions {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .find {
-    margin-inline-end: auto;
-  }
-  /* the field opens out from the search button */
-  .search {
-    animation: open-search 0.14s ease-out;
-  }
-  @keyframes open-search {
-    from {
-      max-width: 28px;
-    }
-    to {
-      max-width: 100%;
-    }
-  }
-  .search :global(.icon) {
-    position: absolute;
-    inset-inline-start: 8px;
-    pointer-events: none;
-  }
-  .search input {
-    width: 100%;
-    padding-inline-start: calc(8px + 16px + 5px);
-  }
-  .none {
-    margin: 5px 8px;
+    padding: 5px;
   }
   .list {
     flex: 1;
@@ -939,7 +782,6 @@
   .list:focus {
     outline: none;
   }
-  .item.hit,
   .item.chosen {
     background: var(--gold-soft);
   }
@@ -975,15 +817,6 @@
   .name {
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .where {
-    margin-inline-start: auto;
-    padding-inline-start: 8px;
-    font-size: var(--t-s);
-    color: var(--weak);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-shrink: 1;
   }
   .count {
     font-size: var(--t-s);

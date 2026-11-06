@@ -2,13 +2,14 @@
   // Command palette: actions, saved sessions, open tabs and tunnels, fuzzy-searched. An address
   // ("me@host:2222", "rdp 192.0.2.19") offers to connect to it directly. One of the filters above
   // the list (Sessions, Snippets, Hosts) narrows the search to its own items.
+  import { untrack } from "svelte";
   import { _ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { ACTIONS, type Filter, find, isWheel, keysOf, quickConnect, shown as keysShown } from "./actions";
   import { addressSession, host, KIND_COLOR, KIND_ICON, type SavedLayout, type Session, type Snippet, type TunnelStats } from "./api";
   import Icon from "./Icon.svelte";
   import SessionIcon from "./SessionIcon.svelte";
-  import { app, lookOf } from "./state.svelte";
+  import { app, inside, lookOf } from "./state.svelte";
 
   let {
     tabs,
@@ -18,6 +19,7 @@
     onopen,
     onshow,
     onclose,
+    start = null,
   }: {
     tabs: { key: number; title: string; session: Session }[];
     onaction: (id: string) => void;
@@ -26,14 +28,16 @@
     onopen: (s: Session) => void;
     onshow: (key: number) => void;
     onclose: () => void;
+    /** The filter picked as it opens (Sessions, to find one). */
+    start?: Filter | null;
   } = $props();
 
   /** `in`: the filters that keep the item; an action is in none, so only the unfiltered list has it. */
-  type Item = { label: string; hint: string; icon: string; color: string; keys?: string; in?: Filter[]; run: () => void };
+  type Item = { label: string; hint: string; tags?: string; icon: string; color: string; keys?: string; in?: Filter[]; run: () => void };
 
   let query = $state("");
   let sel = $state(0);
-  let filter = $state<Filter | null>(null);
+  let filter = $state<Filter | null>(untrack(() => start));
   const FILTERS: [Filter, string][] = [
     ["sessions", _("Sessions")],
     ["snippets", _("Snippets")],
@@ -55,6 +59,8 @@
       ...app.store.session.map((s) => ({
         label: s.folder ? `${s.folder}/${s.name}` : s.name,
         hint: host(s.kind),
+        // a folder's tags find every session in it and below
+        tags: app.store.folder.filter((f) => f.tags.length && inside(s.folder, f.path)).flatMap((f) => f.tags).join(" "),
         ...lookOf(s),
         // a session that reaches a machine on the network is a host too, found by its address
         in: ("host" in s.kind ? ["sessions", "hosts"] : ["sessions"]) as Filter[],

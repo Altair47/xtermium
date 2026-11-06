@@ -190,12 +190,13 @@ function walk(t: string, word: string, start: number): number {
 export type Filter = "sessions" | "snippets" | "hosts";
 
 /** The palette's hits for `q`, best first: every item without a filter; with one, only the items
- *  in it. Hosts are searched by address alone (the hint), so "10.0" doesn't also find a name. */
-export function find<T extends { label: string; hint: string; in?: Filter[] }>(items: T[], q: string, filter: Filter | null): T[] {
+ *  in it. Hosts are searched by address alone (the hint), so "10.0" doesn't also find a name.
+ *  `tags`: searched but not shown (a session's folders' tags). */
+export function find<T extends { label: string; hint: string; tags?: string; in?: Filter[] }>(items: T[], q: string, filter: Filter | null): T[] {
   const pool = filter ? items.filter((it) => it.in?.includes(filter)) : items;
   if (!q) return pool;
   return pool
-    .map((it) => [it, score(q, filter === "hosts" ? it.hint : `${it.label} ${it.hint}`)] as const)
+    .map((it) => [it, score(q, filter === "hosts" ? it.hint : `${it.label} ${it.hint} ${it.tags ?? ""}`)] as const)
     .filter(([, s]) => s >= 0)
     .sort((a, b) => b[1] - a[1])
     .map(([it]) => it);

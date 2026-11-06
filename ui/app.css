@@ -34,7 +34,7 @@
   --control: 26px;
   --bar: 34px;
   /* The window's own title bar (TitleBar.svelte); the page, dialogs and the lock start under it. */
-  --titlebar: var(--control);
+  --titlebar: var(--bar);
   --t-s: 11.5px;
   --t: 13px;
   --t-l: 14.5px;

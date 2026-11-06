@@ -6,7 +6,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Sizes } from "./lib/actions";
+  import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Filter, type Sizes } from "./lib/actions";
   import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
   import Logo from "./lib/Logo.svelte";
@@ -90,6 +90,8 @@
   let showImport = $state(false);
   let showExport = $state(false);
   let showPalette = $state(false);
+  /** The filter the palette opens on: Sessions when it's opened to find one. */
+  let paletteFilter = $state<Filter | null>(null);
   let showSnippets = $state(false);
   /** A snippet waiting for its placeholders' values. */
   let asking = $state<{ snippet: Snippet; values: Record<string, string> } | null>(null);
@@ -101,9 +103,6 @@
   let editor = $state<{ session: Session; index: number | null } | null>(null);
   let prompts = $state<Prompt[]>([]);
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
-  let sidebar = $state<Sidebar>();
-  /** The sidebar's search is open: the rest of the window steps back (not the tabs' contents). */
-  let searching = $state(false);
   /** Terminal views by tab key, for commands that act on the focused one. */
   const views: Record<number, Terminal | undefined> = $state({});
   /** Remote desktop views by tab key (detaching one releases it). */
@@ -639,13 +638,18 @@
   }
 
   // ---- workspaces: each with its own sessions, logins and tunnels (Settings > Workspaces) ----
-  const MANAGE = "\u0000manage";
-  function pickWorkspace(el: HTMLSelectElement) {
-    const name = el.value;
-    el.value = app.workspace; // until the switch is through
-    if (name === MANAGE) return openSettings("workspaces");
-    workspaceOp({ op: "switch", name }).catch((e) => (app.status = String(e)));
+  /** The title bar's workspace menu, open at this point. */
+  let workspaceMenu = $state<{ x: number; y: number } | null>(null);
+  function pickWorkspace(name: string) {
+    workspaceMenu = null;
+    if (name !== app.workspace) workspaceOp({ op: "switch", name }).catch((e) => (app.status = String(e)));
   }
+  /** Opens a menu under the button `e` came from, at its start; a second click closes it. */
+  const below = (e: MouseEvent, was: { x: number; y: number } | null) => {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return was ? null : { x: document.documentElement.dir === "rtl" ? r.right : r.left, y: r.bottom + 3 };
+  };
 
   // ---- dragging: a tab along the strip (its place) or onto a pane, a pane's status bar onto
   // another pane. Pointer events, not the page's drag and drop: the window takes dropped files for
@@ -1052,11 +1056,12 @@
     if (id.startsWith("layout-")) return setLayout(id.slice(7) as Layout);
     switch (id) {
       case "palette":
+        paletteFilter = null;
         showPalette = !showPalette;
         break;
       case "find":
-        showSidebar = true;
-        expandSidebar(true);
+        paletteFilter = "sessions";
+        showPalette = true;
         break;
       case "find-text":
         if (t) views[t.key]?.find();
@@ -1093,8 +1098,9 @@
         showSidebar = !showSidebar;
         break;
       case "collapse-sidebar":
+        // A hidden sidebar comes back open.
+        app.settings!.sidebar_collapsed = showSidebar && !app.settings!.sidebar_collapsed;
         showSidebar = true;
-        app.settings!.sidebar_collapsed = !app.settings!.sidebar_collapsed;
         break;
       case "toggle-files":
         showFiles = !showFiles;
@@ -1189,10 +1195,9 @@
     el.addEventListener("pointerup", () => el.removeEventListener("pointermove", move), { once: true });
   }
 
-  /** Opens a collapsed sidebar out; `search`: and puts the cursor in its search box. */
-  function expandSidebar(search = false) {
+  /** Opens a collapsed sidebar out. */
+  function expandSidebar() {
     app.settings!.sidebar_collapsed = false;
-    if (search) tick().then(() => sidebar?.focusSearch());
   }
 
   /** Double-click on the handle: the sidebar opens out, as wide as its longest session or folder
@@ -1236,7 +1241,7 @@
   <!-- Tiles: drawn with three panes. -->
   {@const [cols, rows] = l === "tiles" ? [1, 1] : GRID[l]}
   {@const cells = l === "tiles" ? [0, 1, 2].map((i) => tile(3, i)) : Array.from({ length: cols * rows }, (_, i): [number, number, number, number] => [(i % cols) * (100 / cols), Math.floor(i / cols) * (100 / rows), 100 / cols, 100 / rows])}
-  <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
+  <svg width="21" height="17" viewBox="0 0 20 16" aria-hidden="true">
     {#each cells as [x, y, w, h], i (i)}
       <rect
         x={1 + x * 0.18 + (w < 100 ? 0.75 : 0)}
@@ -1271,17 +1276,14 @@
   <Account onsettings={() => openSettings("sync")} />
 {/snippet}
 
-<svelte:window onkeydowncapture={keydown} oninputcapture={cleanInput} onchangecapture={clampNumber} onclick={() => ([tabMenu, showTasks, layoutsMenu] = [null, null, null])} />
+<svelte:window onkeydowncapture={keydown} oninputcapture={cleanInput} onchangecapture={clampNumber} onclick={() => ([tabMenu, showTasks, layoutsMenu, workspaceMenu] = [null, null, null, null])} />
 
 {#if ready}
-  <div class="app" class:searching>
+  <div class="app">
     {#if showSidebar && app.settings?.sidebar_collapsed}
-      <!-- Collapsed: the sidebar's buttons in a column, search first, then one to open it out. -->
+      <!-- Collapsed: the sidebar's foot in a column (the title bar's burger opens it out). -->
       <aside class="rack rail">
         <Backdrop place="sidebar" tint={(a) => `rgba(var(--panel-rgb), ${a})`} />
-        <button class="flat icon-only" onclick={() => expandSidebar(true)} title={tip(_("Search sessions"), "find")} aria-label={_("Search sessions")}><Icon name="search" size={16} /></button>
-        <button class="flat icon-only" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={16} /></button>
-        <button class="flat icon-only flip" onclick={() => expandSidebar()} title={tip(_("Expand the sidebar"), "collapse-sidebar")} aria-label={_("Expand the sidebar")}><Icon name="chevrons-right" size={16} /></button>
         <!-- The sidebar shows messages; collapsed, they wait behind this. -->
         {#if app.status}
           <button class="flat icon-only" onclick={() => expandSidebar()} title={app.status} aria-label={app.status}><Icon name="info-circle" size={16} color="var(--gold)" /></button>
@@ -1294,19 +1296,7 @@
     {:else if showSidebar}
       <aside class="rack" style:width="{app.settings?.sidebar_width ?? 280}px">
         <Backdrop place="sidebar" tint={(a) => `rgba(var(--panel-rgb), ${a})`} />
-        <Sidebar bind:this={sidebar} bind:searching {live} onopen={open} onedit={(session, index) => (editor = { session, index })}>
-          {#snippet actions()}
-            <select class="workspace" value={app.workspace} title={_("Workspace: its own sessions and folders")} aria-label={_("Workspace")} onchange={(e) => pickWorkspace(e.currentTarget)}>
-              <option value="">{_("Default")}</option>
-              {#each app.workspaces as w (w)}<option value={w}>{w}</option>{/each}
-              <option value={MANAGE}>{_("Manage workspaces…")}</option>
-            </select>
-            <button class="flat icon-only" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={16} /></button>
-            <button class="flat icon-only flip" onclick={() => (app.settings!.sidebar_collapsed = true)} title={tip(_("Collapse the sidebar"), "collapse-sidebar")} aria-label={_("Collapse the sidebar")}>
-              <Icon name="chevrons-left" size={16} />
-            </button>
-          {/snippet}
-        </Sidebar>
+        <Sidebar {live} onopen={open} onedit={(session, index) => (editor = { session, index })} />
         {#if app.status}
           <div class="status row" role="status">
             {#if app.statusLink?.text === app.status}
@@ -1393,7 +1383,7 @@
             </div>
           {/each}
         </div>
-        <!-- the tools act on tabs, so they come as the tabs do: files and snippets with a terminal tab, broadcast with two tabs; the layouts are always there -->
+        <!-- the tools act on tabs, so they come as the tabs do: files and snippets with a terminal tab, broadcast with two tabs -->
         <div class="tools row">
           {#if tasks.length}
             <button
@@ -1437,22 +1427,6 @@
               <Icon name="broadcast" />
             </button>
           {/if}
-          <button
-            class="flat icon-only"
-            class:on={!!layoutsMenu}
-            title={_("Saved layouts: sessions opened together in panes")}
-            aria-label={_("Saved layouts")}
-            onclick={(e) => {
-              e.stopPropagation();
-              const r = e.currentTarget.getBoundingClientRect();
-              layoutsMenu = layoutsMenu ? null : { x: r.right, y: r.bottom + 4 };
-            }}><Icon name="grid-alt" /></button
-          >
-          <div class="segmented" role="group" aria-label={_("Layout")}>
-            {#each LAYOUTS as [l, name] (l)}
-              <button class="flat icon-only" class:on={layout === l} title={tip(_(name), `layout-${l}`)} aria-label={_(name)} onclick={() => setLayout(l)}>{@render layoutGlyph(l)}</button>
-            {/each}
-          </div>
         </div>
       </header>
 
@@ -1708,6 +1682,14 @@
       <button disabled={strip.at(-1)?.key === k} onclick={() => closeOthers(k, true)}>{_("Close tabs to the right")}</button>
     </div>
   {/if}
+  {#if workspaceMenu}
+    <div class="menu" aria-label={_("Workspace")} {@attach menu(() => (workspaceMenu = null), workspaceMenu.x, workspaceMenu.y)}>
+      {#each ["", ...app.workspaces] as w (w)}
+        <button class:selected={w === app.workspace} onclick={() => pickWorkspace(w)}><Icon name={w === app.workspace ? "check" : "cluster"} />{w || _("Default")}</button>
+      {/each}
+      <button class="sep" onclick={() => ((workspaceMenu = null), openSettings("workspaces"))}>{_("Manage workspaces…")}</button>
+    </div>
+  {/if}
   {#if layoutsMenu}
     <div class="menu tasks-list" {@attach menu(() => (layoutsMenu = null), layoutsMenu.x, layoutsMenu.y)}>
       {#each app.store.layout as l (l.name)}
@@ -1805,6 +1787,7 @@
   {/if}
   {#if showPalette}
     <Palette
+      start={paletteFilter}
       tabs={tabs.map((t) => ({ ...t, title: titleOf(t), session: t.color ? { ...t.session, color: t.color } : t.session }))}
       onaction={run}
       onsnippet={runSnippet}
@@ -1899,27 +1882,50 @@
 
 <!-- The bar's centre says where the keyboard goes, the focused tab, and opens the palette, which goes anywhere else. Locked, it says nothing. -->
 <TitleBar>
-  <!-- The local shell and tunnels reach past any one session, so they stand by the mark rather than in the sidebar. -->
+  <!-- What reaches past any one session stands by the mark: the sidebar's burger, a local shell,
+       tunnels, saved layouts and a new session. -->
   {#snippet tools()}
     {#if ready && app.locked === null && !lock.locked}
-      <button class="flat icon-only bar-tool" tabindex="-1" onclick={localShell} title={tip(_("Open a local shell"), "local-shell")} aria-label={_("Open a local shell")}><Icon name="terminal" size={18} /></button>
-      <button class="flat icon-only bar-tool" tabindex="-1" class:on={showTunnels} onclick={() => (showTunnels = !showTunnels)} title={tip(_("SSH tunnels"), "tunnels")} aria-label={_("SSH tunnels")}><Icon name="transfer-alt" size={18} /></button>
+      {@const open = showSidebar && !app.settings?.sidebar_collapsed}
+      <button class="flat icon-only bar-tool" tabindex="-1" onclick={() => run("collapse-sidebar")} title={tip(open ? _("Collapse the sidebar") : _("Expand the sidebar"), "collapse-sidebar")} aria-label={open ? _("Collapse the sidebar") : _("Expand the sidebar")} aria-expanded={open}><Icon name="menu" size={21} /></button>
+      <button class="flat icon-only bar-tool" tabindex="-1" onclick={localShell} title={tip(_("Open a local shell"), "local-shell")} aria-label={_("Open a local shell")}><Icon name="terminal" size={21} /></button>
+      <button class="flat icon-only bar-tool" tabindex="-1" class:on={showTunnels} onclick={() => (showTunnels = !showTunnels)} title={tip(_("SSH tunnels"), "tunnels")} aria-label={_("SSH tunnels")}><Icon name="transfer-alt" size={21} /></button>
+      <button class="flat icon-only bar-tool" tabindex="-1" class:on={!!layoutsMenu} onclick={(e) => (layoutsMenu = below(e, layoutsMenu))} title={_("Saved layouts: sessions opened together in panes")} aria-label={_("Saved layouts")}><Icon name="grid-alt" size={21} /></button>
+      <button class="icon-only bar-tool new" tabindex="-1" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={21} /></button>
     {/if}
   {/snippet}
+  <!-- The centre: search (the palette on Sessions), what has the keyboard (the palette), and the workspace. Locked, nothing. -->
   {#if ready && app.locked === null && !lock.locked}
-    <button class="flat where" tabindex="-1" title={tip(_("Command palette"), "palette")} onclick={() => run("palette")}>
-      {#if activeTab}
-        {@const look = lookOf(activeTab.session)}
-        {#if activeTab.alive}<SessionIcon icon={look.icon} color={look.color} size={16} still />{:else}<Icon name="error" size={16} color="var(--warn)" />{/if}
-        <span class="name">{titleOf(activeTab)}</span>
-        <!-- the shell's or page's own title, when it says more than the name -->
-        {#if activeTab.title && activeTab.title !== titleOf(activeTab)}<span>{activeTab.title}</span>{/if}
-      {:else}
-        <Icon name="search" size={16} />
-        <span>{_("Type a command, a session, or user@host to connect")}</span>
-      {/if}
-    </button>
+    {@const ws = _("Workspace: {name}", { name: app.workspace || _("Default") })}
+    <div class="finder">
+      <button class="flat icon-only bar-tool" tabindex="-1" onclick={() => run("find")} title={tip(_("Find a session"), "find")} aria-label={_("Find a session")}><Icon name="search" size={21} /></button>
+      <div class="field">
+        <button class="flat where" tabindex="-1" title={tip(_("Command palette"), "palette")} onclick={() => run("palette")}>
+          {#if activeTab}
+            {@const look = lookOf(activeTab.session)}
+            {#if activeTab.alive}<SessionIcon icon={look.icon} color={look.color} size={16} still />{:else}<Icon name="error" size={16} color="var(--warn)" />{/if}
+            <span class="name">{titleOf(activeTab)}</span>
+            <!-- the shell's or page's own title, when it says more than the name -->
+            {#if activeTab.title && activeTab.title !== titleOf(activeTab)}<span>{activeTab.title}</span>{/if}
+          {:else}
+            <span>{_("Type a command, a session, or user@host to connect")}</span>
+          {/if}
+        </button>
+        <button class="flat icon-only workspace" class:on={!!workspaceMenu} tabindex="-1" aria-haspopup="menu" aria-expanded={!!workspaceMenu} title={ws} aria-label={ws} onclick={(e) => (workspaceMenu = below(e, workspaceMenu))}>
+          <Icon name="chevron-down" size={18} />
+        </button>
+      </div>
+    </div>
   {/if}
+  {#snippet end()}
+    {#if ready && app.locked === null && !lock.locked}
+      <div class="layouts" role="group" aria-label={_("Layout")}>
+        {#each LAYOUTS as [l, name] (l)}
+          <button class="flat icon-only bar-tool" tabindex="-1" class:on={layout === l} title={tip(_(name), `layout-${l}`)} aria-label={_(name)} onclick={() => setLayout(l)}>{@render layoutGlyph(l)}</button>
+        {/each}
+      </div>
+    {/if}
+  {/snippet}
 </TitleBar>
 <LockScreen />
 
@@ -1959,22 +1965,6 @@
     min-width: 0;
     background: rgba(var(--panel-rgb), var(--chrome-alpha));
   }
-  /* between the search button and the others, taking the room there is: dimmed and cut short
-     while closed, every name in full in its list */
-  .workspace {
-    flex: 1 1 0;
-    min-width: 0;
-    margin-inline: 2px 5px;
-    color: var(--weak);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .workspace:is(:hover, :focus) {
-    color: var(--fg);
-  }
-  .workspace option {
-    color: var(--fg);
-  }
   .status {
     gap: 5px;
     margin: 0 5px 5px;
@@ -1993,13 +1983,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* searching: everything around the search steps back; the tabs' contents don't */
-  .app :is(.strip, .corner, .status, .files, .dashboard) {
-    transition: opacity 0.15s;
-  }
-  .app.searching :is(.strip, .corner, .status, .files, .dashboard) {
-    opacity: 0.45;
-  }
   /* settings, then the account, at the end of the sidebar's foot */
   .corner {
     gap: 2px;
@@ -2016,37 +1999,63 @@
     flex: none;
     cursor: col-resize;
   }
-  /* the collapsed sidebar */
-  /* its first button on the tab strip's line, as the open sidebar's top row is */
+  /* the collapsed sidebar: its foot in a column */
   .rail {
     width: 38px;
     align-items: center;
     gap: 2px;
-    padding: calc((var(--bar) - var(--control)) / 2) 0 8px;
-  }
-  /* collapse and expand point the way the sidebar goes, on whichever side it is */
-  :global([dir="rtl"]) .flip :global(.icon) {
-    transform: scaleX(-1);
+    padding: 5px 0 8px;
   }
 
-  /* ---- the title bar's centre: the focused tab, a way into the palette ---- */
-  /* as tall as the bar and square, as the window buttons are; never so wide that no bar is left
-     to drag the window by */
-  .where {
+  /* ---- the title bar: tools by the mark, a field in the centre, the layouts at the end ---- */
+  /* the bar's own tools step back like its text until pointed at */
+  .bar-tool:not(.on, :hover) {
+    color: inherit;
+  }
+  /* a new session is the bar's one standing action: a filled key, set a little apart */
+  .new {
+    margin-inline-start: 13px;
+    border: 0;
+    background: var(--raised);
+    color: var(--fg);
+  }
+  .new:hover {
+    background: var(--hover);
+  }
+  /* search, then the field: never so wide that no bar is left to drag the window by */
+  .finder {
+    display: flex;
+    align-items: center;
+    gap: 3px;
     min-width: 0;
-    max-width: min(610px, 50vw);
-    height: var(--titlebar);
-    padding: 0 13px;
+  }
+  .field {
+    display: flex;
+    align-items: stretch;
+    width: clamp(233px, 38vw, 610px);
+    min-width: 0;
+    height: var(--control);
+    border: 1px solid var(--line);
+    border-radius: var(--r-control);
+    background: rgba(var(--deep-rgb), 1);
+    overflow: hidden;
+  }
+  .field:hover {
+    border-color: color-mix(in srgb, var(--fg) 25%, var(--line));
+  }
+  /* the focused tab, its type's icon and its name, centred; a way into the palette */
+  .where {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    justify-content: center;
+    padding: 0 8px;
     border: 0;
     border-radius: 0;
     color: inherit;
   }
   .where:hover {
     color: var(--fg);
-  }
-  /* the bar's own tools step back like its text until pointed at */
-  .bar-tool:not(.on, :hover) {
-    color: inherit;
   }
   .where span {
     min-width: 0;
@@ -2062,6 +2071,21 @@
   /* the name and its icon are one thing; what the shell says of itself stands a little off */
   .where .name + span {
     margin-inline-start: 3px;
+  }
+  /* the workspace's menu, at the field's end behind a line */
+  .workspace {
+    flex: none;
+    width: var(--control);
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-inline-start: 1px solid var(--line);
+    border-radius: 0;
+    justify-content: center;
+  }
+  .layouts {
+    display: flex;
+    gap: 2px;
   }
 
   /* ---- tabs and view tools share one strip ---- */
@@ -2207,19 +2231,6 @@
   }
   .tools button.on {
     color: var(--gold);
-  }
-  .segmented {
-    display: flex;
-    padding: 1px;
-    margin: 0 5px;
-    border-radius: var(--r-control);
-    background: rgba(var(--deep-rgb), 1);
-  }
-  .segmented button {
-    min-height: var(--row);
-    padding: 2px 5px;
-    border: 0;
-    border-radius: calc(var(--r-control) - 1px); /* the strip's curve, less its padding */
   }
 
   /* ---- panes ---- */
