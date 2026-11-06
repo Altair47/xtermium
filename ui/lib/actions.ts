@@ -186,6 +186,21 @@ function walk(t: string, word: string, start: number): number {
   return last - start + 1 > word.length * 2 + 2 ? -1 : s;
 }
 
+/** The command palette's filters: what its query searches when one is picked. */
+export type Filter = "sessions" | "snippets" | "hosts";
+
+/** The palette's hits for `q`, best first: every item without a filter; with one, only the items
+ *  in it. Hosts are searched by address alone (the hint), so "10.0" doesn't also find a name. */
+export function find<T extends { label: string; hint: string; in?: Filter[] }>(items: T[], q: string, filter: Filter | null): T[] {
+  const pool = filter ? items.filter((it) => it.in?.includes(filter)) : items;
+  if (!q) return pool;
+  return pool
+    .map((it) => [it, score(q, filter === "hosts" ? it.hint : `${it.label} ${it.hint}`)] as const)
+    .filter(([, s]) => s >= 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([it]) => it);
+}
+
 export type Address = { type: "ssh" | "rdp" | "telnet" | "vnc"; host: string; port: number; user: string };
 
 /** Each protocol's usual port; a bare `host:port` with one of these picks the protocol. */

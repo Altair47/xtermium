@@ -1,9 +1,10 @@
 <script lang="ts">
   // Command palette: actions, saved sessions, open tabs and tunnels, fuzzy-searched. An address
-  // ("me@host:2222", "rdp 192.0.2.19") offers to connect to it directly.
+  // ("me@host:2222", "rdp 192.0.2.19") offers to connect to it directly. One of the filters above
+  // the list (Sessions, Snippets, Hosts) narrows the search to its own items.
   import { _ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { ACTIONS, isWheel, keysOf, quickConnect, score, shown as keysShown } from "./actions";
+  import { ACTIONS, type Filter, find, isWheel, keysOf, quickConnect, shown as keysShown } from "./actions";
   import { addressSession, host, KIND_COLOR, KIND_ICON, type SavedLayout, type Session, type Snippet, type TunnelStats } from "./api";
   import Icon from "./Icon.svelte";
   import SessionIcon from "./SessionIcon.svelte";
@@ -27,10 +28,17 @@
     onclose: () => void;
   } = $props();
 
-  type Item = { label: string; hint: string; icon: string; color: string; keys?: string; run: () => void };
+  /** `in`: the filters that keep the item; an action is in none, so only the unfiltered list has it. */
+  type Item = { label: string; hint: string; icon: string; color: string; keys?: string; in?: Filter[]; run: () => void };
 
   let query = $state("");
   let sel = $state(0);
+  let filter = $state<Filter | null>(null);
+  const FILTERS: [Filter, string][] = [
+    ["sessions", _("Sessions")],
+    ["snippets", _("Snippets")],
+    ["hosts", _("Hosts")],
+  ];
   let list: HTMLDivElement;
   let live = $state<Record<string, TunnelStats>>({});
   invoke<Record<string, TunnelStats>>("tunnel_stats").then((s) => (live = s));
@@ -42,18 +50,20 @@
   const items = $derived.by((): Item[] => {
     const shortcuts = app.settings?.shortcuts ?? {};
     return [
-      ...tabs.map((t) => ({ label: t.title, hint: _("Open tab"), ...lookOf(t.session), run: () => onshow(t.key) })),
+      ...tabs.map((t) => ({ label: t.title, hint: _("Open tab"), ...lookOf(t.session), in: ["sessions"] as Filter[], run: () => onshow(t.key) })),
       // the sessions before the actions: the keyboard's front door is reached for a machine first
       ...app.store.session.map((s) => ({
         label: s.folder ? `${s.folder}/${s.name}` : s.name,
         hint: host(s.kind),
         ...lookOf(s),
+        // a session that reaches a machine on the network is a host too, found by its address
+        in: ("host" in s.kind ? ["sessions", "hosts"] : ["sessions"]) as Filter[],
         run: () => onopen(s),
       })),
       // every action but opening the palette, which is open, and the ones only the mouse wheel runs
       ...ACTIONS.filter((a) => a.id !== "palette" && !isWheel(a.id)).map((a) => ({ label: _(a.label), hint: "", icon: "play", color: "var(--weak)", keys: keysShown(keysOf(a.id, shortcuts)), run: () => onaction(a.id) })),
       ...app.store.layout.map((l) => ({ label: _("Open layout: {name}", { name: l.name }), hint: l.pane.map((s) => s.name).join(", "), icon: "grid-alt", color: "var(--gold)", run: () => onlayout(l) })),
-      ...app.store.snippet.map((s) => ({ label: _("Run snippet: {name}", { name: s.name }), hint: s.text.split("\n")[0], icon: "play", color: "var(--gold)", run: () => onsnippet(s) })),
+      ...app.store.snippet.map((s) => ({ label: _("Run snippet: {name}", { name: s.name }), hint: s.text.split("\n")[0], icon: "play", color: "var(--gold)", in: ["snippets"] as Filter[], run: () => onsnippet(s) })),
       ...app.store.tunnel.map((t) => {
         const on = !!live[t.name]?.live;
         return { label: on ? _("Stop tunnel {name}", { name: t.name }) : _("Start tunnel {name}", { name: t.name }), hint: `${t.kind} :${t.listen_port}`, icon: "transfer-alt", color: "var(--gold)", run: () => tunnel(t.name, on) };
@@ -61,17 +71,15 @@
     ];
   });
 
+  const q = $derived(query.trim());
+  // A typed address is a host to connect to, so the Sessions and Snippets filters leave it out.
+  const addr = $derived(quickConnect(q));
+  /** How many items each filter holds for the query, on its card. */
+  const counts = $derived(Object.fromEntries(FILTERS.map(([f]) => [f, find(items, q, f).length + (f === "hosts" && addr ? 1 : 0)])));
+
   const shown = $derived.by((): Item[] => {
-    const q = query.trim();
-    const found = q
-      ? items
-          .map((it) => [it, score(q, `${it.label} ${it.hint}`)] as const)
-          .filter(([, s]) => s >= 0)
-          .sort((a, b) => b[1] - a[1])
-          .map(([it]) => it)
-      : items;
-    const addr = quickConnect(q);
-    if (!addr) return found.slice(0, 60);
+    const found = find(items, q, filter);
+    if (!addr || (filter && filter !== "hosts")) return found.slice(0, 60);
     const label = `${addr.user ? addr.user + "@" : ""}${addr.host}:${addr.port}`;
     const connect = () => onopen(addressSession(addr));
     return [{ label: _("Connect to {address}", { address: label }), hint: addr.type.toUpperCase(), icon: KIND_ICON[addr.type], color: KIND_COLOR[addr.type], run: connect }, ...found.slice(0, 59)];
@@ -83,8 +91,20 @@
     it.run();
   }
 
+  /** Picks a filter, or none when it is the one picked; the list starts again from its top. */
+  function choose(f: Filter | null) {
+    filter = f === filter ? null : f;
+    sel = 0;
+  }
+
   function keydown(e: KeyboardEvent) {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (e.key === "Tab") {
+      // Tab and Shift+Tab step through the filters (and none) without leaving the field, so
+      // Enter still runs the first hit.
+      e.preventDefault();
+      const order = [null, ...FILTERS.map(([f]) => f)];
+      choose(order[(order.indexOf(filter) + (e.shiftKey ? order.length - 1 : 1)) % order.length]);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       sel = Math.max(0, Math.min(shown.length - 1, sel + (e.key === "ArrowDown" ? 1 : -1)));
       requestAnimationFrame(() => list.querySelector(".on")?.scrollIntoView({ block: "nearest" }));
@@ -108,6 +128,22 @@
       <!-- Focused outright: Svelte's autofocus leaves focus alone while the terminal has it. -->
       <input bind:value={query} oninput={() => (sel = 0)} onkeydown={keydown} {@attach (el) => el.focus()} placeholder={_("Type a command, a session, or user@host to connect")} />
     </label>
+    <div class="filters" role="group" aria-label={_("Filters")}>
+      {#each FILTERS as [f, name] (f)}
+        <!-- Out of the Tab order, and a click doesn't take focus: Tab in the field steps through these, and the field keeps the keyboard. -->
+        <button
+          class="filter"
+          class:on={filter === f}
+          aria-pressed={filter === f}
+          tabindex="-1"
+          title={_("Search only these; pick again for everything. Tab and Shift+Tab step through the filters.")}
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => choose(f)}
+        >
+          {name}<span class="count">{counts[f]}</span>
+        </button>
+      {/each}
+    </div>
     <div class="list" bind:this={list}>
       {#each shown as it, i (i)}
         <button class="flat item" class:on={i === sel} onclick={() => pick(it)} onpointermove={() => (sel = i)}>
@@ -164,6 +200,22 @@
   .query input {
     flex: 1;
     padding-inline-start: calc(8px + 16px + 5px);
+  }
+  .filters {
+    display: flex;
+    gap: 5px;
+    padding: 0 5px 5px;
+  }
+  .filter {
+    flex: 1;
+    justify-content: space-between;
+  }
+  .count {
+    font-size: var(--t-s);
+    color: var(--weak);
+  }
+  .filter.on .count {
+    color: inherit;
   }
   .list {
     overflow: auto;

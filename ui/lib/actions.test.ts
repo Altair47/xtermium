@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ACTIONS, bindings, cell, chord, defaultKeys, even, fill, keysOf, neighbour, nudge, type Os, ownWindow, placeholders, quickConnect, resize, score, shown, TERMINAL_KEYS, tile, wheelAction, wheelChord } from "./actions.ts";
+import { ACTIONS, bindings, cell, chord, defaultKeys, even, fill, find, type Filter, keysOf, neighbour, nudge, type Os, ownWindow, placeholders, quickConnect, resize, score, shown, TERMINAL_KEYS, tile, wheelAction, wheelChord } from "./actions.ts";
 
 const key = (code: string, key: string, mods: Partial<KeyboardEvent> = {}) =>
   chord({ code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods } as KeyboardEvent);
@@ -170,4 +170,18 @@ test("the interface runs only in xtermium's own windows, never framed", () => {
   assert.ok(ownWindow("main", false) && ownWindow("tab-7", false));
   assert.ok(!ownWindow("web3", false), "a website tab's view");
   assert.ok(!ownWindow("main", true), "framed by a page");
+});
+
+test("a palette filter keeps its own items, and Hosts searches the address alone", () => {
+  const items: { label: string; hint: string; in?: Filter[] }[] = [
+    { label: "Prod/db1", hint: "me@10.0.0.5:22", in: ["sessions", "hosts"] },
+    { label: "Run snippet: uptime", hint: "uptime", in: ["snippets"] },
+    { label: "Settings", hint: "" },
+  ];
+  assert.equal(find(items, "", null).length, 3);
+  assert.deepEqual(find(items, "", "snippets").map((it) => it.label), ["Run snippet: uptime"]);
+  assert.deepEqual(find(items, "prod", "sessions").map((it) => it.label), ["Prod/db1"]);
+  assert.equal(find(items, "prod", "hosts").length, 0, "a name isn't an address");
+  assert.equal(find(items, "10.0", "hosts").length, 1);
+  assert.equal(find(items, "set", "sessions").length, 0, "actions are in no filter");
 });
