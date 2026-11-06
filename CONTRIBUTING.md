@@ -30,7 +30,9 @@ them for a developer reading what changed.
 ## Versions
 
 Leave the version alone (`Cargo.toml`, `package.json`). A merge that raises it publishes a
-release (`.github/workflows/release.yml`), and maintainers do that.
+release (`.github/workflows/release.yml`), and maintainers do that, seldom: what is merged
+reaches people first as a nightly build (`.github/workflows/nightly.yml`, the rolling `nightly`
+pre-release), is used there for a while, and a release follows once it has held up.
 
 ## Conventions
 

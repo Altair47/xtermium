@@ -1,0 +1,182 @@
+# Nightly builds: main as it stands, built every night it has changed, so changes are used for a
+# while before a release carries them (release.yml, far less often). Windows, Linux and macOS
+# build as a release does; the files then replace those of one rolling pre-release, tagged
+# `nightly`, under names that never change (xtermium_nightly_x64_en-US.msi …), so links to them
+# hold (the Scoop bucket's xtermium-nightly, the site). GitHub's "latest release" is never a
+# pre-release, so the site's downloads, Scoop's xtermium and a release's own update check don't
+# see it. A nightly build carries the last release's version number, with "nightly" and its commit
+# in Settings › About (XTERMIUM_NIGHTLY, src/support.rs), and checks for a later nightly by the
+# commit named in this release's notes.
+# All three systems publish together or not at all: one that fails to build leaves last night's
+# files in place and the run red.
+# By hand (Actions tab, `gh workflow run nightly.yml`) it builds even when nothing changed.
+name: nightly
+
+on:
+  schedule:
+    # 01:17 UTC: off the hour, when GitHub's scheduler is busiest.
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Has main moved since the last nightly?
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      new: ${{ steps.c.outputs.new }}
+    steps:
+      - id: c
+        run: |
+          last=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/tags/nightly | cut -f1)
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ "$last" = "$GITHUB_SHA" ]; then
+            echo "main is where last night's build left it: nothing to build."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The same builds release.yml makes; they publish nothing themselves and hold no write token.
+  build:
+    needs: changed
+    if: needs.changed.outputs.new == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ""
+          # The oldest Ubuntu runner: the Linux packages run on its glibc (2.35) or newer.
+          - os: ubuntu-22.04
+            args: ""
+          # One app for both Macs (scripts/rdp.mjs joins the RDP helper's two builds with lipo).
+          - os: macos-latest
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      # The WezTerm git dependency has paths longer than 260 characters.
+      - if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@v7
+
+      # What Tauri needs (libdbus for its window layer), plus libudev for serial ports.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libudev-dev libdbus-1-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      # THIRD-PARTY-NOTICES.txt for exactly what this build ships (scripts/notices.mjs).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.3
+      - run: npm run notices
+
+      - run: npx tauri build ${{ matrix.args }}
+        env:
+          # Shown in Settings › About, to tell builds apart (src/support.rs).
+          XTERMIUM_BUILD: ${{ github.run_number }}
+          XTERMIUM_NIGHTLY: ${{ github.sha }}
+
+      # As build.yml checks a macOS build: both programs carry both CPUs, the app's signature
+      # holds, and xtermium starts on this Mac (its help, which needs no window).
+      - if: runner.os == 'macOS'
+        run: |
+          app=target/universal-apple-darwin/release/bundle/macos/xtermium.app
+          for b in xtermium xtermium-rdp; do lipo "$app/Contents/MacOS/$b" -verify_arch arm64 x86_64; done
+          codesign --verify --deep --strict --verbose=2 "$app"
+          "$app/Contents/MacOS/xtermium" help 2>&1 | grep -q "Drive the running xtermium"
+
+      # The portable build, as release.yml makes it: the files the MSI puts in its folder.
+      - if: runner.os == 'Windows'
+        run: |
+          $files = 'xtermium.exe', 'xtermium-rdp.exe', 'LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.txt'
+          Compress-Archive -LiteralPath ($files | ForEach-Object { "target/release/$_" }) -DestinationPath xtermium_nightly_x64-portable.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-${{ runner.os }}
+          path: |
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*-setup.exe
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            xtermium_nightly_x64-portable.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  # Only this job writes, and only after every system has built: it moves the `nightly` tag and
+  # replaces the pre-release's files and notes.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The notes read the history back to the last release's tag.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: nightly-*
+          path: built
+          merge-multiple: true
+
+      # The files under names that don't change from night to night: "nightly" where a
+      # release's name has its version. Every one of the seven must be there.
+      - run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          mkdir out
+          find built -type f | while read -r f; do
+            mv "$f" "out/$(basename "$f" | sed "s/$version/nightly/")"
+          done
+          for f in xtermium_nightly_x64-setup.exe xtermium_nightly_x64_en-US.msi xtermium_nightly_x64-portable.zip \
+            xtermium_nightly_amd64.deb xtermium-nightly-1.x86_64.rpm xtermium_nightly_amd64.AppImage \
+            xtermium_nightly_universal.dmg; do
+            test -f "out/$f" || { echo "missing: $f (built: $(ls out | tr '\n' ' '))"; exit 1; }
+          done
+
+      # The first line names the commit: a nightly build finds out there whether it is the
+      # latest (src/support.rs `latest`). Then what main has that the last release hasn't
+      # (scripts/changelog.mjs, without its line about the release installers).
+      - run: |
+          {
+            echo "Nightly build of main at $GITHUB_SHA, $(date -u +%F)."
+            echo
+            echo "This is main as it stands: newer than the [latest release](https://github.com/$GITHUB_REPOSITORY/releases/latest) and less tested. It installs over the release and opens the same data, so keep a backup you trust (Settings › Import and export › Back up everything…)."
+            echo
+            node scripts/changelog.mjs | tail -n +3
+          } > notes.md
+
+      # The tag first, so the pre-release points at what the files are built from; the notes
+      # last, so a nightly build is told of a later one only once its files are there.
+      - run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -X PATCH -f sha="$GITHUB_SHA" -F force=true > /dev/null 2>&1 \
+            || gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA" > /dev/null
+          gh release view nightly > /dev/null 2>&1 \
+            || gh release create nightly --prerelease --verify-tag --title "xtermium nightly" --notes "Being published."
+          gh release upload nightly out/* --clobber
+          gh release edit nightly --prerelease --title "xtermium nightly $(date -u +%F)" --notes-file notes.md

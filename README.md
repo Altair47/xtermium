@@ -55,6 +55,20 @@ The macOS app isn't signed or notarized yet: that takes an Apple Developer membe
 
 Both scripts check each download against the sha256 GitHub publishes for it before installing anything. Read [install.ps1](https://xtermium.com/install.ps1) or [install.sh](https://xtermium.com/install.sh) first if you like.
 
+### Nightly builds
+
+Main as it stands, built every night it has changed: what the next release will carry, before it has been used for long. The files are on the [nightly pre-release](https://github.com/xtermium/xtermium/releases/tag/nightly) (the same kinds as a release's, named `xtermium_nightly_…`), and on Windows also through Scoop:
+
+```powershell
+scoop bucket add xtermium https://github.com/xtermium/scoop
+scoop uninstall xtermium          # the release, if it is installed: your data stays
+scoop install xtermium/xtermium-nightly
+scoop config update_nightly true  # once: Scoop then updates nightly builds, by their date
+scoop update xtermium-nightly     # the latest night's build
+```
+
+A nightly build installs over the release and opens the same data, so keep a backup you trust (Settings › Import and export › Back up everything…). Settings › About says "nightly" with the commit it was built from, and its update check looks for a later nightly. To go back, install the latest release again.
+
 ## Contents
 
 - **Start:** [Get it](#get-it) · [What you get](#what-you-get) · [Using it](#using-it)

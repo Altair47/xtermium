@@ -206,6 +206,14 @@ npm run tauri build -- --debug --no-bundle   # standalone debug exe: target/debu
   package.json's in step). A PR that raises it publishes `v<version>` when merged; merges without
   a bump publish nothing (release.yml skips a version already tagged). Pre-1.0: a new feature or
   a breaking change bumps the minor, a fix the patch. Bump only when asked to release.
+- **Merged work ships as nightly builds first; releases are seldom.** `nightly.yml` builds main
+  every night it has changed (all three systems, or nothing) and replaces the files of the one
+  rolling `nightly` pre-release, under names without a version (`xtermium_nightly_…`); the Scoop
+  bucket's `xtermium-nightly` and the site link to them. A nightly build carries the last
+  release's version, `XTERMIUM_NIGHTLY` (its commit) makes it say "nightly" in Settings › About,
+  and its update check reads the commit on the first line of that pre-release's notes
+  (`support.rs` `latest`): keep that line's shape in nightly.yml. A release follows once the
+  nightlies have held up.
 - The PR title and the commit bodies' bullets become the release notes (`scripts/changelog.mjs`,
   run by release.yml, everything merged since the previous tag): write them for developers
   reading what changed.
