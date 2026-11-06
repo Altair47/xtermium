@@ -408,7 +408,9 @@ whole). In Arabic, Hindi, Japanese and Chinese (`lang` ar, hi, ja, zh) `--short`
 Every window starts with xtermium's own title bar (`TitleBar.svelte`, `--titlebar`, as tall as
 the tab strip: 34px) instead of the system's, so it looks the same on Windows, Linux and macOS. It
 sits on the window's ground with no panel of its own, in three parts. At the start, 13px in, the
-mark alone (`Logo.svelte` with `mark`, 26px), then the main window's tools, icon-only at 21px and
+mark alone (`Logo.svelte` with `mark`, 26px; or the picture chosen under Settings › Appearance ›
+App icon, which also takes the mark's place on the start screen, the windows, the taskbar and the
+tray), then the main window's tools, icon-only at 21px and
 `weak` until pointed at: the burger that collapses and expands the sidebar, a local shell,
 Tunnels and the saved layouts' menu, then, 13px apart, New session as a filled key (`raised`).
 In the centre: a magnifier that opens the palette on its Sessions filter, then a field (an inset

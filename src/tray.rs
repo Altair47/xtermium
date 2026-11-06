@@ -77,12 +77,30 @@ const WINDOW_ICON: u32 = 64;
 /// The tray's slot before display scaling, in pixels.
 const TRAY_ICON: f64 = 16.0;
 
-/// The mark for a light or dark OS theme, `size` pixels square.
-fn mark(light: bool, size: u32) -> Option<Image<'static>> {
-    let png = if light { MARK_LIGHT } else { MARK_DARK };
+/// A PNG made `size` pixels square.
+fn sized(png: &[u8], size: u32) -> Option<Image<'static>> {
     let img = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?.to_rgba8();
     let img = image::imageops::resize(&img, size, size, image::imageops::FilterType::Lanczos3);
     Some(Image::new_owned(img.into_raw(), size, size))
+}
+
+/// The mark for a light or dark OS theme, `size` pixels square.
+fn mark(light: bool, size: u32) -> Option<Image<'static>> {
+    sized(if light { MARK_LIGHT } else { MARK_DARK }, size)
+}
+
+/// A picture chosen as the app's icon (`Settings::app_icon`), `size` pixels square; None for "".
+fn picture(data_url: &str, size: u32) -> Option<Image<'static>> {
+    use base64::Engine;
+    let b64 = data_url.strip_prefix("data:image/png;base64,")?;
+    sized(&base64::engine::general_purpose::STANDARD.decode(b64).ok()?, size)
+}
+
+/// The app's icon, `size` pixels square: the picture chosen in Settings › Appearance, else the
+/// mark for the OS theme.
+fn icon(h: &AppHandle, size: u32) -> Option<Image<'static>> {
+    let own = h.state::<App>().settings.lock().unwrap().app_icon.clone();
+    picture(&own, size).or_else(|| mark(light(h), size))
 }
 
 /// Where Windows keeps its theme, under HKEY_CURRENT_USER.
@@ -116,22 +134,22 @@ fn light(h: &AppHandle) -> bool {
     h.get_window("main").and_then(|w| w.theme().ok()) == Some(tauri::Theme::Light)
 }
 
-/// Gives one window the icon for the OS theme. Windows has no large icon set for our windows, so
-/// its taskbar shows this one too.
+/// Gives one window the app's icon. Windows has no large icon set for our windows, so its taskbar
+/// shows this one too.
 pub fn window_icon(w: &tauri::WebviewWindow, h: &AppHandle) {
-    if let Some(icon) = mark(light(h), WINDOW_ICON) {
+    if let Some(icon) = icon(h, WINDOW_ICON) {
         let _ = w.set_icon(icon);
     }
 }
 
-/// Puts the OS theme's mark on the tray and on every window.
+/// Puts the app's icon on the tray and on every window: after the OS theme or the chosen icon changes.
 ///
 /// ponytail: the tray's size is worked out here, so moving to a display with another scale keeps
 /// the old size until the theme next changes. Windows scales it, so it's only a little softer.
-fn show_theme(h: &AppHandle) {
+pub fn show_theme(h: &AppHandle) {
     if let Some(t) = h.tray_by_id(ID) {
         let scale = h.get_window("main").and_then(|w| w.scale_factor().ok()).unwrap_or(1.0);
-        let _ = t.set_icon(mark(light(h), (TRAY_ICON * scale).round() as u32));
+        let _ = t.set_icon(icon(h, (TRAY_ICON * scale).round() as u32));
     }
     for w in h.webview_windows().values() {
         window_icon(w, h);
@@ -202,7 +220,7 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
                 open(t.app_handle());
             }
         });
-    if let Some(icon) = mark(light(h), TRAY_ICON as u32) {
+    if let Some(icon) = icon(h, TRAY_ICON as u32) {
         tray = tray.icon(icon);
     }
     tray.build(app)?;
@@ -268,5 +286,16 @@ mod tests {
             let grey = solid().find(|p| p[0].abs_diff(p[2]) < 8).unwrap();
             assert_eq!(grey[0] < 128, light, "the diamonds should contrast with the taskbar");
         }
+    }
+
+    /// A chosen icon comes out at the size asked for; no choice, or a broken one, gives none.
+    #[test]
+    fn a_chosen_icon_is_resized_and_a_bad_one_ignored() {
+        use base64::Engine;
+        let png = base64::engine::general_purpose::STANDARD.encode(MARK_DARK);
+        let icon = picture(&format!("data:image/png;base64,{png}"), 32).unwrap();
+        assert_eq!((icon.width(), icon.height()), (32, 32));
+        assert!(picture("", 32).is_none());
+        assert!(picture("data:image/png;base64,bm90IGEgcGljdHVyZQ==", 32).is_none());
     }
 }

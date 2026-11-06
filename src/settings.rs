@@ -171,6 +171,9 @@ pub struct Settings {
     pub focus_animated: bool,
     /// The interface's accent colour (`#rrggbb`); "" = the built-in gold.
     pub accent: String,
+    /// The app's own icon (Settings › Appearance): a square `data:image/png` URL shown on the
+    /// windows, the taskbar, the tray, the title bar and the start screen; "" = the mark.
+    pub app_icon: String,
     /// Terminal colour schemes the user imported, next to the built-in `SCHEMES`.
     pub custom_schemes: Vec<Scheme>,
     /// Images used as session or folder icons, kept to pick again (ui/lib/Appearance.svelte).
@@ -339,6 +342,7 @@ impl Default for Settings {
             broadcast_outline_color: "#9aa3ad".into(),
             focus_animated: true,
             accent: String::new(),
+            app_icon: String::new(),
             custom_schemes: vec![],
             custom_icons: vec![],
             workspace: String::new(),

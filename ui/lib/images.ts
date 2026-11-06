@@ -86,3 +86,28 @@ export async function shrinkIcon(dataUrl: string): Promise<string> {
   c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/png");
 }
+
+/** The side of the app icon's square, in pixels: sharp on the taskbar and at the start screen's size. */
+const APP_ICON = 256;
+
+/** A picture file as the app's icon: a square PNG `data:` URL with the picture fitted inside,
+ *  centred, on nothing (src/tray.rs puts it on the windows and the tray). SVGs without a size
+ *  of their own fill the square. */
+export async function appIcon(file: Blob): Promise<string> {
+  const url = await new Promise<string>((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = () => fail(r.error);
+    r.readAsDataURL(file);
+  });
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const [w0, h0] = [img.naturalWidth || APP_ICON, img.naturalHeight || APP_ICON];
+  const k = APP_ICON / Math.max(w0, h0);
+  const [w, h] = [w0 * k, h0 * k];
+  const c = document.createElement("canvas");
+  c.width = c.height = APP_ICON;
+  c.getContext("2d")!.drawImage(img, (APP_ICON - w) / 2, (APP_ICON - h) / 2, w, h);
+  return c.toDataURL("image/png");
+}
