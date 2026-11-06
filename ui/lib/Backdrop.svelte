@@ -1,7 +1,9 @@
 <script lang="ts">
   // A place's background (Settings: terminal, sidebar, tab bar): its picture or shader, and over
   // it `tint`, the place's own colour at the strength set. It goes in a parent that isolates its
-  // stacking (`isolation: isolate`), under everything else there.
+  // stacking (`isolation: isolate`), under everything else there. It stands in for the parent's
+  // own background, which it clears, and is as see-through as that was (`--chrome-alpha`): a
+  // picture mustn't make a Transparent window solid where it's shown.
   import { PLACES, type Place } from "./api";
   import { show } from "./shader";
   import { app, backdrops, loadBackdrop } from "./state.svelte";
@@ -23,19 +25,35 @@
 </script>
 
 {#if b && data}
-  {#if b.kind === "image"}
-    <div class="layer" style:background="url('{data}') {FIT[b.fit] ?? FIT.fill}"></div>
-  {:else}
-    {#key data}<canvas class="layer" {@attach (el) => show(el, data)}></canvas>{/key}
-  {/if}
-  <div class="layer" style:background={tint(1 - b.show)}></div>
+  <div class="place-backdrop">
+    <!-- the place's colour under a picture that doesn't cover it all (fit, centre) -->
+    <div class="layer" style:background={tint(1)}></div>
+    {#if b.kind === "image"}
+      <div class="layer" style:background="url('{data}') {FIT[b.fit] ?? FIT.fill}"></div>
+    {:else}
+      {#key data}<canvas class="layer" {@attach (el) => show(el, data)}></canvas>{/key}
+    {/if}
+    <div class="layer" style:background={tint(1 - b.show)}></div>
+  </div>
 {/if}
 
 <style>
-  .layer {
+  /* one layer as see-through as the parent's background was, so the window's ground and this
+     together still make the Opacity setting */
+  .place-backdrop {
     position: absolute;
     inset: 0;
     z-index: -1;
+    opacity: var(--chrome-alpha);
+    pointer-events: none;
+  }
+  /* its colour is in the backdrop now: painted twice it would be more solid than set */
+  :global(:has(> .place-backdrop)) {
+    background: none !important;
+  }
+  .layer {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     pointer-events: none;
