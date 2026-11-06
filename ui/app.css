@@ -624,6 +624,13 @@ kbd {
   filter: brightness(1.15);
 }
 
+/* "default": the colour it would have anyway (a folder's, the kind's), struck through; shared by
+   Appearance.svelte and the sidebar's selection menu */
+.swatch.auto,
+.swatch.auto:is(:hover, .selected) {
+  background: linear-gradient(135deg, transparent 45%, var(--weak) 45% 55%, transparent 55%), color-mix(in srgb, var(--c) 35%, transparent);
+}
+
 /* the picked one keeps its colour (not the gold wash of other picked buttons), ringed */
 .swatch.selected {
   background: var(--c);

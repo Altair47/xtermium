@@ -12,8 +12,9 @@
   import { _ } from "./i18n.svelte";
   import Logo from "./Logo.svelte";
 
-  /** `title`: the window's name, shown in the centre unless `children` draw the centre themselves. */
-  let { title = "", children }: { title?: string; children?: Snippet } = $props();
+  /** `title`: the window's name, shown in the centre unless `children` draw the centre themselves.
+   *  `tools`: buttons beside the mark (the main window's local shell and tunnels). */
+  let { title = "", children, tools }: { title?: string; children?: Snippet; tools?: Snippet } = $props();
 
   const w = getCurrentWindow();
   let max = $state(false);
@@ -37,6 +38,7 @@
   <header class="titlebar" class:mac={OS === "macos"} class:away data-tauri-drag-region="deep">
     <div class="start">
       {#if OS !== "macos"}<div class="mark"><Logo mark /></div>{/if}
+      {@render tools?.()}
     </div>
     <div class="centre">
       {#if children}{@render children()}{:else if title}<span class="name">{title}</span>{/if}
@@ -72,6 +74,9 @@
   }
   /* The mark stands over the sidebar's first column of icons. */
   .start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding-inline-start: 21px;
   }
   /* macOS's own buttons sit on the left, whichever way the text runs. */
@@ -80,7 +85,7 @@
   }
   /* An even size in an even bar: its edges land on whole pixels. */
   .mark {
-    width: 20px;
+    width: 22px;
   }
   .centre {
     min-width: 0;

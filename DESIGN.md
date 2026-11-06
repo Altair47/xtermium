@@ -408,8 +408,9 @@ whole). In Arabic, Hindi, Japanese and Chinese (`lang` ar, hi, ja, zh) `--short`
 Every window starts with xtermium's own title bar (`TitleBar.svelte`, `--titlebar`, as tall as a
 control: 26px) instead of the system's, so it looks the same on Windows, Linux and macOS. It sits
 on the window's ground with no panel of its own, in three parts. At the start, the mark alone
-(`Logo.svelte` with `mark`, 20px, an even size in an even bar), 21px in, over the sidebar's first
-column of icons. In the centre of the window, where the keyboard goes: the focused tab's icon in
+(`Logo.svelte` with `mark`, 22px, an even size in an even bar), 21px in, over the sidebar's first
+column of icons, then the main window's two always-there tools, a local shell and Tunnels, icon-only
+at 18px, `weak` until pointed at. In the centre of the window, where the keyboard goes: the focused tab's icon in
 its kind hue, its name (mono 500, `fg`) and, in `weak`, what the shell or page says of itself;
 with no tab open, a magnifier and the palette's own placeholder. It is a flat button as tall as
 the bar and square, at most `min(610px, 50vw)` wide, that opens the command palette; locked, the

@@ -5,12 +5,12 @@
   // Enter closes the search and puts the keyboard on it in the tree, Escape just closes it. The
   // list is one stop for Tab; arrow keys walk it.
   // Sessions with a tab open have a dot on their icon. Ctrl+click (Cmd on macOS) and Shift+click
-  // pick several sessions and folders, to drag, delete or move to another workspace together.
+  // pick several sessions and folders, to drag, colour, delete or move to another workspace together.
   import { tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { _, N_ } from "./i18n.svelte";
   import type { Snippet } from "svelte";
-  import { host, KVM_VENDORS, newSession, openUrl, type Folder, type Session, type Workspaces } from "./api";
+  import { COLORS, host, KVM_VENDORS, newSession, openUrl, type Folder, type Session, type Workspaces } from "./api";
   import Appearance from "./Appearance.svelte";
   import Export from "./Export.svelte";
   import Icon from "./Icon.svelte";
@@ -293,6 +293,31 @@
     app.store.folder = app.store.folder.filter((f) => !folders.some((p) => inside(f.path, p)));
     [deletingMany, chosen] = [null, new Set()];
     saveStore();
+  }
+
+  /** Gives every picked session, and every picked folder itself, name colour `c` ("": none, so a
+   *  session takes its folder's again). Each row seen picked gets it, even one inside a picked
+   *  folder; Undo puts the old colours back. */
+  function tintChosen(c: string) {
+    const keys = [...chosen];
+    const sessions = keys.filter((k) => k[0] === "s").map((k) => Number(k.slice(1))).filter((i) => app.store.session[i]);
+    const paths = keys.filter((k) => k[0] === "f").map((k) => k.slice(1));
+    const before = { sessions: sessions.map((i) => app.store.session[i].color), folders: paths.map((p) => folderOf(p)?.color ?? "") };
+    const paint = (sc: (n: number) => string, fc: (n: number) => string) => {
+      sessions.forEach((i, n) => app.store.session[i] && (app.store.session[i].color = sc(n)));
+      paths.forEach((p, n) => {
+        const f = folderOf(p);
+        if (f) f.color = fc(n);
+        // A folder that exists only through its sessions is stored once it has a colour to keep.
+        else if (fc(n)) app.store.folder.push({ path: p, tags: [], color: fc(n), icon: "" });
+      });
+      saveStore();
+    };
+    paint(() => c, () => c);
+    toast(_("Changed the colour of {n} names.", { n: sessions.length + paths.length }), {
+      label: _("Undo"),
+      run: () => paint((n) => before.sessions[n], (n) => before.folders[n]),
+    });
   }
 
   /** The other workspaces, to move sessions to ("" the default one). */
@@ -673,6 +698,16 @@
   {@const p = picked()}
   <div class="menu" {@attach menuAt(() => (menu = null), menu.x, menu.y)}>
     {#if elsewhere.length}<button onclick={() => (moving = p)}><Icon name="cluster" />{_("Move to workspace…")}</button>{/if}
+    <!-- the swatches are menu items too: arrow keys reach them, Enter or a click applies one -->
+    <div class="sep tints" role="group" aria-label={_("Name colour")}>
+      <span class="weak">{_("Name colour")}</span>
+      <div class="row wrap">
+        <button class="swatch auto" title={_("No colour")} aria-label={_("No colour")} style:--c="var(--fg)" onclick={() => tintChosen("")}></button>
+        {#each COLORS as c (c)}
+          <button class="swatch" title={c} aria-label={_("Colour {c}", { c })} style:--c={c} onclick={() => tintChosen(c)}></button>
+        {/each}
+      </div>
+    </div>
     <button onclick={() => (chosen = new Set())}>{_("Clear selection")}</button>
     <button class="danger" onclick={() => (deletingMany = p)}><Icon name="trash" />{_("Delete…")}</button>
   </div>
@@ -907,6 +942,27 @@
   .item.hit,
   .item.chosen {
     background: var(--gold-soft);
+  }
+  /* the selection menu's colour row, lined up with the items' text */
+  .tints {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 3px 8px 5px;
+    padding-inline-start: calc(8px + 18px + 5px);
+  }
+  .tints .row {
+    gap: 5px;
+  }
+  /* a menu's buttons are see-through rounded rows; these stay round swatches */
+  .menu .tints .swatch {
+    width: 18px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .menu .tints .swatch:not(.auto) {
+    background: var(--c);
   }
   .choices {
     display: flex;
