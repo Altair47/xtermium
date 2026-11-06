@@ -53,6 +53,11 @@ typography:
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.4
+  short-strong:
+    fontFamily: "JetBrains Mono Variable, Cascadia Mono, Consolas, monospace"
+    fontSize: "13px"
+    fontWeight: 500
+    lineHeight: 1.4
   body:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Ubuntu, sans-serif"
     fontSize: "13px"
@@ -156,11 +161,34 @@ components:
   tab-active:
     backgroundColor: "{colors.bg}"
     textColor: "{colors.fg}"
+    typography: "{typography.short-strong}"
+  title-bar:
+    backgroundColor: "transparent"
+    textColor: "{colors.weak}"
+    height: "{spacing.bar}"
+  title-tool:
+    backgroundColor: "transparent"
+    textColor: "{colors.weak}"
+    rounded: "{rounded.control}"
+    size: "{spacing.control}"
+  title-tool-new:
+    backgroundColor: "{colors.raised}"
+    textColor: "{colors.fg}"
+    rounded: "{rounded.control}"
+    size: "{spacing.control}"
+  title-field:
+    backgroundColor: "{colors.deep}"
+    textColor: "{colors.weak}"
+    typography: "{typography.short}"
+    rounded: "{rounded.control}"
+    padding: "0 8px"
+    height: "{spacing.control}"
+    width: "clamp(233px, 38vw, 610px)"
   rack-row:
     textColor: "{colors.fg}"
     padding: "0 5px"
     height: "{spacing.row}"
-  rack-row-hit:
+  rack-row-chosen:
     backgroundColor: "{colors.gold-soft}"
   panel:
     backgroundColor: "{colors.panel}"
@@ -410,16 +438,17 @@ the tab strip: 34px) instead of the system's, so it looks the same on Windows, L
 sits on the window's ground with no panel of its own, in three parts. At the start, 13px in, the
 mark alone (`Logo.svelte` with `mark`, 26px; or the picture chosen under Settings › Appearance ›
 App icon, which also takes the mark's place on the start screen, the windows, the taskbar and the
-tray), then the main window's tools, icon-only at 21px and
-`weak` until pointed at: the burger that collapses and expands the sidebar, a local shell,
+tray), then the main window's tools, icon-only, 21px glyphs in 26px squares 3px apart, `weak`
+until pointed at: the burger that collapses and expands the sidebar, a local shell,
 Tunnels and the saved layouts' menu, then, 13px apart, New session as a filled key (`raised`).
 In the centre: a magnifier that opens the palette on its Sessions filter, then a field (an inset
 well, 26px tall, `clamp(233px, 38vw, 610px)` wide) naming where the keyboard goes: the focused
-tab's icon in its kind hue, its name (mono 500, `fg`) and, in `weak`, what the shell or page says
+tab's icon in its kind hue, its name (`short-strong`: mono 500, `fg`) and, in `weak`, what the shell or page says
 of itself; with no tab open, the palette's own placeholder. The field opens the command palette.
 At its end, behind a hairline, a chevron opens the workspace menu (the workspace in use ticked,
 then Manage workspaces…). Locked, the centre is empty. A detached tab's window shows its name
-there. At the end, the five layout buttons (21px glyphs, the one in use amber), then the three
+there. At the end, the five layout buttons (21px glyphs in 26px squares, 3px apart, the one in
+use amber), then the three
 window buttons, 46px wide, square, their glyphs 10px hairlines in `weak`; under the pointer they
 take `hover`, and Close takes `error`. The room between is what the window is dragged by (a
 double click maximizes). While another window has the keyboard the bar's contents drop to half
@@ -427,8 +456,10 @@ strength. macOS keeps its own three buttons at the left instead of the mark, and
 them room. Dialogs, the palette and the lock screen start under the bar, so the window can always
 be moved, minimized and closed; full screen has no bar.
 
-The sidebar has no header: its tree starts 5px in, and the collapsed rail holds only the
-sidebar's foot. Finding a session is the palette's job (it searches names, addresses, folders and
+Every control in the bar is as tall as the field (`--control`), so the row shares one top and
+bottom edge, centred in the bar. The sidebar has no header: its first row's middle sits on the tab
+strip's middle beside it (`calc((var(--bar) - var(--row)) / 2)` above it), and the collapsed rail
+holds only the sidebar's foot. Finding a session is the palette's job (it searches names, addresses, folders and
 folder tags).
 
 Under the bar the window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
@@ -564,7 +595,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   active tab takes the content's `bg` and drops its bottom line so it joins its pane. A 2px
   connector sits on top of each tab, in its mark (the tab's own, else its session's or folder's)
   or else its kind hue: hidden when idle, at 50% when the tab is visible in a split, and full on
-  the active one. The tab's icon is always in its kind hue. A drag shows a 2px amber insertion bar.
+  the active one. The tab's icon is always in its kind hue, and the active tab's name is in
+  `short-strong`, as the title bar's field names it (the mono's widths don't change with weight,
+  so the strip doesn't shift). A drag shows a 2px amber insertion bar.
 - **Session rack:** 21px rows, folders with a rotating caret (0.12s) and a hairline guide under
   each level. Leaves indent past the caret so icons in one level line up. A session with an open
   tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Chosen rows
