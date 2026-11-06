@@ -77,8 +77,10 @@
       (e.shiftKey ? all.at(-1) : all[0])?.focus();
     }
   }
-  /** Something behind took the keyboard (a terminal coming into view): it comes back here. */
-  const focusin = (e: FocusEvent) => onTop() && !win.contains(e.target as Node) && home();
+  /** Something behind took the keyboard (a terminal coming into view): it comes back here. A menu
+   *  the dialog opened keeps it until it closes: it sits at the end of the page (menu.ts), outside
+   *  the dialog, and hands the keyboard back itself. */
+  const focusin = (e: FocusEvent) => onTop() && !win.contains(e.target as Node) && !(e.target as Element).closest?.(".menu") && home();
 </script>
 
 <svelte:window onkeydown={keydown} />

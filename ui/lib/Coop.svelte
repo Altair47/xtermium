@@ -1,13 +1,16 @@
 <script lang="ts">
-  // The Terminal Co-op dialog (Ctrl+Shift+G): start a ring or join one, then who is in it. It polls
-  // nothing itself: while it is open it asks the backend for a fresh look every 2 seconds, and what
-  // it draws is the `coop` event's picture, kept in `app.coop` (state.svelte.ts).
+  // The Terminal Co-op dialog (Ctrl+Shift+G): join a ring or start one, then who is in it, drawn as
+  // a ring (CoopRing.svelte) with each person's traffic. It polls nothing itself: while it is open it
+  // asks the backend for a fresh look every 2 seconds and for the traffic every second, and what it
+  // draws is the `coop` event's picture, kept in `app.coop` (state.svelte.ts).
   import { invoke } from "@tauri-apps/api/core";
   import { _ } from "./i18n.svelte";
-  import { openUrl } from "./api";
-  import { clock, passcode, PASSCODE_LENGTH } from "./coop";
+  import { openUrl, type CoopMember, type CoopTraffic } from "./api";
+  import { clock, passcode, PASSCODE_LENGTH, rate, RING_SEATS, type RingFlow } from "./coop";
   import CoopPic from "./CoopPic.svelte";
+  import CoopRing from "./CoopRing.svelte";
   import Icon from "./Icon.svelte";
+  import { menu } from "./menu";
   import Modal from "./Modal.svelte";
   import { app, CHECKOUT, copyText, loadAccount } from "./state.svelte";
 
@@ -22,6 +25,9 @@
   // The owner hears of the people turned away too ("kicked"); they are no longer in the ring.
   const inside = $derived(ring?.members.filter((m) => m.state === "approved") ?? []);
 
+  /** More people than the ring is drawn for: they are listed instead, without their traffic. */
+  const crowded = $derived(inside.length > RING_SEATS);
+
   let code = $state("");
   let error = $state("");
   let busy = $state(false);
@@ -32,9 +38,29 @@
   /** Only the owner asks the server who is waiting; a viewer hears of changes from the `coop` event. */
   const owns = $derived(!!ring?.owner);
   const refresh = () => owns && invoke("coop_refresh").catch(() => {});
+  /** What each person sends and receives, by their id (the backend says whose it knows). */
+  let flows = $state<Record<string, RingFlow>>({});
+  /** The counters as read over the last 3 seconds, oldest first. A rate is the growth since the
+   *  oldest, so the figures move calmly instead of leaping with every burst. */
+  let reads: { at: number; by: Map<string, CoopTraffic> }[] = [];
+  async function measure() {
+    if (!ring || crowded) return void (flows = {});
+    const list = await invoke<CoopTraffic[]>("coop_traffic").catch(() => [] as CoopTraffic[]);
+    const at = performance.now();
+    flows = Object.fromEntries(
+      list.map((t) => {
+        const old = reads.find((r) => r.by.has(t.id));
+        const was = old?.by.get(t.id);
+        const secs = old ? (at - old.at) / 1000 : 0;
+        return [t.id, { up: was ? rate(t.up, was.up, secs) : 0, down: was ? rate(t.down, was.down, secs) : 0, sent: t.up, received: t.down }];
+      }),
+    );
+    reads = [...reads.filter((r) => at - r.at < 3500), { at, by: new Map(list.map((t) => [t.id, t])) }];
+  }
   $effect(() => {
     refresh();
-    const [look, tick] = [setInterval(refresh, 2000), setInterval(() => (now = Date.now()), 1000)];
+    measure();
+    const [look, tick] = [setInterval(refresh, 2000), setInterval(() => ((now = Date.now()), measure()), 1000)];
     return () => (clearInterval(look), clearInterval(tick));
   });
   // Whether the account has Pro is asked afresh each time the dialog opens; a refusal is forgotten once it has it.
@@ -67,11 +93,36 @@
 
   /** Whose ring it is, for someone who joined it. */
   const owner = $derived(ring?.members.find((m) => m.owner)?.name);
+  /** Before there is a ring it is drawn with you alone on it. */
+  const alone = $derived.by((): CoopMember[] => {
+    const a = app.sync.account;
+    return signedIn && a ? [{ id: "", name: a.name || a.email, image: a.image, state: "approved", you: true }] : [];
+  });
+
+  /** The person the owner picked on the ring, and where their menu opens. */
+  let picked = $state<{ m: CoopMember; x: number; y: number } | null>(null);
+  /** The person being given another name, and the name typed so far. */
+  let renaming = $state<{ id: string; was: string; name: string } | null>(null);
+  const keep = () => ([renaming, error] = [null, ""]);
+  async function rename() {
+    const r = renaming;
+    const name = r?.name.trim();
+    if (!r || !name || busy) return;
+    if (name === r.was || (await act("coop_rename", { user: r.id, name }))) renaming = null;
+  }
 </script>
+
+<!-- A click anywhere closes the menu, but the click on a seat that opened it. -->
+<svelte:window onclick={(e) => (e.target as Element).closest?.(".seat") || (picked = null)} />
 
 {#snippet person(m: { name: string; image: string | null })}
   <CoopPic name={m.name} image={m.image} />
   <span class="grow name" title={m.name}>{m.name}</span>
+{/snippet}
+
+{#snippet renameFoot()}
+  <button onclick={keep}>{_("Cancel")}</button>
+  <button class="primary" disabled={busy || !renaming?.name.trim()} onclick={rename}>{_("Rename")}</button>
 {/snippet}
 
 {#snippet foot()}
@@ -98,13 +149,6 @@
         <button class="link" onclick={() => openUrl(CHECKOUT).catch((e) => (app.status = String(e)))}>{_("Get Pro")}</button>
       </p>
     {/if}
-    <h3>{_("Start a ring")}</h3>
-    <p class="weak">{_("You get a passcode. The people you give it to ask to join, and you say yes.")}</p>
-    <div class="row">
-      <button class="primary" disabled={!signedIn || needsPro || busy} onclick={() => act("coop_create")}>
-        {#if busy}<Icon name="loader-alt" spin />{/if}{_("Start a ring")}
-      </button>
-    </div>
     <h3>{_("Join a ring")}</h3>
     <p class="weak">{_("Ask the person who started it for the passcode.")}</p>
     <div class="row">
@@ -121,6 +165,14 @@
       />
       <button disabled={!signedIn || busy || passcode(code).length !== PASSCODE_LENGTH} onclick={join}>{_("Join")}</button>
     </div>
+    <h3>{_("Start a ring")}</h3>
+    <p class="weak">{_("You get a passcode. The people you give it to ask to join, and you say yes.")}</p>
+    <div class="row">
+      <button class="primary" disabled={!signedIn || needsPro || busy} onclick={() => act("coop_create")}>
+        {#if busy}<Icon name="loader-alt" spin />{/if}{_("Start a ring")}
+      </button>
+    </div>
+    {#if alone.length}<CoopRing people={alone} />{/if}
   {:else if ring.owner}
     <p class="weak">{_("Give people this passcode. They ask to join, and you say yes.")}</p>
     <div class="passcode row">
@@ -143,15 +195,20 @@
       {/each}
     {/if}
     <h3>{_("In the ring")}</h3>
-    {#each inside as m (m.id)}
-      <div class="row person">
-        {@render person(m)}
-        {#if !m.owner}
-          <button class="flat" disabled={busy} title={_("Take {name} out of the ring", { name: m.name })} onclick={() => act("coop_kick", { user: m.id })}>{_("Kick")}</button>
-        {/if}
-      </div>
-    {/each}
-    {#if inside.length < 2}<p class="weak">{_("Nobody else is in yet.")}</p>{/if}
+    {#if crowded}
+      {#each inside as m (m.id)}
+        <div class="row person">
+          {@render person(m)}
+          {#if !m.owner}
+            <button class="flat" disabled={busy} onclick={() => (renaming = { id: m.id, was: m.name, name: m.name })}>{_("Rename…")}</button>
+            <button class="flat" disabled={busy} onclick={() => act("coop_kick", { user: m.id })}>{_("Kick")}</button>
+          {/if}
+        </div>
+      {/each}
+    {:else}
+      <CoopRing people={inside} {flows} picked={picked?.m.id} onpick={(m, x, y) => (picked = { m, x, y })} />
+      <p class="weak">{inside.length < 2 ? _("Nobody else is in yet.") : _("Click a person on the ring to rename or kick them.")}</p>
+    {/if}
     <p class="weak">{_("Right-click a tab › Share with the ring puts it in front of everyone here.")}</p>
   {:else if ring.state !== "joined"}
     <p class="row weak">
@@ -159,13 +216,35 @@
     </p>
   {:else}
     <p>{owner ? _("You're in {name}'s ring.", { name: owner }) : _("You're in a ring.")}</p>
-    {#each inside as m (m.id)}
-      <div class="row person">{@render person(m)}</div>
-    {/each}
+    {#if crowded}
+      {#each inside as m (m.id)}
+        <div class="row person">{@render person(m)}</div>
+      {/each}
+    {:else}
+      <CoopRing people={inside} {flows} />
+    {/if}
     <p class="weak">{_("The tabs the owner shares open as tabs here. Type and click in them as if they were yours.")}</p>
   {/if}
-  {#if error && !refused}<p class="error">{error}</p>{/if}
+  {#if error && !refused && !renaming}<p class="error">{error}</p>{/if}
 </Modal>
+
+{#if picked}
+  {@const m = picked.m}
+  <div class="menu" {@attach menu(() => (picked = null), picked.x, picked.y)}>
+    <button onclick={() => (renaming = { id: m.id, was: m.name, name: m.name })}><Icon name="edit" />{_("Rename…")}</button>
+    <button class="danger" disabled={busy} onclick={() => act("coop_kick", { user: m.id })}><Icon name="x" />{_("Kick")}</button>
+  </div>
+{/if}
+
+{#if renaming}
+  <Modal title={_("Rename")} onclose={keep} foot={renameFoot}>
+    <p class="weak">{_("Give {name} another name. Everyone in the ring sees it instead of the one they chose.", { name: renaming.was })}</p>
+    <div class="row">
+      <input class="grow" bind:value={renaming.name} maxlength="120" autocomplete="off" spellcheck="false" aria-label={_("Name")} onkeydown={(e) => e.key === "Enter" && rename()} />
+    </div>
+    {#if error}<p class="error">{error}</p>{/if}
+  </Modal>
+{/if}
 
 <style>
   .code {

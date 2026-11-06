@@ -1539,6 +1539,69 @@ pub async fn coop_kick(user: String) -> Res<Payload> {
     Ok(payload)
 }
 
+/// Gives a person in the ring another name (theirs was offensive, say). The server keeps it for this
+/// ring only, so everyone in the ring reads the new one at their next look.
+#[tauri::command]
+pub async fn coop_rename(user: String, name: String) -> Res<Payload> {
+    let ring = host()?;
+    let name = line(&name);
+    if !id_ok(&user) || user == ring.st().host.id {
+        return Err("That person isn't in the ring.".into());
+    }
+    if name.is_empty() {
+        return Err("Type a name.".into());
+    }
+    let path = format!("/v1/coop/rings/{}/members/{user}/name", ring.id);
+    call(&ring.handle, reqwest::Method::POST, &path, Some(serde_json::json!({ "name": name })))
+        .await
+        .map_err(|e| said(&e))?;
+    let _ = ring.fetch_members().await;
+    Ok(ring.payload())
+}
+
+/// The bytes one person has sent and received in the ring since their connection opened
+/// (`coop_traffic`): the dialog reads them every second and shows the difference.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Traffic {
+    id: String,
+    up: u64,
+    down: u64,
+}
+
+/// Each person's bytes, from this side's connections (`links`: whose it is, what we sent them and
+/// what they sent us). Ours is the sum; theirs is their link turned round, which is all of it only
+/// when `whole`: the owner's ring is a star, so the owner knows everyone's, and a viewer knows the
+/// owner's while nobody else is in.
+fn tally(me: &str, links: &[(String, u64, u64)], whole: bool) -> Vec<Traffic> {
+    if links.is_empty() {
+        return vec![];
+    }
+    let (sent, got) = links.iter().fold((0, 0), |(s, g), l| (s + l.1, g + l.2));
+    let mut out = vec![Traffic { id: me.into(), up: sent, down: got }];
+    if whole {
+        out.extend(links.iter().map(|(id, s, g)| Traffic { id: id.clone(), up: *g, down: *s }));
+    }
+    out
+}
+
+/// The ring's traffic so far, per person, as QUIC counted it (everything on the wire, the relay's
+/// way included). Empty while nobody is connected.
+#[tauri::command]
+pub fn coop_traffic() -> Vec<Traffic> {
+    let Some(ring) = current() else { return vec![] };
+    let st = ring.st();
+    let link = |id: &str, c: &Connection| {
+        let s = c.stats();
+        (id.to_string(), s.udp_tx.bytes, s.udp_rx.bytes)
+    };
+    let links: Vec<_> = if ring.owner {
+        st.peers.values().map(|p| link(&p.person.id, &p.conn)).collect()
+    } else {
+        st.link.iter().map(|l| link(&st.host.id, &l.conn)).collect()
+    };
+    tally(&st.me.id, &links, ring.owner || st.members.len() <= 1)
+}
+
 /// Ends the ring for everyone (as a viewer: leaves it).
 #[tauri::command]
 pub async fn coop_end() -> Res<()> {
@@ -1894,6 +1957,18 @@ mod tests {
         assert!(!urls(relay_of(None)).iter().any(|u| u.contains("iroh") || u.contains("n0")));
     }
 
+    /// The owner knows everyone's traffic (theirs is their link turned round); a viewer knows its
+    /// own, and the owner's only while nobody else is in the ring.
+    #[test]
+    fn traffic_is_told_per_person() {
+        let t = |id: &str, up, down| Traffic { id: id.into(), up, down };
+        let links = [("a".to_string(), 100, 7), ("b".to_string(), 50, 3)];
+        assert_eq!(tally("me", &links, true), [t("me", 150, 10), t("a", 7, 100), t("b", 3, 50)]);
+        assert_eq!(tally("me", &links[..1], true), [t("me", 100, 7), t("a", 7, 100)]);
+        assert_eq!(tally("me", &links[..1], false), [t("me", 100, 7)]);
+        assert_eq!(tally("me", &[], true), []);
+    }
+
     #[test]
     fn user_ids_are_checked_before_a_path() {
         assert!(id_ok("a1B2_c-3"));
@@ -2015,6 +2090,10 @@ mod tests {
                 panic!("no input")
             };
             assert_eq!(t, "ls\n");
+
+            // The connection counts what crossed it (`coop_traffic`): the three frames came in, the input went out.
+            let seen = conn.stats();
+            assert!(seen.udp_rx.bytes > 900_000 && seen.udp_tx.bytes > 0, "the traffic is counted");
 
             conn.close(LEFT.into(), b"left");
             served.abort();
