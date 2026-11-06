@@ -103,7 +103,7 @@
 <style>
   .backdrop {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar) 0 0;
     z-index: 20;
     display: grid;
     place-items: center;

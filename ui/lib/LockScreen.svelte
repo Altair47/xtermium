@@ -108,10 +108,10 @@
 {/if}
 
 <style>
-  /* Over everything, dialogs included, and opaque: nothing behind it shows. */
+  /* Over everything but the title bar, dialogs included, and opaque: nothing behind it shows. */
   .lockscreen {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar) 0 0;
     z-index: 10000;
     display: grid;
     place-items: center;

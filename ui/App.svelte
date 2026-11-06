@@ -32,6 +32,7 @@
   import { _, N_, setLanguage } from "./lib/i18n.svelte";
   import { app, boot, dismiss, lock, lookOf, notify, saveStore, shortcut, tell, tip, toast, toasts, sessionKey, siteIcon, syncNow, takeRestore, workspaceOp, type SyncSide } from "./lib/state.svelte";
   import Terminal, { IGNORED } from "./lib/Terminal.svelte";
+  import TitleBar from "./lib/TitleBar.svelte";
   import Tunnels from "./lib/Tunnels.svelte";
   import Web from "./lib/Web.svelte";
 
@@ -522,13 +523,15 @@
     if (!t.id || !detachable(k)) return void (app.status = _("Only terminal and RDP tabs can move to a window of their own."));
     const box = document.querySelector(`.view[data-pane="${panes.indexOf(key)}"]`)?.getBoundingClientRect();
     const scale = app.settings?.ui_scale ?? 1;
+    // The new window has a title bar of its own over the view: the view keeps its size.
+    const bar = document.querySelector<HTMLElement>(".titlebar")?.offsetHeight ?? 0;
     try {
       await invoke("detach_tab", {
         id: t.id,
         title: titleOf(t),
         state: { id: t.id, title: titleOf(t), zoom: t.zoom ?? 0, session: $state.snapshot(t.session) },
         width: (box?.width ?? 800) * scale,
-        height: (box?.height ?? 500) * scale,
+        height: ((box?.height ?? 500) + bar) * scale,
       });
     } catch (e) {
       return void (app.status = String(e));
@@ -1898,6 +1901,23 @@
   {/if}
 {/if}
 
+<!-- The bar's centre says where the keyboard goes, the focused tab, and opens the palette, which goes anywhere else. Locked, it says nothing. -->
+<TitleBar>
+  {#if ready && app.locked === null && !lock.locked}
+    <button class="flat where" tabindex="-1" title={tip(_("Command palette"), "palette")} onclick={() => run("palette")}>
+      {#if activeTab}
+        {@const look = lookOf(activeTab.session)}
+        {#if activeTab.alive}<SessionIcon icon={look.icon} color={look.color} size={16} still />{:else}<Icon name="error" size={16} color="var(--warn)" />{/if}
+        <span class="name">{titleOf(activeTab)}</span>
+        <!-- the shell's or page's own title, when it says more than the name -->
+        {#if activeTab.title && activeTab.title !== titleOf(activeTab)}<span>{activeTab.title}</span>{/if}
+      {:else}
+        <Icon name="search" size={16} />
+        <span>{_("Type a command, a session, or user@host to connect")}</span>
+      {/if}
+    </button>
+  {/if}
+</TitleBar>
 <LockScreen />
 
 <div class="toasts" aria-live="polite">
@@ -1916,7 +1936,7 @@
   .app {
     height: 100%;
     display: flex;
-    padding: var(--gap);
+    padding: 0 var(--gap) var(--gap); /* the title bar is the room above */
   }
   .rack,
   .center,
@@ -1994,15 +2014,47 @@
     cursor: col-resize;
   }
   /* the collapsed sidebar */
+  /* its first button on the tab strip's line, as the open sidebar's top row is */
   .rail {
     width: 38px;
     align-items: center;
     gap: 2px;
-    padding: 8px 0;
+    padding: calc((var(--bar) - var(--control)) / 2) 0 8px;
   }
   /* collapse and expand point the way the sidebar goes, on whichever side it is */
   :global([dir="rtl"]) .flip :global(.icon) {
     transform: scaleX(-1);
+  }
+
+  /* ---- the title bar's centre: the focused tab, a way into the palette ---- */
+  /* as tall as the bar and square, as the window buttons are; never so wide that no bar is left
+     to drag the window by */
+  .where {
+    min-width: 0;
+    max-width: min(610px, 50vw);
+    height: var(--titlebar);
+    padding: 0 13px;
+    border: 0;
+    border-radius: 0;
+    color: inherit;
+  }
+  .where:hover {
+    color: var(--fg);
+  }
+  .where span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .where .name {
+    flex: none;
+    max-width: 233px;
+    color: var(--fg);
+    font-weight: 500;
+  }
+  /* the name and its icon are one thing; what the shell says of itself stands a little off */
+  .where .name + span {
+    margin-inline-start: 3px;
   }
 
   /* ---- tabs and view tools share one strip ---- */

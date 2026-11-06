@@ -792,9 +792,12 @@
     display: flex;
     flex-direction: column;
     gap: 5px;
-    padding: 8px 5px 5px;
+    padding: 0 5px 5px;
   }
+  /* as tall as the tab strip beside it, so the two rows of tools share a line */
   .top {
+    flex: none;
+    height: var(--bar);
     display: flex;
     align-items: center;
     gap: 2px;

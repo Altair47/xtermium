@@ -405,7 +405,27 @@ whole). In Arabic, Hindi, Japanese and Chinese (`lang` ar, hi, ja, zh) `--short`
 
 ## Layout
 
-The window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
+Every window starts with xtermium's own title bar (`TitleBar.svelte`, `--titlebar`, as tall as a
+control: 26px) instead of the system's, so it looks the same on Windows, Linux and macOS. It sits
+on the window's ground with no panel of its own, in three parts. At the start, the mark alone
+(`Logo.svelte` with `mark`, 20px, an even size in an even bar), 21px in, over the sidebar's first
+column of icons. In the centre of the window, where the keyboard goes: the focused tab's icon in
+its kind hue, its name (mono 500, `fg`) and, in `weak`, what the shell or page says of itself;
+with no tab open, a magnifier and the palette's own placeholder. It is a flat button as tall as
+the bar and square, at most `min(610px, 50vw)` wide, that opens the command palette; locked, the
+centre is empty. A detached tab's window shows its name there. At the end, the three window
+buttons, 46px wide, square, their glyphs 10px hairlines in `weak`; under the pointer they take
+`hover`, and Close takes `error`. The room between is what the window is dragged by (a double
+click maximizes). While another window has the keyboard the bar's contents drop to half strength.
+macOS keeps its own three buttons at the left instead of the mark, and the bar leaves them room.
+Dialogs, the palette and the lock screen start under the bar, so the window can always be moved,
+minimized and closed; full screen has no bar.
+
+The sidebar's top row is as tall as the tab strip (`--bar`), and the collapsed rail starts
+`calc((var(--bar) - var(--control)) / 2)` down, so the tools of both panels share one line under
+the title bar.
+
+Under the bar the window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
 the session rack (resizable; it collapses to a 38px rail), the center (a 34px tab strip over
 the panes), and the file panel (340px). The splitter between rack and center is the gap itself.
 Split panes are each their own panel (5px corners, 1px hairline) with the window's dark showing
@@ -588,7 +608,7 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   centred, in the mono at `--t-xxl`, with a flat copy button beside it and an amber spinner while
   it waits. Cancel is flat; after a failure, Try again is the primary.
 - **Lock screen:** not a dialog but a whole opaque window (`rgb(var(--window-rgb))`, over
-  everything, dialogs included) that fades in over 0.16s. A centred 377px column, 13px between
+  everything but the title bar, dialogs included) that fades in over 0.16s. A centred 377px column, 13px between
   parts: a 34px lock icon in amber, a 600 title at `--t-xl`, a password or PIN well with the
   primary Unlock beside it (Password / PIN switch as flat buttons, the picked one amber), then
   passkey and Windows Hello as plain buttons, and "Your sessions keep running." in `weak`.
