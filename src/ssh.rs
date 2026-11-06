@@ -316,13 +316,17 @@ async fn authenticate(h: &mut Handle<Client>, ep: &Endpoint, prompt: &Prompter) 
         return Ok(());
     }
 
-    let keys: Vec<std::path::PathBuf> = if ep.key.is_empty() {
-        let ssh = directories::UserDirs::new().map(|d| d.home_dir().join(".ssh")).unwrap_or_default();
-        let default = (!d.key.is_empty()).then(|| home_path(&d.key));
-        let usual = ["id_ed25519", "id_ecdsa", "id_rsa"].iter().map(|k| ssh.join(k));
-        default.into_iter().chain(usual).filter(|p| p.exists()).collect()
-    } else {
-        vec![home_path(&ep.key)]
+    // The session's own key; one that isn't on this computer is passed over (the terminal said so,
+    // `missing_keys`) for the usual ones and the password, rather than ending the session.
+    let own = (!ep.key.is_empty()).then(|| crate::paths::local(&ep.key)).filter(|p| p.exists());
+    let keys: Vec<std::path::PathBuf> = match &own {
+        Some(p) => vec![p.clone()],
+        None => {
+            let ssh = directories::UserDirs::new().map(|d| d.home_dir().join(".ssh")).unwrap_or_default();
+            let default = (!d.key.is_empty()).then(|| crate::paths::local(&d.key));
+            let usual = ["id_ed25519", "id_ecdsa", "id_rsa"].iter().map(|k| ssh.join(k));
+            default.into_iter().chain(usual).filter(|p| p.exists()).collect()
+        }
     };
     for path in keys {
         let key = match keys::load_secret_key(&path, None) {
@@ -336,7 +340,7 @@ async fn authenticate(h: &mut Handle<Client>, ep: &Endpoint, prompt: &Prompter) 
                 keys::load_secret_key(&path, Some(&pass))?
             }
             Err(e) => {
-                if !ep.key.is_empty() {
+                if own.is_some() {
                     return Err(e).with_context(|| format!("loading key {}", path.display()));
                 }
                 continue;
@@ -383,11 +387,21 @@ async fn authenticate(h: &mut Handle<Client>, ep: &Endpoint, prompt: &Prompter) 
 }
 
 /// `~/x` (or `~\x`) → the home directory's `x`.
-fn home_path(p: &str) -> std::path::PathBuf {
-    match (p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")), directories::UserDirs::new()) {
-        (Some(rest), Some(d)) => d.home_dir().join(rest),
-        _ => p.into(),
+/// Warnings for the terminal, one line each: the session's key files (its own, its jump host's)
+/// that aren't on this computer, as `crate::paths::local` finds them. Connecting goes on with
+/// the usual keys and the password.
+pub fn missing_keys(ssh: &config::Ssh) -> String {
+    let mut out = String::new();
+    for ep in std::iter::once(&ssh.target).chain(ssh.jump.as_ref()) {
+        let path = crate::paths::local(&ep.key);
+        if !ep.key.is_empty() && !path.exists() {
+            out += &format!(
+                "\x1b[33mThe key file {} isn't on this computer: trying your usual keys and the password. Edit the session to point at the key.\x1b[0m\r\n",
+                path.display()
+            );
+        }
     }
+    out
 }
 
 async fn password_auth(h: &mut Handle<Client>, user: &str, pass: &str) -> Result<bool> {
@@ -547,6 +561,7 @@ pub async fn shell(
     mut sink: impl FnMut(&[u8]),
 ) -> Result<()> {
     let opts = Options { link: Some(link.clone()), ..Options::of(Some(ssh)) };
+    sink(missing_keys(ssh).as_bytes());
     // The tab can close while this still connects (or waits on a host key or password question):
     // then it stops, and the question goes away with it (main.rs `prompt-gone`). What comes
     // meanwhile (typing, a resize, the file panel) is kept for when the shell is up.

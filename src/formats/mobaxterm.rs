@@ -126,21 +126,29 @@ fn tunnel(key: &str, val: &str) -> Option<Tunnel> {
     })
 }
 
-/// Expand the file's path macros.
+/// Expand the file's path macros. The home folder becomes `~/…`, which works on every system
+/// (and on another computer the sessions sync to); away from Windows the separators turn to `/`.
 fn path(p: &str) -> String {
-    let dirs = directories::UserDirs::new();
+    if let Some(rest) = p.strip_prefix("_ProfileDir_") {
+        return format!("~/{}", rest.trim_start_matches(['\\', '/']).replace('\\', "/"));
+    }
     let base = directories::BaseDirs::new();
     let mut s = p.to_string();
-    if let Some(d) = &dirs {
-        s = s.replace("_ProfileDir_", &d.home_dir().to_string_lossy());
-        if let Some(docs) = d.document_dir() {
-            s = s.replace("_MyDocuments_", &docs.to_string_lossy());
-        }
+    if let Some(docs) = directories::UserDirs::new().and_then(|d| d.document_dir().map(|p| p.to_path_buf())) {
+        s = s.replace("_MyDocuments_", &docs.to_string_lossy());
     }
     if let Some(b) = &base {
         s = s.replace("_LocalAppDataDir_", &b.data_local_dir().to_string_lossy());
     }
-    s
+    if cfg!(windows) { s } else { s.replace('\\', "/") }
+}
+
+/// A key path as MobaXterm writes it: one under the home folder as `_ProfileDir_\…`.
+fn moba_path(p: &str) -> String {
+    match p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+        Some(rest) => format!("_ProfileDir_\\{}", rest.replace('/', "\\")),
+        None => p.to_string(),
+    }
 }
 
 /// The serial speed field looks like "1009600" for 9600; pick the standard rate it ends with.
@@ -200,7 +208,7 @@ pub fn export(store: &Store) -> Export {
                 t.ssh.host,
                 t.ssh.port,
                 t.listen_port,
-                t.ssh.key,
+                moba_path(&t.ssh.key),
                 t.bind
             );
         }
@@ -220,7 +228,7 @@ fn line(s: &Session) -> Option<String> {
                 .map(|v| clean(v))
                 .collect::<Vec<_>>()
                 .join("%");
-            (109, format!("0%{f}%0%0%0%{}%{}%-1%0%0%0%%1080%%0%0%1", clean(&t.key), clean(&j.key)))
+            (109, format!("0%{f}%0%0%0%{}%{}%-1%0%0%0%%1080%%0%0%1", clean(&moba_path(&t.key)), clean(&moba_path(&j.key))))
         }
         Kind::Rdp { host, port, user, .. } => (91, format!("4%{}%{port}%{}", clean(host), clean(user))),
         Kind::Browser { url, .. } => (103, format!("11%{}", clean(url))),
@@ -283,7 +291,8 @@ weird=#1#7%x#y#0\r\n\
         assert_eq!(db.folder, "Lab/DB");
         let Kind::Ssh(ssh) = &db.kind else { panic!() };
         assert_eq!((ssh.target.host.as_str(), ssh.target.port, ssh.target.user.as_str()), ("192.0.2.15", 2222, "root"));
-        assert!(ssh.target.key.ends_with(".ssh\\id_ed25519") && !ssh.target.key.contains("_ProfileDir_"));
+        assert_eq!(ssh.target.key, "~/.ssh/id_ed25519", "the same on every system");
+        assert_eq!(moba_path(&ssh.target.key), "_ProfileDir_\\.ssh\\id_ed25519", "and back for MobaXterm");
         assert_eq!(ssh.command, "htop");
         let j = ssh.jump.as_ref().unwrap();
         assert_eq!((j.host.as_str(), j.user.as_str()), ("gw.example", "jumper"));
