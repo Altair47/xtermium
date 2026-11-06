@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _, N_ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { AGENT_EFFORTS, AGENT_MODES, AGENTS, broadcasts, EFFORT_TOOLS, KIND_COLOR, MCP_TOOLS, KIND_ICON, KVM_VENDORS, newEndpoint, newKind, newStyle, type Kind, type KindName, type Session } from "./api";
+  import { AGENT_EFFORTS, AGENT_MODES, AGENTS, broadcasts, EFFORT_TOOLS, KIND_COLOR, MCP_TOOLS, KIND_ICON, KVM_VENDORS, newEndpoint, newKind, SKILL_TOOLS, type Kind, type KindName, type Session } from "./api";
   import Appearance from "./Appearance.svelte";
   import Ciphers from "./Ciphers.svelte";
   import Endpoint from "./Endpoint.svelte";
@@ -19,6 +19,8 @@
   // An editable copy: the stored session changes only on Save.
   // svelte-ignore state_referenced_locally
   let s = $state(structuredClone($state.snapshot(session)));
+  // Sessions saved before skills could be turned off have no list yet.
+  if (s.kind.type === "agent") s.kind.skills_off ??= [];
   /** Closing with changes asks first: a stray Escape mustn't lose a half-typed session. */
   const start = JSON.stringify($state.snapshot(s));
   let discarding = $state(false);
@@ -30,24 +32,28 @@
     if (s.kind.type === "serial") invoke<string[]>("serial_ports").then((p) => (ports = p));
   });
 
-  /** The MCP servers the agent's tool would start in its folder (src/agent_mcp.rs); null while looking. */
+  /** The MCP servers and skills the agent's tool would load in its folder (src/agent_mcp.rs); null while looking. */
   let servers = $state<string[] | null>(null);
+  let skills = $state<string[] | null>(null);
   $effect(() => {
     const k = s.kind;
-    if (k.type !== "agent" || !MCP_TOOLS.includes(k.tool)) return;
+    if (k.type !== "agent") return;
     const [tool, dir] = [k.tool, k.dir];
-    servers = null;
+    servers = skills = null;
     // the folder is typed a letter at a time: look once it rests
-    const t = setTimeout(() => invoke<string[]>("agent_mcp_servers", { tool, dir }).then((l) => (servers = l), () => (servers = [])), 250);
+    const t = setTimeout(() => {
+      if (MCP_TOOLS.includes(tool)) invoke<string[]>("agent_mcp_servers", { tool, dir }).then((l) => (servers = l), () => (servers = []));
+      if (SKILL_TOOLS.includes(tool)) invoke<string[]>("agent_skills", { tool, dir }).then((l) => (skills = l), () => (skills = []));
+    }, 250);
     return () => clearTimeout(t);
   });
-  /** Unticked: the server stays off in this session; ticked again, it's on. */
+  /** Unticked: the server or skill stays off in this session; ticked again, it's on. */
   function serverOn(off: string[], name: string, on: boolean) {
     const at = off.indexOf(name);
     if (on && at >= 0) off.splice(at, 1);
     else if (!on && at < 0) off.push(name);
   }
-  /** Enter in "another server": that name is turned off, for servers the list can't know of. */
+  /** Enter in "another by name": that name is turned off, for ones the list can't know of. */
   function offByName(e: KeyboardEvent, off: string[]) {
     if (e.key !== "Enter") return;
     e.preventDefault();
@@ -86,18 +92,6 @@
     return [...all].sort();
   });
 
-  // The sections that start closed open by themselves when the session changed something in them.
-  const plain = newStyle();
-  // svelte-ignore state_referenced_locally
-  const k0 = s.kind;
-  const tuned =
-    (k0.type === "ssh" && (k0.ciphers.length > 0 || k0.keepalive !== null || k0.compression !== null || k0.agent_forward)) ||
-    (k0.type === "rdp" && (k0.quality !== null || k0.smb_login != null || !!k0.no_shares)) ||
-    s.style.font !== plain.font ||
-    s.style.font_size !== plain.font_size ||
-    s.style.term !== plain.term;
-  const decorated = !!(s.color || s.icon || s.notes);
-
   /** Why the session can't be saved yet; "" when it can. Where to connect comes first: the name
    *  follows from it. */
   const problem = $derived.by(() => {
@@ -127,6 +121,26 @@
     go?.(saved);
   }
 </script>
+
+<!-- An agent's MCP servers or skills, ticked on: unticked ones stay off in this session. Shut
+     until opened, as every section below the main fields, so the dialog stays short. -->
+{#snippet toggles(title: string, found: string[] | null, off: string[], note: string, tip: (n: string) => string = (n) => n)}
+  {@const all = [...new Set([...(found ?? []), ...off])]}
+  <details>
+    <summary>{title} <span class="count">{found === null ? _("Looking…") : _("{on} of {all} on", { on: all.length - off.length, all: all.length })}</span></summary>
+    <div class="toggles">
+      <div class="list">
+        {#each all as n (n)}
+          <label class="check" title={tip(n)}>
+            <input type="checkbox" checked={!off.includes(n)} onchange={(e) => serverOn(off, n, e.currentTarget.checked)} /><span class="name">{n}</span>
+          </label>
+        {/each}
+      </div>
+      <input placeholder={_("Turn off another by name, then Enter")} onkeydown={(e) => offByName(e, off)} />
+      <p class="weak">{note}</p>
+    </div>
+  </details>
+{/snippet}
 
 <!-- Where it connects is one row for every type, as an SSH session's (Endpoint). -->
 {#snippet hostPort(k: { host: string; port: number }, placeholder = "")}
@@ -186,25 +200,6 @@
         <span>{_("Arguments")}</span><input bind:value={a.args} placeholder={_("optional, e.g. --continue")} />
       {/if}
       <span>{_("Working folder")}</span><PathInput bind:value={a.dir} dirs placeholder={_("your home folder")} />
-      {#if MCP_TOOLS.includes(a.tool)}
-        {@const off = a.mcp_off}
-        <span class="top">{_("MCP servers")}</span>
-        <div class="servers">
-          {#if servers === null}<span class="weak">{_("Looking…")}</span>{/if}
-          <div class="list">
-            {#each [...new Set([...(servers ?? []), ...off])] as n (n)}
-              <label class="check" title={n === "xtermium" ? _("xtermium's own tools, there while Settings › MCP is on") : n}>
-                <input type="checkbox" checked={!off.includes(n)} onchange={(e) => serverOn(off, n, e.currentTarget.checked)} /><span class="name">{n}</span>
-              </label>
-            {/each}
-          </div>
-          <input placeholder={_("Turn off another by name, then Enter")} onkeydown={(e) => offByName(e, off)} />
-          <p class="weak">
-            {_("Untick a server to leave it off in this session; the tool's own settings don't change.")}
-            {#if a.tool === "claude"}{_("claude.ai connectors show here once Claude Code's /mcp has turned them on or off; type any other, like claude.ai Gmail.")}{/if}
-          </p>
-        </div>
-      {/if}
       <span></span>
       <p class="weak">
         {_("Runs the tool in a local terminal. Install it first: its command has to be on your PATH.")}
@@ -287,8 +282,20 @@
     <input list="editor-folders" bind:value={s.folder} placeholder="Prod/DB" />
     <datalist id="editor-folders">{#each folders as f (f)}<option value={f}></option>{/each}</datalist>
   </div>
+  {#if s.kind.type === "agent" && MCP_TOOLS.includes(s.kind.tool)}
+    {@render toggles(
+      _("MCP servers"),
+      servers,
+      s.kind.mcp_off,
+      _("A server turned off isn't started, so its tools cost the agent no tokens. The tool's own settings don't change."),
+      (n) => (n === "xtermium" ? _("xtermium's own tools, there while Settings › MCP is on") : n),
+    )}
+  {/if}
+  {#if s.kind.type === "agent" && SKILL_TOOLS.includes(s.kind.tool)}
+    {@render toggles(_("Skills"), skills, (s.kind.skills_off ??= []), _("A skill turned off isn't listed to the agent, so it costs no tokens. The tool's own settings don't change."))}
+  {/if}
   {#if s.kind.type === "ssh" || s.kind.type === "rdp" || broadcasts(s.kind)}
-    <details open={tuned}>
+    <details>
       <summary>{_("Advanced")}</summary>
       <div class="form">
         {#if s.kind.type === "ssh"}
@@ -370,7 +377,7 @@
       </div>
     </details>
   {/if}
-  <details open={decorated}>
+  <details>
     <summary>{_("Icon, colour and notes")}</summary>
     <div class="form">
       <Appearance
@@ -439,28 +446,33 @@
   details[open] > summary {
     margin-bottom: 8px;
   }
-  /* a label beside a tall field sits by its first line, not its middle */
-  .top {
-    align-self: start;
+  /* a note under the fields sits a row's gap away, like a field, not a paragraph's */
+  .form > p {
+    margin: 0;
   }
-  .servers {
+  /* how many are on, beside the closed section's name */
+  .count {
+    margin-inline-start: 5px;
+    font-size: var(--t-s);
+  }
+  .toggles {
     display: flex;
     flex-direction: column;
     gap: 5px;
     min-width: 0;
   }
   /* columns of names, scrolling past six rows: some people have dozens */
-  .servers .list {
+  .toggles .list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(calc(var(--row) * 9), 1fr));
     gap: 2px 8px;
     max-height: calc(var(--row) * 6);
     overflow-y: auto;
   }
-  .servers .check {
+  .toggles .check {
     min-width: 0;
   }
-  .servers .name {
+  .toggles .name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

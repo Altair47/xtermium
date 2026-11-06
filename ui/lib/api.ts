@@ -43,7 +43,7 @@ export type Kind =
   | { type: "kvm"; vendor: string; host: string; port: number; credential?: string }
   /** An AI agent's command line in folder `dir` ("" = home): `tool` from AGENTS, run with the flags for `mode`
    *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command. */
-  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[] }
+  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[]; skills_off?: string[] }
   /** A tab someone in your Terminal Co-op ring shares with you (App.svelte `openRemote`): `tab` is its
    *  number at the owner, `picture` a remote desktop rather than a terminal. Never stored or saved. */
   | { type: "coop"; tab: number; picture: boolean; owner: string };
@@ -79,6 +79,8 @@ export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 export const EFFORT_TOOLS = ["claude", "codex"];
 /** The agent tools whose sessions can turn MCP servers off (src/agent_mcp.rs `TOOLS`); Cursor's CLI has no way to. */
 export const MCP_TOOLS = ["claude", "codex", "opencode", "copilot"];
+/** The agent tools whose sessions can turn skills off (src/agent_mcp.rs `SKILL_TOOLS`); Copilot's and Cursor's CLIs have no way to for one run. */
+export const SKILL_TOOLS = ["claude", "codex", "opencode"];
 /** `color`: `#rrggbb` or "" (folder's, else the kind's). `icon`: a built-in icon name, a `data:` image, or "". */
 export type Session = { name: string; folder: string; kind: Kind; style: Style; color: string; icon: string; /** A built-in icon doesn't move on hover. */ still?: boolean; notes: string };
 export type TunnelKind = "Local" | "Remote" | "Dynamic";

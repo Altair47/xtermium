@@ -1,12 +1,17 @@
-//! An AI agent session's MCP servers: the ones its tool would load (read from the tool's own
-//! configuration files, never changed), and turning some off for that session only, each tool its
-//! own way. Cursor's CLI has no way to turn a server off for one run, so it isn't offered there.
+//! An AI agent session's MCP servers and skills: the ones its tool would load (read from the
+//! tool's own configuration files and skill folders, never changed), and turning some off for that
+//! session only, each tool its own way. What's off isn't loaded or listed to the model, so it
+//! costs no tokens. Cursor's CLI has no way to turn a server off for one run, and Copilot's and
+//! Cursor's none to turn a skill off, so those aren't offered there.
 
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 /// The tools whose sessions can turn servers off (ui/lib/api.ts `MCP_TOOLS`).
 pub const TOOLS: &[&str] = &["claude", "codex", "opencode", "copilot"];
+
+/// The tools whose sessions can turn skills off (ui/lib/api.ts `SKILL_TOOLS`).
+pub const SKILL_TOOLS: &[&str] = &["claude", "codex", "opencode"];
 
 /// xtermium's own server, which agent sessions get while automation runs (`automation::agent_launch`).
 pub const OWN: &str = "xtermium";
@@ -65,6 +70,56 @@ pub fn servers(tool: &str, dir: &str) -> Vec<String> {
     names.dedup();
     names.insert(0, OWN.into());
     names
+}
+
+/// The names of the skills `tool` would list in `dir` (empty: the home folder), sorted: the user's
+/// skill folders, then the project's, from `dir` up to its repository's top (only `dir` outside a
+/// repository). Plugins' skills aren't here: Claude can't turn one off on its own.
+pub fn skills(tool: &str, dir: &str) -> Vec<String> {
+    if !SKILL_TOOLS.contains(&tool) {
+        return vec![];
+    }
+    let Some(home) = directories::BaseDirs::new().map(|d| d.home_dir().to_path_buf()) else { return vec![] };
+    let dir = match dir.trim() {
+        "" => home.clone(),
+        d => crate::paths::expand(d),
+    };
+    let (mut roots, project): (Vec<PathBuf>, &[&str]) = match tool {
+        "claude" => (vec![home.join(".claude").join("skills")], &[".claude"]),
+        "codex" => {
+            let codex = std::env::var_os("CODEX_HOME").map_or_else(|| home.join(".codex"), PathBuf::from);
+            (vec![home.join(".agents").join("skills"), codex.join("skills")], &[".agents"])
+        }
+        _ => {
+            let config = std::env::var_os("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from);
+            (vec![config.join("opencode").join("skills"), home.join(".claude").join("skills"), home.join(".agents").join("skills")], &[".opencode", ".claude", ".agents"])
+        }
+    };
+    let top = dir.ancestors().position(|d| d.join(".git").exists()).unwrap_or(0);
+    for d in dir.ancestors().take(top + 1) {
+        roots.extend(project.iter().map(|p| d.join(p).join("skills")));
+    }
+    let mut names = vec![];
+    for root in roots {
+        for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+            if let Ok(text) = std::fs::read_to_string(e.path().join("SKILL.md")) {
+                names.push(skill_name(&text).unwrap_or_else(|| e.file_name().to_string_lossy().into_owned()));
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// A SKILL.md's `name:` from its front matter; None without one (the folder names it then).
+fn skill_name(text: &str) -> Option<String> {
+    let mut lines = text.trim_start_matches('\u{feff}').lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    let name = lines.take_while(|l| l.trim() != "---").find_map(|l| l.strip_prefix("name:"))?;
+    Some(name.trim().trim_matches(['"', '\'']).to_string()).filter(|n| !n.is_empty())
 }
 
 /// `codex mcp list --json` run in `dir` (its project's .codex/config.toml counts): every server it
@@ -216,30 +271,41 @@ fn plain(name: &str) -> bool {
     !name.is_empty() && name.len() <= 128 && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
 }
 
-/// Turns `off` servers off for this run of `tool`: Claude through a settings file with
-/// `deniedMcpServers` (any server, plugins' and claude.ai connectors' too), Codex with one
-/// `-c mcp_servers.<name>.enabled=false` each, OpenCode with `"enabled": false` entries in
+/// Turns `off` servers and `skills` off for this run of `tool`: Claude through a settings file
+/// with `deniedMcpServers` (any server, plugins' and claude.ai connectors' too) and
+/// `skillOverrides` "off", Codex with one `-c mcp_servers.<name>.enabled=false` each and a
+/// `skills.config` list, OpenCode with `"enabled": false` servers and denied skills in
 /// OPENCODE_CONFIG_CONTENT (merged over its other files), Copilot with `--disable-mcp-server`.
 /// xtermium's own server is left out by `agent_launch` instead, and turned off here as well in case
 /// the tool has one of its own by that name.
-pub fn turn_off(tool: &str, off: &[String], argv: &mut Vec<String>, env: &mut Vec<(String, String)>) {
-    if off.is_empty() || argv.is_empty() {
+pub fn turn_off(tool: &str, off: &[String], skills: &[String], argv: &mut Vec<String>, env: &mut Vec<(String, String)>) {
+    if (off.is_empty() && skills.is_empty()) || argv.is_empty() {
         return;
     }
     match tool {
         "claude" => {
-            let denied: Vec<Value> = off.iter().map(|n| json!({ "serverName": n })).collect();
+            let mut settings = json!({});
+            if !off.is_empty() {
+                settings["deniedMcpServers"] = off.iter().map(|n| json!({ "serverName": n })).collect();
+            }
+            if !skills.is_empty() {
+                settings["skillOverrides"] = skills.iter().map(|n| (n.clone(), json!("off"))).collect::<serde_json::Map<_, _>>().into();
+            }
             static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if let Some(path) = crate::config::temp().map(|t| t.join(format!("mcp-off-{n}.json")))
-                && std::fs::write(&path, json!({ "deniedMcpServers": denied }).to_string()).is_ok()
+                && std::fs::write(&path, settings.to_string()).is_ok()
             {
                 argv.extend(["--settings".into(), path.display().to_string()]);
             }
         }
         "codex" => {
-            let flags = off.iter().filter(|n| plain(n)).flat_map(|n| ["-c".to_string(), format!("mcp_servers.{n}.enabled=false")]);
-            argv.splice(1..1, flags.collect::<Vec<_>>());
+            let mut flags: Vec<String> = off.iter().filter(|n| plain(n)).flat_map(|n| ["-c".to_string(), format!("mcp_servers.{n}.enabled=false")]).collect();
+            let named: Vec<String> = skills.iter().filter(|n| plain(n)).map(|n| format!("{{name={},enabled=false}}", json!(n))).collect();
+            if !named.is_empty() {
+                flags.extend(["-c".into(), format!("skills.config=[{}]", named.join(","))]);
+            }
+            argv.splice(1..1, flags);
         }
         "copilot" => argv.extend(off.iter().filter(|n| plain(n)).map(|n| format!("--disable-mcp-server={n}"))),
         "opencode" => {
@@ -248,6 +314,9 @@ pub fn turn_off(tool: &str, off: &[String], argv: &mut Vec<String>, env: &mut Ve
             let mut config = at.and_then(|i| serde_json::from_str::<Value>(&env[i].1).ok()).unwrap_or_else(|| json!({}));
             for n in off {
                 config["mcp"][n] = json!({ "enabled": false });
+            }
+            for n in skills {
+                config["permission"]["skill"][n] = json!("deny");
             }
             let text = config.to_string();
             match at {
@@ -281,29 +350,53 @@ mod tests {
     fn each_tool_turns_servers_off_its_own_way() {
         let off = vec!["context7".to_string(), "claude.ai Gmail".to_string(), "x\" & calc".to_string()];
         let (mut argv, mut env) = (vec!["codex".to_string(), "--model".into(), "m".into()], vec![]);
-        turn_off("codex", &off, &mut argv, &mut env);
+        turn_off("codex", &off, &[], &mut argv, &mut env);
         assert_eq!(argv, ["codex", "-c", "mcp_servers.context7.enabled=false", "--model", "m"], "names unsafe on a command line are skipped");
 
         let mut argv = vec!["copilot".to_string()];
-        turn_off("copilot", &off, &mut argv, &mut env);
+        turn_off("copilot", &off, &[], &mut argv, &mut env);
         assert_eq!(argv, ["copilot", "--disable-mcp-server=context7"]);
 
         let mut env = vec![("OPENCODE_CONFIG_CONTENT".to_string(), json!({ "mcp": { OWN: { "type": "remote" } } }).to_string())];
-        turn_off("opencode", &off, &mut vec!["opencode".into()], &mut env);
+        turn_off("opencode", &off, &[], &mut vec!["opencode".into()], &mut env);
         let config: Value = serde_json::from_str(&env[0].1).unwrap();
         assert_eq!(config["mcp"][OWN]["type"], "remote", "xtermium's own entry stays");
         assert_eq!(config["mcp"]["claude.ai Gmail"], json!({ "enabled": false }));
 
         let mut argv = vec!["claude".to_string()];
-        turn_off("claude", &off, &mut argv, &mut vec![]);
+        turn_off("claude", &off, &[], &mut argv, &mut vec![]);
         assert_eq!(argv[1], "--settings");
         let settings: Value = serde_json::from_str(&std::fs::read_to_string(&argv[2]).unwrap()).unwrap();
         let _ = std::fs::remove_file(&argv[2]);
         assert_eq!(settings["deniedMcpServers"][1], json!({ "serverName": "claude.ai Gmail" }), "any name: it's in a file");
 
         let mut argv = vec!["claude".to_string()];
-        turn_off("claude", &[], &mut argv, &mut vec![]);
+        turn_off("claude", &[], &[], &mut argv, &mut vec![]);
         assert_eq!(argv, ["claude"], "nothing off: nothing added");
+    }
+
+    #[test]
+    fn skills_turn_off_and_are_named() {
+        let skills = vec!["deploy".to_string(), "x\" & calc".to_string()];
+        let mut argv = vec!["codex".to_string()];
+        turn_off("codex", &[], &skills, &mut argv, &mut vec![]);
+        assert_eq!(argv, ["codex", "-c", r#"skills.config=[{name="deploy",enabled=false}]"#], "names unsafe on a command line are skipped");
+
+        let mut env = vec![];
+        turn_off("opencode", &[], &skills, &mut vec!["opencode".into()], &mut env);
+        let config: Value = serde_json::from_str(&env[0].1).unwrap();
+        assert_eq!(config["permission"]["skill"]["deploy"], "deny");
+
+        let mut argv = vec!["claude".to_string()];
+        turn_off("claude", &["context7".into()], &skills, &mut argv, &mut vec![]);
+        let settings: Value = serde_json::from_str(&std::fs::read_to_string(&argv[2]).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&argv[2]);
+        assert_eq!(settings["skillOverrides"]["deploy"], "off");
+        assert_eq!(settings["deniedMcpServers"][0], json!({ "serverName": "context7" }), "one settings file for both");
+
+        assert_eq!(skill_name("\u{feff}---\nname: \"deploy\"\ndescription: x\n---\nbody"), Some("deploy".into()));
+        assert_eq!(skill_name("---\ndescription: x\n---\nname: not this"), None, "only the front matter names it");
+        assert_eq!(skill_name("# no front matter"), None);
     }
 
     #[test]

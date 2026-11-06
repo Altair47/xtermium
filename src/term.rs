@@ -812,8 +812,8 @@ impl Tab {
             Kind::Shell { program, dir } => {
                 std::thread::spawn(move || done(run_pty(&program, &dir, &style_term, rx, feed)));
             }
-            Kind::Agent { tool, args, dir, mode, effort, model, mcp_off } => {
-                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model), &mcp_off);
+            Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off } => {
+                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model), &mcp_off, &skills_off);
                 std::thread::spawn(move || done(run_argv(argv, env, &dir, &style_term, rx, feed)));
             }
             Kind::Serial { port, baud } => {

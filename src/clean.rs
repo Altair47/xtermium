@@ -132,7 +132,7 @@ impl Store {
                     }
                     h.clone()
                 }
-                Kind::Agent { tool, args, dir, mode, effort, model, mcp_off } => {
+                Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off } => {
                     if !crate::config::AGENTS.contains(&tool.as_str()) {
                         *tool = "custom".into();
                     }
@@ -143,8 +143,10 @@ impl Store {
                         effort.clear();
                     }
                     (*args, *dir, *model) = (text(args), text(dir), text(model));
-                    let mut seen = std::collections::HashSet::new();
-                    *mcp_off = mcp_off.iter().map(|n| text(n).chars().take(128).collect::<String>()).filter(|n| !n.is_empty() && seen.insert(n.clone())).take(100).collect();
+                    for off in [mcp_off, skills_off] {
+                        let mut seen = std::collections::HashSet::new();
+                        *off = off.iter().map(|n| text(n).chars().take(128).collect::<String>()).filter(|n| !n.is_empty() && seen.insert(n.clone())).take(100).collect();
+                    }
                     tool.clone()
                 }
                 Kind::Vnc { host: h, port, .. } => {

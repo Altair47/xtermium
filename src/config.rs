@@ -325,6 +325,10 @@ pub enum Kind {
         /// a new one too, stays on.
         #[serde(default)]
         mcp_off: Vec<String>,
+        /// Skills turned off for this session, by name (`agent_mcp::turn_off`): the agent isn't
+        /// told of them, which saves tokens; any other, a new one too, stays on.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        skills_off: Vec<String>,
     },
     Vnc {
         host: String,
