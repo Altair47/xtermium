@@ -10,7 +10,7 @@ fn home() -> Option<PathBuf> {
 }
 
 /// `~` and `~/…` as the home folder.
-fn expand(typed: &str) -> PathBuf {
+pub fn expand(typed: &str) -> PathBuf {
     match (typed.strip_prefix('~'), home()) {
         (Some(rest), Some(h)) if rest.is_empty() || rest.starts_with(['/', '\\']) => {
             h.join(rest.trim_start_matches(['/', '\\']))
