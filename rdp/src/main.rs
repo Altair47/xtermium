@@ -557,6 +557,22 @@ mod tests {
         }
     }
 
+    /// xrdp up to 0.10.4 resizes the desktop with a Deactivate All that is only the 6-byte header
+    /// (no shareId): it must decode, or every resize ends the session (patches/ironrdp-pdu).
+    #[test]
+    fn xrdp_short_deactivate_all_decodes() {
+        use ironrdp::core::decode;
+        use ironrdp::pdu::rdp::headers::{ShareControlHeader, ShareControlPdu};
+        // totalLength 6, Deactivate All with protocol version 1, pduSource 1001.
+        let short: ShareControlHeader = decode(&[0x06, 0x00, 0x16, 0x00, 0xE9, 0x03]).expect("header-only PDU");
+        assert!(matches!(short.share_control_pdu, ShareControlPdu::ServerDeactivateAll(_)));
+        assert_eq!(short.share_id, 0);
+        // The full form still carries its shareId.
+        let full: ShareControlHeader =
+            decode(&[0x0A, 0x00, 0x16, 0x00, 0xE9, 0x03, 0xDD, 0xCC, 0xBB, 0xAA]).expect("full PDU");
+        assert_eq!(full.share_id, 0xAABB_CCDD);
+    }
+
     /// Typed text goes one character per `PACE`, and input after it waits its turn.
     #[test]
     fn typed_text_is_paced_in_order() {

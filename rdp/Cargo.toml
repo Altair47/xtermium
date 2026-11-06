@@ -29,5 +29,10 @@ opt-level = 3
 # ironrdp-session 0.11 shears xrdp's picture (bitmaps padded wider than their rectangle, IronRDP
 # #1251); patches/ironrdp-session is 0.11.0 with the one fix (fast_path.rs `fit_rows`).
 # ponytail: drop it once the ironrdp crate takes ironrdp-session 0.12 or later.
+# ironrdp-pdu 0.9 refuses the 6-byte Deactivate All that xrdp up to 0.10.4 sends when the desktop
+# is resized, ending the session; patches/ironrdp-pdu is 0.9.0 with IronRDP #1719
+# (headers.rs `ShareControlHeader::decode` reads shareId only when it's there).
+# ponytail: drop it once the ironrdp crate takes ironrdp-pdu 0.10 or later.
 [patch.crates-io]
 ironrdp-session = { path = "patches/ironrdp-session" }
+ironrdp-pdu = { path = "patches/ironrdp-pdu" }
