@@ -7,8 +7,10 @@
   import { app } from "./state.svelte";
   // Settings › About: the version, build and kind of build, and the latest release on GitHub.
 
-  type About = { version: string; build: number; kind: "debug" | "beta" | "release" };
-  const KINDS = { debug: _("debug build"), beta: _("beta"), release: _("release") };
+  // A nightly build (main as it stood that night) also names its commit, and is checked against
+  // the latest nightly instead (src/support.rs).
+  type About = { version: string; build: number; kind: "debug" | "nightly" | "beta" | "release"; commit: string };
+  const KINDS = { debug: _("debug build"), nightly: _("nightly"), beta: _("beta"), release: _("release") };
   let about = $state<About | null>(null);
   invoke<About>("about").then((a) => (about = a));
 
@@ -35,7 +37,7 @@
   <div class="logo"><Logo /></div>
   <div class="version">
     {_("version {version}", { version: app.version })}
-    {#if about}<span class="weak">{about.build ? _("build {build}", { build: about.build }) : ""} ({KINDS[about.kind]})</span>{/if}
+    {#if about}<span class="weak">{about.build ? _("build {build}", { build: about.build }) : ""} ({KINDS[about.kind]}{about.commit ? ` ${about.commit}` : ""})</span>{/if}
   </div>
   <em>{_("co-created with Claude by Sotirios Roussis")}</em>
   <div class="weak">{_("Logo, logo animations, colours and design system by")} <button class="link" onclick={() => openUrl("https://github.com/dehawk202")}>dehawk</button></div>
@@ -54,7 +56,7 @@
       </div>
       <p class="weak">{_("Updating is up to you: close xtermium, run the new installer, start it again. Your sessions and settings stay as they are.")}</p>
     {:else if update.latest}
-      <span class="row"><Icon name="check-circle" color="var(--ok)" />{_("You have the latest release.")}</span>
+      <span class="row"><Icon name="check-circle" color="var(--ok)" />{about?.kind === "nightly" ? _("You have the latest nightly build.") : _("You have the latest release.")}</span>
     {:else if update.error}
       <span class="row error"><Icon name="x-circle" />{update.error}</span>
     {/if}

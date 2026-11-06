@@ -11,10 +11,19 @@ pub fn build() -> u32 {
     option_env!("XTERMIUM_BUILD").and_then(|b| b.parse().ok()).unwrap_or(0)
 }
 
-/// "debug" (built locally), "beta" (a pre-release version like 1.2.0-beta.1) or "release".
+/// The commit a nightly build was made from (XTERMIUM_NIGHTLY, stamped by nightly.yml): main as
+/// it stood that night, carrying the last release's version number. "" in every other build.
+pub fn nightly() -> &'static str {
+    option_env!("XTERMIUM_NIGHTLY").unwrap_or("")
+}
+
+/// "debug" (built locally), "nightly" (main, built each night), "beta" (a pre-release version
+/// like 1.2.0-beta.1) or "release".
 pub fn kind() -> &'static str {
     if cfg!(debug_assertions) {
         "debug"
+    } else if !nightly().is_empty() {
+        "nightly"
     } else if env!("CARGO_PKG_VERSION").contains('-') {
         "beta"
     } else {
@@ -27,11 +36,13 @@ pub struct About {
     version: &'static str,
     build: u32,
     kind: &'static str,
+    /// A nightly build's commit, short; "" otherwise.
+    commit: &'static str,
 }
 
 #[tauri::command]
 pub fn about() -> About {
-    About { version: env!("CARGO_PKG_VERSION"), build: build(), kind: kind() }
+    About { version: env!("CARGO_PKG_VERSION"), build: build(), kind: kind(), commit: nightly().get(..7).unwrap_or("") }
 }
 
 /// A desktop notification (the UI decides when one is due: Settings › General).
@@ -96,7 +107,8 @@ pub fn setup(handle: &AppHandle) {
     }
 }
 
-/// The latest release on GitHub, with the download for this computer's system.
+/// The latest release on GitHub (for a nightly build, the latest nightly), with the download for
+/// this computer's system.
 #[derive(Serialize, Clone)]
 pub struct Update {
     version: String,
@@ -110,13 +122,27 @@ pub struct Update {
 
 const RELEASES: &str = "https://github.com/xtermium/xtermium/releases/latest";
 
+/// What a release on GitHub is called here and whether it is later than this build. A release
+/// is tagged v<version> (release.yml) and compared by semver. A nightly build (`nightly`: its
+/// commit) looks at the one rolling `nightly` pre-release instead, whose notes name the commit it
+/// was built from (nightly.yml): another commit there is a later night's build.
+fn latest(v: &serde_json::Value, nightly: &str) -> (String, bool) {
+    if nightly.is_empty() {
+        let version = v["tag_name"].as_str().unwrap_or_default().trim_start_matches('v');
+        (version.into(), semver(version) > semver(env!("CARGO_PKG_VERSION")))
+    } else {
+        let name = v["name"].as_str().unwrap_or("nightly").trim_start_matches("xtermium ");
+        (name.into(), !v["body"].as_str().unwrap_or_default().contains(nightly))
+    }
+}
+
 #[tauri::command]
 pub async fn update_check() -> Res<Update> {
-    let (_, body) = crate::fetch("https://api.github.com/repos/xtermium/xtermium/releases/latest", 1 << 20, false).await?;
+    // GitHub's "latest" is never a pre-release, so releases don't see the nightly one.
+    let which = if nightly().is_empty() { "latest" } else { "tags/nightly" };
+    let (_, body) = crate::fetch(&format!("https://api.github.com/repos/xtermium/xtermium/releases/{which}"), 1 << 20, false).await?;
     let v: serde_json::Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
-    // Tags read v<version> (.github/workflows/release.yml).
-    let version = v["tag_name"].as_str().unwrap_or_default().trim_start_matches('v');
-    let newer = semver(version) > semver(env!("CARGO_PKG_VERSION"));
+    let (version, newer) = latest(&v, nightly());
     let want: &[&str] = match std::env::consts::OS {
         "windows" => &["-setup.exe", ".msi"],
         "macos" => &[".dmg"],
@@ -130,7 +156,7 @@ pub async fn update_check() -> Res<Update> {
             .and_then(|a| a["browser_download_url"].as_str())
             .map(String::from)
     });
-    Ok(Update { version: version.into(), newer, page: v["html_url"].as_str().unwrap_or(RELEASES).into(), download })
+    Ok(Update { version, newer, page: v["html_url"].as_str().unwrap_or(RELEASES).into(), download })
 }
 
 /// The numbers, whether it's a release (not a pre-release), and the pre-release's parts.
@@ -174,10 +200,11 @@ pub fn troubleshoot_bundle(handle: AppHandle) -> Res<String> {
     };
 
     let mut about = format!(
-        "xtermium {} build {} ({})\nsystem: {} {}\ntauri: {}\nwebview: {}\ndata folder: {}\nprogram: {}\n",
+        "xtermium {} build {} ({} {})\nsystem: {} {}\ntauri: {}\nwebview: {}\ndata folder: {}\nprogram: {}\n",
         env!("CARGO_PKG_VERSION"),
         build(),
         kind(),
+        nightly(),
         std::env::consts::OS,
         std::env::consts::ARCH,
         tauri::VERSION,
@@ -416,7 +443,7 @@ pub async fn pick_background(window: tauri::Window) -> Res<Option<(String, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{Personal, semver, zip};
+    use super::{Personal, latest, semver, zip};
 
     /// Versions compare as semver orders them, numbers as numbers.
     #[test]
@@ -427,6 +454,19 @@ mod tests {
         }
         assert_eq!(semver("1.0.0+abc"), semver("1.0.0"), "build metadata doesn't count");
         assert!(semver("0.1.0") <= semver("0.1.0"), "the same version isn't newer");
+    }
+
+    /// A release is later by its version; a nightly build looks for its own commit in the
+    /// nightly release's notes instead.
+    #[test]
+    fn nightly_builds_follow_the_nightly_release() {
+        let release = serde_json::json!({ "tag_name": "v999.0.0", "name": "xtermium 999.0.0", "body": "" });
+        assert_eq!(latest(&release, ""), ("999.0.0".into(), true));
+        let same = serde_json::json!({ "tag_name": format!("v{}", env!("CARGO_PKG_VERSION")) });
+        assert!(!latest(&same, "").1, "the release this build is");
+        let nightly = serde_json::json!({ "tag_name": "nightly", "name": "xtermium nightly 2026-11-07", "body": "Nightly build of main at 0123abc0123abc." });
+        assert_eq!(latest(&nightly, "0123abc0123abc"), ("nightly 2026-11-07".into(), false));
+        assert!(latest(&nightly, "fedcba9fedcba9").1, "another night's commit");
     }
 
     /// The bundle's text loses the home folder, the user and computer names, email and IP
