@@ -13,8 +13,9 @@
   import Logo from "./Logo.svelte";
 
   /** `title`: the window's name, shown in the centre unless `children` draw the centre themselves.
-   *  `tools`: buttons beside the mark (the main window's local shell and tunnels). */
-  let { title = "", children, tools }: { title?: string; children?: Snippet; tools?: Snippet } = $props();
+   *  `tools`: buttons beside the mark; `end`: buttons before the window's own (the main window's
+   *  tools and layouts). */
+  let { title = "", children, tools, end }: { title?: string; children?: Snippet; tools?: Snippet; end?: Snippet } = $props();
 
   const w = getCurrentWindow();
   let max = $state(false);
@@ -44,6 +45,7 @@
       {#if children}{@render children()}{:else if title}<span class="name">{title}</span>{/if}
     </div>
     <div class="end">
+      {#if end}<div class="extra">{@render end()}</div>{/if}
       {#if OS !== "macos"}
         <button tabindex="-1" title={_("Minimize")} aria-label={_("Minimize")} onmousedown={keep} onclick={() => w.minimize()}>
           <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" /></svg>
@@ -72,12 +74,12 @@
     align-items: center;
     color: var(--weak);
   }
-  /* The mark stands over the sidebar's first column of icons. */
+  /* The mark, then the tools, a few pixels apart as the tab strip's are. */
   .start {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding-inline-start: 21px;
+    gap: 3px;
+    padding-inline-start: 13px;
   }
   /* macOS's own buttons sit on the left, whichever way the text runs. */
   .mac .start {
@@ -85,7 +87,8 @@
   }
   /* An even size in an even bar: its edges land on whole pixels. */
   .mark {
-    width: 22px;
+    width: 26px;
+    margin-inline-end: 8px;
   }
   .centre {
     min-width: 0;
@@ -105,10 +108,16 @@
   .end {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     height: 100%;
   }
+  .extra {
+    display: flex;
+    align-items: center;
+    padding-inline-end: 8px;
+  }
   /* Windows' own caption buttons: 46px wide, square, the glyphs hairlines. */
-  .end button {
+  .end > button {
     width: 46px;
     height: 100%;
     min-height: 0;
@@ -120,11 +129,11 @@
     background: none;
     color: inherit;
   }
-  .end button:hover {
+  .end > button:hover {
     background: var(--hover);
     color: var(--fg);
   }
-  .end button:active {
+  .end > button:active {
     background: var(--raised);
   }
   .end .close:hover {
@@ -143,10 +152,11 @@
   }
   .start,
   .centre,
+  .extra,
   svg {
     transition: opacity 0.15s;
   }
-  .away :is(.start, .centre, .end button:not(:hover) svg) {
+  .away :is(.start, .centre, .extra, .end > button:not(:hover) svg) {
     opacity: 0.5;
   }
 </style>

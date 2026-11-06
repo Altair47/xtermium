@@ -405,26 +405,29 @@ whole). In Arabic, Hindi, Japanese and Chinese (`lang` ar, hi, ja, zh) `--short`
 
 ## Layout
 
-Every window starts with xtermium's own title bar (`TitleBar.svelte`, `--titlebar`, as tall as a
-control: 26px) instead of the system's, so it looks the same on Windows, Linux and macOS. It sits
-on the window's ground with no panel of its own, in three parts. At the start, the mark alone
-(`Logo.svelte` with `mark`, 22px, an even size in an even bar), 21px in, over the sidebar's first
-column of icons, then the main window's two always-there tools, a local shell and Tunnels, icon-only
-at 18px, `weak` until pointed at. In the centre of the window, where the keyboard goes: the focused tab's icon in
-its kind hue, its name (mono 500, `fg`) and, in `weak`, what the shell or page says of itself;
-with no tab open, a magnifier and the palette's own placeholder. It is a flat button as tall as
-the bar and square, at most `min(610px, 50vw)` wide, that opens the command palette; locked, the
-centre is empty. A detached tab's window shows its name there. At the end, the three window
-buttons, 46px wide, square, their glyphs 10px hairlines in `weak`; under the pointer they take
-`hover`, and Close takes `error`. The room between is what the window is dragged by (a double
-click maximizes). While another window has the keyboard the bar's contents drop to half strength.
-macOS keeps its own three buttons at the left instead of the mark, and the bar leaves them room.
-Dialogs, the palette and the lock screen start under the bar, so the window can always be moved,
-minimized and closed; full screen has no bar.
+Every window starts with xtermium's own title bar (`TitleBar.svelte`, `--titlebar`, as tall as
+the tab strip: 34px) instead of the system's, so it looks the same on Windows, Linux and macOS. It
+sits on the window's ground with no panel of its own, in three parts. At the start, 13px in, the
+mark alone (`Logo.svelte` with `mark`, 26px), then the main window's tools, icon-only at 21px and
+`weak` until pointed at: the burger that collapses and expands the sidebar, a local shell,
+Tunnels and the saved layouts' menu, then, 13px apart, New session as a filled key (`raised`).
+In the centre: a magnifier that opens the palette on its Sessions filter, then a field (an inset
+well, 26px tall, `clamp(233px, 38vw, 610px)` wide) naming where the keyboard goes: the focused
+tab's icon in its kind hue, its name (mono 500, `fg`) and, in `weak`, what the shell or page says
+of itself; with no tab open, the palette's own placeholder. The field opens the command palette.
+At its end, behind a hairline, a chevron opens the workspace menu (the workspace in use ticked,
+then Manage workspaces…). Locked, the centre is empty. A detached tab's window shows its name
+there. At the end, the five layout buttons (21px glyphs, the one in use amber), then the three
+window buttons, 46px wide, square, their glyphs 10px hairlines in `weak`; under the pointer they
+take `hover`, and Close takes `error`. The room between is what the window is dragged by (a
+double click maximizes). While another window has the keyboard the bar's contents drop to half
+strength. macOS keeps its own three buttons at the left instead of the mark, and the bar leaves
+them room. Dialogs, the palette and the lock screen start under the bar, so the window can always
+be moved, minimized and closed; full screen has no bar.
 
-The sidebar's top row is as tall as the tab strip (`--bar`), and the collapsed rail starts
-`calc((var(--bar) - var(--control)) / 2)` down, so the tools of both panels share one line under
-the title bar.
+The sidebar has no header: its tree starts 5px in, and the collapsed rail holds only the
+sidebar's foot. Finding a session is the palette's job (it searches names, addresses, folders and
+folder tags).
 
 Under the bar the window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
 the session rack (resizable; it collapses to a 38px rail), the center (a 34px tab strip over
@@ -562,11 +565,8 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   the active one. The tab's icon is always in its kind hue. A drag shows a 2px amber insertion bar.
 - **Session rack:** 21px rows, folders with a rotating caret (0.12s) and a hairline guide under
   each level. Leaves indent past the caret so icons in one level line up. A session with an open
-  tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Search hits
-  and chosen rows take the amber wash. A marked session's or folder's name is in its mark. Its
-  search opens out of the magnifier; Enter closes it and puts the keyboard on the hit's row in
-  the tree, its folders opened (a second Enter opens the session); Escape gives the tree back the
-  keyboard.
+  tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Chosen rows
+  take the amber wash. A marked session's or folder's name is in its mark.
 - **Sidebar foot:** the status pill (an inset well, label size in `weak`, fading in over 0.16s
   when a message arrives), then Settings and
   the account, in that order, at the foot's trailing end. The account is a flat icon button; signed

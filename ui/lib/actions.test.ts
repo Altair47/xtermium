@@ -185,3 +185,12 @@ test("a palette filter keeps its own items, and Hosts searches the address alone
   assert.equal(find(items, "10.0", "hosts").length, 1);
   assert.equal(find(items, "set", "sessions").length, 0, "actions are in no filter");
 });
+
+test("the palette finds a session by its folder's tag", () => {
+  const items = [
+    { label: "Lab/web1", hint: "10.0.0.7", tags: "staging", in: ["sessions"] as Filter[] },
+    { label: "Lab/web2", hint: "10.0.0.8", in: ["sessions"] as Filter[] },
+  ];
+  assert.deepEqual(find(items, "staging", "sessions").map((it) => it.label), ["Lab/web1"]);
+  assert.equal(find(items, "staging", "hosts").length, 0, "Hosts searches the address alone");
+});
