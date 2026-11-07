@@ -30,3 +30,6 @@ node_modules
 /gen/schemas
 # RDP helper, copied here by scripts/rdp.mjs for bundling
 /binaries
+
+# Impeccable design notes are kept; its hook cache is per machine
+.impeccable/hook.cache.json
