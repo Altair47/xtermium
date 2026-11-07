@@ -71,6 +71,7 @@ Tokens, kind hues, type roles and components condensed: `references/app-look.md`
 - All UI text goes through `_("…")` (`xtermium-developing`).
 - The name is **xtermium**, lower case, in the app, its README, code, commands and paths (`PRODUCT.md`, "Brand Commitments"). The wordmark and the website write "XTermium"; the website's own rules live in the `xtermium-web` repository's `DESIGN.md`.
 - Claim only what the README and the app show: there are no customers, testimonials, case studies or benchmarks on hand (`PRODUCT.md`, "Evidence on Hand"), so none are invented.
+- The README is a light overview: what xtermium is, install, a line per feature at most, links. Menus, limits, formats and steps go in the wiki (https://github.com/xtermium/xtermium/wiki), written with the change.
 - Comments read the same way: full sentences saying why.
 - Commit messages and release notes: for a developer reading what changed (`xtermium-contributing`).
 

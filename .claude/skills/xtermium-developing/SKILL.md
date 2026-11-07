@@ -103,7 +103,7 @@ Rules from those sections that bite most often:
 1. Schema and description in `automation::tools()` and the handler in `call()` (`src/automation.rs`). `call()` starts with `unlocked()?`, so a new tool respects the lock without extra code; never route around it.
 2. A CLI word in `src/cli.rs`: `USAGE`, `COMMANDS`, `parse` (and `VALUED` for a flag that takes a value), and a case in the `commands` test.
 3. The list sentence on the Settings › MCP page (`ui/lib/Settings.svelte`).
-4. A README line ("Agents and scripts").
+4. Its entry on the wiki's AI agents page (the README lists the feature at most, in a line).
 5. Never return a password; AI-agent sessions and tabs stay invisible to automation. UI-side actions go as events to the main window (`automation-open`, `automation-detach`, `automation-layout`).
 
 How the tools look from the outside: `xtermium-mcp`.

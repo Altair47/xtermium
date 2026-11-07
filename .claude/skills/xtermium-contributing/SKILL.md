@@ -43,6 +43,7 @@ Every change reaches `main` as a pull request from a topic branch, merged with a
   ```
 
 - One topic per pull request. A fix and an unrelated clean-up are two pull requests.
+- Documentation lives in the wiki (https://github.com/xtermium/xtermium/wiki): a change that adds, changes, removes, breaks or deprecates a feature says in its pull request what the wiki should say (what it does, where it is, its limits and refusals, what changed for people who used it). The wiki's pages are kept in the website's private repository and pushed by a maintainer once the change ships. The README stays a light overview (what xtermium is, install, a short feature list, links): add no detail there.
 - Keep the diff to the change. `cargo fmt --check` already reports about 100 diffs on `main`, so never run `cargo fmt` over whole files; format only what you wrote.
 - Describe in the pull request what changed, which checks passed (with counts where a tool prints them), and anything a maintainer must still do.
 - Conventions come from `CLAUDE.md` (written for coding agents, but for everyone) and `DESIGN.md`; `npm test` enforces some of them (`xtermium-developing`, `xtermium-testing`).
@@ -102,6 +103,7 @@ Lock gates automation, secure the instance port, keep website tabs out of the in
 - Two topics in one pull request, or a whole-file reformat inside a fix.
 - Commit bodies without bullets, or bullets that describe the work instead of the change.
 - Raising the version in a contributor pull request (it would publish a release on merge).
+- A feature change with nothing said about its wiki text, or its detail written into the README.
 - Changing `package.json`'s version without `Cargo.toml`'s, or the reverse.
 - Fixing a Rust advisory in `Cargo.lock` only and leaving `rdp/Cargo.lock` behind.
 - Discussing a vulnerability in a public issue.
