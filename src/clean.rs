@@ -391,6 +391,10 @@ impl Settings {
             i.data.starts_with("data:image/") && i.data.len() <= 1024 * 1024 && seen.insert(i.data.clone())
         });
         self.custom_icons.truncate(100);
+        // The getting-started list's done steps: short ids, each once.
+        let mut seen = std::collections::HashSet::new();
+        self.guide_done.retain(|id| id.len() <= 32 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') && seen.insert(id.clone()));
+        self.guide_done.truncate(16);
         // The app icon is a PNG the UI drew at 256px, base64 and nothing else (the UI writes it
         // into the logo's markup): anything else, or far bigger, is dropped.
         let png = self.app_icon.strip_prefix("data:image/png;base64,");
@@ -481,5 +485,16 @@ mod tests {
             st.sanitize();
             assert_eq!(st.app_icon, "", "{bad}");
         }
+    }
+
+    /// A new install shows the getting-started list; settings saved before it existed don't.
+    #[test]
+    fn the_guide_is_for_new_installs() {
+        assert!(Settings::default().guide);
+        let old: Settings = toml::from_str("sidebar_collapsed = false").unwrap();
+        assert!(!old.guide, "an older settings file");
+        let mut st = Settings { guide_done: vec!["shell".into(), "shell".into(), "<b>".into()], ..Settings::default() };
+        st.sanitize();
+        assert_eq!(st.guide_done, ["shell"]);
     }
 }

@@ -367,6 +367,11 @@ for (const kind of ["keydown", "pointerdown", "wheel"])
 export type ToastAction = { label: string; run: () => void };
 export const toasts = $state<{ id: number; text: string; action?: ToastAction }[]>([]);
 let toastId = 0;
+/** Ticks a getting-started step that has no state to show it by (Guide.svelte `STEPS`). */
+export function guideDone(id: string) {
+  const s = app.settings;
+  if (s?.guide && !s.guide_done.includes(id)) s.guide_done.push(id);
+}
 export function toast(text: string, action?: ToastAction) {
   const id = ++toastId;
   toasts.push({ id, text, action });

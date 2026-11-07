@@ -144,6 +144,13 @@ pub struct Settings {
     pub sidebar_width: u32,
     /// The sidebar is a narrow column of buttons, leaving the room to the tabs.
     pub sidebar_collapsed: bool,
+    /// The getting-started list on the start screen (Settings › General). A new install starts
+    /// with it (`Default`); a settings file from before it existed has no such field and keeps it
+    /// off, so people who already know their way around don't get it.
+    #[serde(default)]
+    pub guide: bool,
+    /// The list's steps done so far (ui/lib/Guide.svelte ids).
+    pub guide_done: Vec<String>,
     /// Keyboard shortcuts changed from the defaults: action → key chord ("" = none).
     /// The actions and their defaults are in the UI (ui/lib/actions.ts).
     pub shortcuts: BTreeMap<String, String>,
@@ -330,6 +337,8 @@ impl Default for Settings {
             language: String::new(),
             sidebar_width: 280,
             sidebar_collapsed: false,
+            guide: true,
+            guide_done: vec![],
             shortcuts: BTreeMap::new(),
             pane_step: 21,
             keep_running: true,
@@ -358,7 +367,11 @@ impl Settings {
     }
 
     /// A settings file's text, cleaned: an older version may have saved it under wider limits.
+    /// No text at all is a new install: it gets the defaults, not an older file's missing fields.
     fn parse(text: &str) -> Option<Self> {
+        if text.trim().is_empty() {
+            return None;
+        }
         let mut settings: Self = toml::from_str(text).ok()?;
         settings.sanitize();
         Some(settings)
@@ -413,6 +426,7 @@ impl Settings {
         self.open_folders = from.open_folders.clone();
         self.sidebar_width = from.sidebar_width;
         self.sidebar_collapsed = from.sidebar_collapsed;
+        (self.guide, self.guide_done) = (from.guide, from.guide_done.clone());
         for (b, f) in [(&mut self.background, &from.background), (&mut self.sidebar_background, &from.sidebar_background), (&mut self.bar_background, &from.bar_background)] {
             (b.kind, b.name, b.stamp) = (f.kind.clone(), f.name.clone(), f.stamp);
         }
@@ -577,6 +591,15 @@ pub const SCHEMES: &[Scheme] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A new install (no settings file yet) starts with the getting-started list; a file saved
+    /// before it existed doesn't.
+    #[test]
+    fn a_new_install_gets_the_guide() {
+        assert!(Settings::parse("").is_none(), "no file: `load` takes the defaults");
+        assert!(Settings::default().guide);
+        assert!(!Settings::parse("sidebar_collapsed = false").unwrap().guide);
+    }
 
     /// Files saved by older versions keep their window see-through, at their window opacity, raised
     /// to the lowest one that's still readable.

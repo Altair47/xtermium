@@ -839,6 +839,14 @@
       {/if}
     </div>
     {#if explorerMenu}<p class="weak">{_("On Windows 11 it is under Show more options. It starts this copy of xtermium.")}</p>{/if}
+    <h3>{_("Getting started")}</h3>
+    <div class="col">
+      <label class="check"><input type="checkbox" bind:checked={s.guide} />{_("Show the getting started list on the start screen")}</label>
+    </div>
+    <div class="row">
+      <button disabled={s.guide && !s.guide_done.length} onclick={() => ((s.guide_done = []), (s.guide = true), toast(_("Getting started starts over on the start screen.")))}>{_("Start over")}</button>
+      <span class="weak">{_("It shows when no tab is open. Steps tick themselves as you do them.")}</span>
+    </div>
     <h3>{_("Browser")}</h3>
     <div class="form">
       <span>{_("Open Browser sessions")}</span>
