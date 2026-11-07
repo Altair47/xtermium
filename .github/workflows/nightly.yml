@@ -161,10 +161,14 @@ jobs:
 
       # The first line names the commit: a nightly build finds out there whether it is the
       # latest (src/support.rs `latest`). Then what main has that the last release hasn't
-      # (scripts/changelog.mjs, without its line about the release installers).
+      # (scripts/changelog.mjs, without its line about the release installers). The time down to
+      # the second, so two builds on one day (a night's and one by hand) tell apart; the title
+      # takes the same stamp.
       - run: |
+          stamp="$(date -u '+%F %T') UTC"
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
           {
-            echo "Nightly build of main at $GITHUB_SHA, $(date -u +%F)."
+            echo "Nightly build of main at $GITHUB_SHA, $stamp."
             echo
             echo "This is main as it stands: newer than the [latest release](https://github.com/$GITHUB_REPOSITORY/releases/latest) and less tested. It installs over the release and opens the same data, so keep a backup you trust (Settings › Import and export › Back up everything…)."
             echo
@@ -179,4 +183,4 @@ jobs:
           gh release view nightly > /dev/null 2>&1 \
             || gh release create nightly --prerelease --verify-tag --title "xtermium nightly" --notes "Being published."
           gh release upload nightly out/* --clobber
-          gh release edit nightly --prerelease --title "xtermium nightly $(date -u +%F)" --notes-file notes.md
+          gh release edit nightly --prerelease --title "xtermium nightly $STAMP" --notes-file notes.md
