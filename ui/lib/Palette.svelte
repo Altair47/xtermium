@@ -68,11 +68,11 @@
       })),
       // every action but opening the palette, which is open, and the ones only the mouse wheel runs
       ...ACTIONS.filter((a) => a.id !== "palette" && !isWheel(a.id)).map((a) => ({ label: _(a.label), hint: "", icon: "play", color: "var(--weak)", keys: keysShown(keysOf(a.id, shortcuts)), run: () => onaction(a.id) })),
-      ...app.store.layout.map((l) => ({ label: _("Open layout: {name}", { name: l.name }), hint: l.pane.map((s) => s.name).join(", "), icon: "grid-alt", color: "var(--gold)", run: () => onlayout(l) })),
-      ...app.store.snippet.map((s) => ({ label: _("Run snippet: {name}", { name: s.name }), hint: s.text.split("\n")[0], icon: "play", color: "var(--gold)", in: ["snippets"] as Filter[], run: () => onsnippet(s) })),
+      ...app.store.layout.map((l) => ({ label: _("Open layout: {name}", { name: l.name }), hint: l.pane.map((s) => s.name).join(", "), icon: "grid-alt", color: "var(--weak)", run: () => onlayout(l) })),
+      ...app.store.snippet.map((s) => ({ label: _("Run snippet: {name}", { name: s.name }), hint: s.text.split("\n")[0], icon: "play", color: "var(--weak)", in: ["snippets"] as Filter[], run: () => onsnippet(s) })),
       ...app.store.tunnel.map((t) => {
         const on = !!live[t.name]?.live;
-        return { label: on ? _("Stop tunnel {name}", { name: t.name }) : _("Start tunnel {name}", { name: t.name }), hint: `${t.kind} :${t.listen_port}`, icon: "transfer-alt", color: "var(--gold)", run: () => tunnel(t.name, on) };
+        return { label: on ? _("Stop tunnel {name}", { name: t.name }) : _("Start tunnel {name}", { name: t.name }), hint: `${t.kind} :${t.listen_port}`, icon: "transfer-alt", color: "var(--weak)", run: () => tunnel(t.name, on) };
       }),
     ];
   });

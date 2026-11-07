@@ -33,8 +33,15 @@ test("spacing is on the Fibonacci scale", () => {
 });
 
 test("text sizes are the type scale's", () => {
+  const size = /^(var\(--t[-\w]*\)|inherit|[\d.]+em|clamp\(.*\))$/;
   for (const [where, line] of lines()) {
     const m = line.match(/^\s*font-size\s*:\s*([^;]+);/);
-    if (m) assert.match(m[1], /^(var\(--t[-\w]*\)|inherit|[\d.]+em|clamp\(.*\))$/, `${where}: ${line.trim()}`);
+    if (m) assert.match(m[1], size, `${where}: ${line.trim()}`);
+    // the `font:` shorthand's size: after any style or weight, before a `/line-height` and the family
+    const f = line.match(/^\s*font\s*:\s*([^;]+);/)?.[1].trim();
+    if (f && !/^(inherit|initial|unset|revert)$/.test(f)) {
+      const s = f.replace(/^((normal|italic|oblique|small-caps|bold|bolder|lighter|\d+)\s+)*/, "").match(/^(clamp\(.*?\)|[^\s/]+)/)?.[1] ?? "";
+      assert.match(s, size, `${where}: ${line.trim()}`);
+    }
   }
 });

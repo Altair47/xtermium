@@ -145,7 +145,8 @@
     max-height: calc(88vh - 21px);
   }
   header {
-    padding: 8px 8px 8px 13px;
+    padding: 8px;
+    padding-inline-start: 13px;
     border-bottom: 1px solid var(--line);
   }
   /* a long name in "Edit …" ends in … rather than widening the dialog */
