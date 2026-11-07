@@ -542,8 +542,10 @@ export type CoopTraffic = { id: string; up: number; down: number };
 /** Where another person's pointer is over a shared tab (`tab` is the owner's number for it): a cell of
  *  a text tab, a pixel (`col` = x, `row` = y) of a picture. Never your own. */
 export type CoopCursor = { tab: number; user_id: string; name: string; image: string | null; col: number; row: number };
+/** Another person's selection on a shared terminal tab: its ends in stable rows (`Meta.shared`). */
+export type CoopSelection = { tab: number; user_id: string; a: [number, number]; b: [number, number]; block: boolean };
 /** The `coop` event: all of it, whenever any of it changes. `shared`: your own tabs (by their id) that
  *  you share. When the ring is over `ring` is null, and `ended` says why when it wasn't you: "pro"
  *  (the owner's Pro lapsed), "kicked", "ended" (the owner ended it), "lost" (the connection),
  *  "signed-out"; `message` is the sentence to show. */
-export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; ended?: string; message?: string };
+export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; selections?: CoopSelection[]; ended?: string; message?: string };

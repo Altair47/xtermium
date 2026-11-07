@@ -13,8 +13,9 @@
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { OS, wheelAction } from "./actions";
   import { bytes, COLORS, css, fontStack, openUrl, type Meta, type Session } from "./api";
-  import { memberColor, throttle } from "./coop";
+  import { memberColor, selectionRows, throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
+  import CoopSelections from "./CoopSelections.svelte";
   import { close, decode, frameAt, type Pic } from "./images";
   import { glRenderer, type Renderer, type Run } from "./glyphs";
   import { contexts } from "./surface";
@@ -114,6 +115,8 @@
   /** A remote tab: the stable row number of the top row on screen (`meta.shared`), which a viewer's
    *  own selection is kept in, so it stays on its text as the screen scrolls. */
   let top = $state(0);
+  /** The screen in cells (columns, rows) while the tab is in a ring: the others' selections are drawn on it. */
+  let screen = $state<[number, number]>([0, 0]);
   /** A viewer's own selection in a remote tab (stable row, column): everyone in a ring has their
    *  own, drawn by their own window; the owner's copy reads its text. Null: none. */
   let mine = $state<{ a: [number, number]; b: [number, number]; block: boolean } | null>(null);
@@ -189,7 +192,10 @@
         }
       }
       overLink = meta.link;
-      if (meta.shared) top = meta.shared[0];
+      if (meta.shared) {
+        top = meta.shared[0];
+        screen = [remote && size ? size[0] : grid.cols, f.rows];
+      }
       onmeta(meta);
       if (meta.ended && !ended) onexit(true);
       ended = meta.ended;
@@ -587,25 +593,17 @@
   /** `mine` on screen: one box per row (CSS pixels from the tab's corner). */
   const lit = $derived.by(() => {
     if (!remote || !mine || !size || !box) return [];
-    let [a, b] = [mine.a, mine.b];
-    if (mine.block)
-      [a, b] = [
-        [Math.min(a[0], b[0]), Math.min(a[1], b[1])],
-        [Math.max(a[0], b[0]), Math.max(a[1], b[1])],
-      ];
-    else if (b[0] < a[0] || (b[0] === a[0] && b[1] < a[1])) [a, b] = [b, a];
-    const boxes: { x: number; y: number; w: number; h: number }[] = [];
-    for (let y = 0; y < size[1]; y++) {
-      const r = top + y;
-      if (r < a[0] || r > b[0]) continue;
-      const from = mine.block || r === a[0] ? a[1] : 0;
-      const to = mine.block || r === b[0] ? b[1] + 1 : size[0];
-      if (to <= from) continue;
+    return selectionRows(mine, top, size[0], size[1]).map(([y, from, to]) => {
       const [x0, y0] = cellAt(from, y);
       const [x1, y1] = cellAt(to, y + 1);
-      boxes.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
-    }
-    return boxes;
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    });
+  });
+
+  /** The others in the ring see `mine` too, in this person's colour (20 times a second at most). */
+  const tellMine = throttle((sel: unknown) => void invoke("coop_selection", { ringTab: remote, sel }).catch(() => {}), 50);
+  $effect(() => {
+    if (remote) tellMine(mine ? [$state.snapshot(mine.a), $state.snapshot(mine.b), mine.block] : null);
   });
 
   // ---- auto-reconnect (Settings > SSH connections): a dropped connection comes back by itself ----
@@ -905,6 +903,7 @@
     scaling?.removeEventListener("change", rescaled);
     if (id && !released && !remote) invoke("close_tab", { id });
     if (remote) invoke("coop_close_remote", { ringTab: remote, channel: out.id }).catch(() => {});
+    if (remote && mine) invoke("coop_selection", { ringTab: remote, sel: null }).catch(() => {});
     clearTimeout(tick);
     clearInterval(blinker);
     gpu?.sleep();
@@ -962,7 +961,7 @@
     </div>
   {/if}
   {#each lit as r, i (i)}<div class="mine" style:--mine={mineColor} style:left="{r.x}px" style:top="{r.y}px" style:width="{r.w}px" style:height="{r.h}px"></div>{/each}
-  {#if ringTab && box}<CoopCursors tab={ringTab} at={cellAt} />{/if}
+  {#if ringTab && box}<CoopSelections tab={ringTab} {top} cols={screen[0]} rows={screen[1]} at={cellAt} /><CoopCursors tab={ringTab} at={cellAt} />{/if}
   {#if retryAt}
     <div class="retry" role="status">
       <Icon name="refresh" size={16} />

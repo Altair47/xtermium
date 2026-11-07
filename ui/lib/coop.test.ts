@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clock, memberColor, pace, passcode, PASSCODE_ALPHABET, rate, throttle, traffic } from "./coop.ts";
+import { clock, memberColor, pace, passcode, PASSCODE_ALPHABET, rate, selectionRows, throttle, traffic } from "./coop.ts";
 
 test("a passcode is upper case, from the alphabet, and 8 characters at most", () => {
   assert.equal(passcode("a7k2m9qx"), "A7K2M9QX");
@@ -78,4 +78,26 @@ test("a ring member keeps one colour, the same everywhere, and members differ", 
   assert.equal(memberColor("user_abc123", n), memberColor("user_abc123", n));
   for (const id of ["", "a", "user_abc123", "x".repeat(200)]) assert.ok(memberColor(id, n) >= 0 && memberColor(id, n) < n);
   assert.notEqual(memberColor("user_abc123", n), memberColor("user_abc124", n));
+});
+
+test("a ring member's selection is drawn row by row, only what is on screen", () => {
+  // Screen 10 × 3 whose top row is stable row 100.
+  const rows = (a: [number, number], b: [number, number], block = false) => selectionRows({ a, b, block }, 100, 10, 3);
+  assert.deepEqual(rows([100, 2], [100, 5]), [[0, 2, 6]]);
+  // Backwards is the same; middle rows run to the edge.
+  assert.deepEqual(rows([102, 1], [100, 8]), [
+    [0, 8, 10],
+    [1, 0, 10],
+    [2, 0, 2],
+  ]);
+  // A rectangle: the same columns on each row.
+  assert.deepEqual(rows([101, 6], [100, 3], true), [
+    [0, 3, 7],
+    [1, 3, 7],
+  ]);
+  // Scrolled off above or below: nothing; partly: the part on screen.
+  assert.deepEqual(rows([50, 0], [60, 4]), []);
+  assert.deepEqual(rows([200, 0], [210, 4]), []);
+  assert.deepEqual(rows([90, 0], [100, 4]), [[0, 0, 5]]);
+  assert.deepEqual(rows([102, 3], [1_000_000, 0]), [[2, 3, 10]]);
 });

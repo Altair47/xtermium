@@ -2043,6 +2043,7 @@ fn main() {
             coop::coop_remote_mouse,
             coop::coop_remote_input,
             coop::coop_remote_select,
+            coop::coop_selection,
             coop::coop_remote_paste,
         ])
         .build(tauri::generate_context!())

@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
-import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -22,8 +22,9 @@ export const app = $state({
   /** The Terminal Co-op dialog is open (Coop.svelte). */
   showCoop: false,
   /** Terminal Co-op as the backend last said (the `coop` event, src/coop.rs): the ring you are in, your
-   *  tabs it shares (their ids), the tabs shared with you and where the others' pointers are. */
-  coop: { ring: null as CoopRing | null, shared: [] as number[], remote: [] as CoopRemote[], cursors: [] as CoopCursor[] },
+   *  tabs it shares (their ids), the tabs shared with you, where the others' pointers are and what
+   *  they have selected. */
+  coop: { ring: null as CoopRing | null, shared: [] as number[], remote: [] as CoopRemote[], cursors: [] as CoopCursor[], selections: [] as CoopSelection[] },
   settings: null as Settings | null,
   schemes: [] as Scheme[],
   ciphers: [] as string[],
@@ -58,7 +59,7 @@ export const app = $state({
 // Terminal Co-op: the whole picture arrives whenever any of it changes, pointers up to 20 times a
 // second, so only the parts that differ are assigned and the rest of the interface isn't redrawn.
 function takeCoop(p: CoopEvent) {
-  const next = { ring: p.ring ?? null, shared: p.shared ?? [], remote: p.remote ?? [], cursors: p.cursors ?? [] };
+  const next = { ring: p.ring ?? null, shared: p.shared ?? [], remote: p.remote ?? [], cursors: p.cursors ?? [], selections: p.selections ?? [] };
   const same = (k: keyof typeof next) => JSON.stringify(app.coop[k]) === JSON.stringify(next[k]);
   Object.assign(app.coop, Object.fromEntries(Object.entries(next).filter(([k]) => !same(k as keyof typeof next))));
 }
