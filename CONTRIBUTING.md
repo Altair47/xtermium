@@ -29,6 +29,9 @@ abuse@xtermium.com.
   (cd rdp && cargo clippy --all-targets)   # when rdp/ changed
   ```
 
+- Have a Mac, Linux, two Pro accounts or an xrdp host? `docs/QA.md` lists what has shipped
+  but hasn't been tested on those yet.
+
 ## Commits and release notes
 
 Each commit has a short summary line, then a body of bullets saying what changed. The pull
