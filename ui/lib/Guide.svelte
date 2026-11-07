@@ -79,7 +79,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 5px 5px 5px 13px;
+    padding: 5px;
+    padding-inline-start: 13px;
     border-bottom: 1px solid var(--line);
   }
   h2 {

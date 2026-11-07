@@ -155,7 +155,7 @@
     const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #141414)`;
     root.setProperty("--gold", `light-dark(${onLight}, ${c})`);
     root.setProperty("--gold-ink", `light-dark(#fff, ${light ? "#111" : "#fff"})`);
-    root.setProperty("--gold-soft", "color-mix(in srgb, var(--gold) 16%, transparent)");
+    root.setProperty("--gold-soft", "color-mix(in srgb, var(--gold) 14%, transparent)");
   }
   let saveTimer = 0;
   let loaded = false;
@@ -1319,7 +1319,7 @@
         <Backdrop place="sidebar" tint={(a) => `rgba(var(--panel-rgb), ${a})`} />
         <!-- The sidebar shows messages; collapsed, they wait behind this. -->
         {#if app.status}
-          <button class="flat icon-only" onclick={() => expandSidebar()} title={app.status} aria-label={app.status}><Icon name="info-circle" size={16} color="var(--gold)" /></button>
+          <button class="flat icon-only" onclick={() => expandSidebar()} title={app.status} aria-label={app.status}><Icon name="info-circle" size={16} color="var(--weak)" /></button>
         {/if}
         <span class="grow"></span>
         {@render corner()}
@@ -1494,13 +1494,13 @@
                   <button class="flat" onclick={localShell} style:--kind="var(--k-shell)" title={_("A terminal on this computer")}>
                     <span class="glyph"><Icon name="terminal" size={16} /></span>{_("Open a local shell")}
                   </button>
-                  <button class="flat" onclick={createSession} style:--kind="var(--k-ssh)" title={_("SSH, RDP, serial port or website")}>
+                  <button class="flat" onclick={createSession} style:--kind="var(--weak)" title={_("SSH, RDP, serial port or website")}>
                     <span class="glyph"><Icon name="plus" size={16} /></span>{_("New session")}
                   </button>
-                  <button class="flat" onclick={() => (showImport = true)} style:--kind="var(--k-rdp)" title={_("From MobaXterm, ~/.ssh/config or an xtermium export")}>
+                  <button class="flat" onclick={() => (showImport = true)} style:--kind="var(--weak)" title={_("From MobaXterm, ~/.ssh/config or an xtermium export")}>
                     <span class="glyph"><Icon name="import" size={16} /></span>{_("Import sessions")}
                   </button>
-                  <button class="flat" onclick={() => (showTunnels = true)} style:--kind="var(--gold)" title={_("Forward ports over SSH")}>
+                  <button class="flat" onclick={() => (showTunnels = true)} style:--kind="var(--weak)" title={_("Forward ports over SSH")}>
                     <span class="glyph"><Icon name="transfer-alt" size={16} /></span>{_("Tunnels")}
                   </button>
                 </div>
@@ -2008,7 +2008,8 @@
   .status {
     gap: 5px;
     margin: 0 5px 5px;
-    padding: 2px 2px 2px 8px;
+    padding: 2px;
+    padding-inline-start: 8px;
     border-radius: var(--r-control);
     background: rgba(var(--deep-rgb), 1);
     font-size: var(--t-s);

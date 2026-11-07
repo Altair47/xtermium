@@ -275,7 +275,7 @@
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    margin-left: 5px;
+    margin-inline-start: 5px;
   }
   .spark {
     position: relative;

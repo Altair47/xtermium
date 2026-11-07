@@ -406,7 +406,7 @@
     border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line));
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);
-    animation: float-in 0.15s ease-out;
+    animation: float-in 0.16s var(--ease-out);
   }
   .insecure span {
     flex: 1;

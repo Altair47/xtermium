@@ -1790,6 +1790,10 @@ xtermium close 3`}</pre>
     background: var(--raised);
     box-shadow: inset 2px 0 var(--gold);
   }
+  /* the edge is on the leading side: mirror it right to left */
+  :global([dir="rtl"]) .pages button.current {
+    box-shadow: inset -2px 0 var(--gold);
+  }
   h3 {
     margin-top: 5px;
   }
@@ -1976,7 +1980,7 @@ xtermium close 3`}</pre>
   .preview {
     height: 64px;
     padding: 8px 13px;
-    font: 13px var(--mono);
+    font: var(--t) var(--mono);
     border-radius: 3px;
     background: rgba(var(--deep-rgb), 1);
   }
