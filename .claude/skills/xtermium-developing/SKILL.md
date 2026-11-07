@@ -35,8 +35,8 @@ xtermium is a Rust backend on tokio inside Tauri 2, with a Svelte 5 + TypeScript
 | File | What it holds |
 |---|---|
 | `CLAUDE.md` | how it fits together, data and storage, UI conventions, automation, build/test/run |
-| `README.md` "Architecture" | the path table (`src/main.rs`, `src/term.rs`, `src/ssh.rs`, …) and the frame model |
-| `README.md` "Configuration", "Security notes" | data folder, file list, encryption, accepted advisories |
+| wiki [Development](https://github.com/xtermium/xtermium/wiki/Development) "Architecture" | the path table (`src/main.rs`, `src/term.rs`, `src/ssh.rs`, …) and the frame model |
+| wiki [Security](https://github.com/xtermium/xtermium/wiki/Security), [Development](https://github.com/xtermium/xtermium/wiki/Development) "Security notes" | data folder, file list, encryption; accepted advisories |
 | `DESIGN.md` | the UI's tokens, components and named rules (`xtermium-designing`) |
 | `docs/sync.md` | sealed-file formats and the sync client's API contract |
 | `CONTRIBUTING.md` | branches, pull requests, commits, versions (`xtermium-contributing`) |
@@ -143,7 +143,7 @@ Deliberately open (don't "fix" these without a maintainer):
 | Network-mode assistant commands start Node-based assistants with `NODE_TLS_REJECT_UNAUTHORIZED=0` | the certificate is self-signed; its SHA-256 fingerprint is shown instead |
 | `initialize`, `ping` and `tools/list` answer while locked | assistants keep the server and carry on after an unlock |
 | `fetch_favicon` skips certificate checks | admin pages are mostly self-signed; only a picture comes back, shown in `<img>` |
-| Imported tunnels keep the imported bind address (often `0.0.0.0`) | the README warns; new tunnels default to `127.0.0.1` |
+| Imported tunnels keep the imported bind address (often `0.0.0.0`) | the wiki (Security, Usage › Tunnels) warns; new tunnels default to `127.0.0.1` |
 | VNC is unencrypted | the app says so over the desktop unless an SSH gateway or tunnel carries it |
 | `cargo audit` accepts RUSTSEC-2023-0071 (rsa "Marvin") and RUSTSEC-2026-0253 (lru) | reasons in `.cargo/audit.toml` and `rdp/.cargo/audit.toml` |
 | `patches/glib` (glib 0.18 with the fix for GHSA-wrw7-89jp-8q8g) | until Tauri moves to glib 0.20 or newer |
@@ -170,7 +170,7 @@ Files, formats, lock, automation checks, network pieces and advisories in detail
 - Returning a session object with its password or key passphrase in it.
 - Comparing secrets with `==` instead of `same()`.
 - Writing logs or temp files to the OS temp or app-data folders.
-- Running `cargo fmt` over whole files (the README's Development block starts with it; on this codebase it rewrites about 100 places).
+- Running `cargo fmt` over whole files (the wiki's Development checks start with it; on this codebase it rewrites about 100 places).
 - A Svelte transition without the reduced-motion check.
 
 ## Read next

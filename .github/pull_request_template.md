@@ -26,5 +26,5 @@ Fixes #
 
 - [ ] One topic; no reformatting of code I didn't touch
 - [ ] The version in `Cargo.toml` and `package.json` is unchanged (maintainers raise it to release)
-- [ ] UI text goes through the translation files; README and docs say what changed
+- [ ] UI text goes through the translation files; the PR says what the wiki should say about what changed
 - [ ] My contribution is licensed under the Apache License 2.0

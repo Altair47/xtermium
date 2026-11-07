@@ -7,7 +7,7 @@ description: Use when connecting an AI assistant or script to xtermium, turning 
 
 ## Overview
 
-xtermium has an MCP server and a command line that call the same tools: open sessions, run commands and read terminals, drive remote desktops and website tabs, start tunnels, switch workspaces, open layouts, detach tabs and keep restore points. The server is off until Settings › MCP turns it on; it listens on `http://127.0.0.1:8721/mcp` behind a token, or on the network over HTTPS with a self-signed certificate. Tools never reveal passwords, never see AI-agent tabs, and refuse while xtermium is locked. Sources: `README.md` ("Agents and scripts"), the wiki's AI agents page, `src/automation.rs` (the tools) and `src/cli.rs` (the CLI).
+xtermium has an MCP server and a command line that call the same tools: open sessions, run commands and read terminals, drive remote desktops and website tabs, start tunnels, switch workspaces, open layouts, detach tabs and keep restore points. The server is off until Settings › MCP turns it on; it listens on `http://127.0.0.1:8721/mcp` behind a token, or on the network over HTTPS with a self-signed certificate. Tools never reveal passwords, never see AI-agent tabs, and refuse while xtermium is locked. Sources: the wiki's AI agents page, `src/automation.rs` (the tools) and `src/cli.rs` (the CLI).
 
 ## When to use
 
@@ -145,7 +145,7 @@ $ xtermium close 2
 
 ## Read next
 
-- `README.md` "Agents and scripts": the user-facing summary.
+- The wiki's [AI agents](https://github.com/xtermium/xtermium/wiki/AI-agents) page: the user-facing detail.
 - `CLAUDE.md` "Automation (MCP + CLI)": how tools are added.
 - `CONTRIBUTING.md`: proposing a new tool.
 - `xtermium-developing`: adding a tool and CLI word; the automation server's security checks.

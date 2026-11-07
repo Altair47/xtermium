@@ -24,7 +24,7 @@ You get a reply as soon as the report has been read. A confirmed problem is fixe
 
 - **In scope:** the app in this repository (the Rust backend, the UI, the RDP helper, the MCP server and the `xtermium` command line, the installers and the install scripts), and the hosts under xtermium.com and xtermium.gr, including the sync server at account.xtermium.com.
 - **Out of scope:** Creem, the sign-in providers, GitHub, Cloudflare's own platform and our hosting provider's networks; denial of service and load testing; spam, social engineering and physical access; findings that need an attacker who already controls your user account or your OS keychain.
-- **Known and accepted:** the `cargo audit` advisories listed with their reasons in the README's [Security notes](https://github.com/xtermium/xtermium#security-notes).
+- **Known and accepted:** the `cargo audit` advisories listed with their reasons in the wiki's [Development › Security notes](https://github.com/xtermium/xtermium/wiki/Development#security-notes).
 
 ## Testing
 
