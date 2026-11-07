@@ -22,7 +22,7 @@ Needs two (or three) Pro accounts on separate machines, joined in one ring throu
 
 The macOS build ships unsigned, and nobody has run these on a Mac yet.
 
-- The SSH key picker hanging ([issue #40](https://github.com/xtermium/xtermium/issues/40)).
+- The fix for the SSH key picker hanging ([issue #40](https://github.com/xtermium/xtermium/issues/40)): native dialogs now open with the calling window as their parent (PR #39). Not confirmed on a Mac.
 - The app's own title bar: the overlay style with its three buttons, dragging, full screen.
 - The per-system shortcuts (⌘ in place of Ctrl), as the wiki's shortcut table lists them.
 - Opening the unsigned `.dmg` past Gatekeeper, as the Installation page describes it.
