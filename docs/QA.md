@@ -1,0 +1,53 @@
+# Not yet tested
+
+What has shipped (on `main`, in the nightly or a release) but hasn't been seen working on
+real hardware or a real setup yet. Automated tests pass for all of it; what's missing is a
+person, a second account or a system we don't have at hand. If you can check an item, say how
+it went in an issue or a pull request, and remove the item once it has held up.
+
+## Terminal Co-op
+
+Needs two (or three) Pro accounts on separate machines, joined in one ring through the relay.
+
+- Shared selections: everyone selects on their own, and each selection is drawn in its
+  person's ring colour in every window.
+- Copy and paste between members (sizes up to the limits on the wiki's Usage page), and a
+  paste from an owner on an older version.
+- The owner renames a ring member (needs the sync server with the rename, live since
+  2026-11-07).
+- A removed member rejoining.
+- Remote desktop tabs shared in a ring: guests can't copy, paste or drop files.
+
+## macOS
+
+The macOS build ships unsigned, and nobody has run these on a Mac yet.
+
+- The SSH key picker hanging ([issue #40](https://github.com/xtermium/xtermium/issues/40)).
+- The app's own title bar: the overlay style with its three buttons, dragging, full screen.
+- The per-system shortcuts (⌘ in place of Ctrl), as the wiki's shortcut table lists them.
+- Opening the unsigned `.dmg` past Gatekeeper, as the Installation page describes it.
+
+## Linux
+
+- The app's own title bar (no system decorations): dragging, resizing from the edges,
+  maximising, and the polish pass's sizes.
+- The clipboard on X11 and Wayland, in terminals and in Co-op.
+
+## Right to left
+
+- The Arabic locale with the new title bar, the sidebar row on the tab line and the
+  Getting started guide.
+
+## Windows
+
+- Unlocking with Windows Hello (needs a camera or a fingerprint reader).
+
+## Remote desktops
+
+- RDP to xrdp: the picture is drawn sheared, row by row (an open decoder bug). Then the
+  resize that keeps the session and the login with a saved password, on a real xrdp host.
+
+## Automation
+
+- `run … --until` and `--wait` in an SSH tab right after `clear` (checked in a local cmd.exe
+  tab on Windows).
