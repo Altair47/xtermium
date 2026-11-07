@@ -38,7 +38,7 @@ Four commands cover the app: `npm run check` (types), `npm test` (UI and script 
 
 ## What `cargo test` covers
 
-- An end-to-end SSH run against an in-process server (host-key prompt, password auth, shell, SFTP and a local tunnel), the importer, the RDP wire protocol and key scancodes, the SOCKS5 handshake, broadcast key encoding, highlight rules (README "Development").
+- An end-to-end SSH run against an in-process server (host-key prompt, password auth, shell, SFTP and a local tunnel), the importer, the RDP wire protocol and key scancodes, the SOCKS5 handshake, broadcast key encoding, highlight rules (the wiki's Development page, "Checks").
 - Automation guards in `src/automation.rs`: `only_local_callers` (Host and Origin), the oversized request line, `locked_xtermium_refuses_tools`; the CLI's `commands` test in `src/cli.rs`.
 - The data folder's 0700 mode on Linux and macOS (`src/config.rs`).
 

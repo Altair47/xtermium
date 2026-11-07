@@ -62,7 +62,7 @@ by hand and through an AI agent or script.
 
 ## Evidence on Hand
 
-The README's feature list and the app itself. There are no customers, testimonials, case studies
+The README's feature list, the wiki and the app itself. There are no customers, testimonials, case studies
 or benchmarks on hand: future work must not invent any.
 
 ## Product Principles

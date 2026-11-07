@@ -1,6 +1,6 @@
 # The app's security model in detail
 
-Sources: `README.md` ("Keeping it safe", "Configuration", "Security notes"), `CLAUDE.md`, `docs/sync.md`, `tauri.conf.json`, `capabilities/default.json`, `.cargo/audit.toml`, and the source files named below.
+Sources: the wiki's [Security](https://github.com/xtermium/xtermium/wiki/Security) page and [Development](https://github.com/xtermium/xtermium/wiki/Development) "Security notes", `CLAUDE.md`, `docs/sync.md`, `tauri.conf.json`, `capabilities/default.json`, `.cargo/audit.toml`, and the source files named below.
 
 ## Files in the data folder
 
@@ -34,7 +34,7 @@ The data folder is `~/.xtermium` (`%USERPROFILE%\.xtermium` on Windows) or `XTER
 - Folder export `*.xtermium`: `XTMX` | salt | m_cost | t_cost | nonce | ciphertext; key from Argon2id over the export passphrase.
 - Readers refuse Argon2 parameters outside m_cost 8 MiB–1 GiB and t_cost 1–10, so a hostile file can't exhaust memory.
 - Sync requires a recovery passphrase of at least 12 characters (`recovery.key` rides along with the vault).
-- Only symmetric cryptography is used, so the README calls the storage post-quantum safe.
+- Only symmetric cryptography is used, so the wiki calls the storage post-quantum safe.
 - Upgrading from plain-text versions: the first start encrypts `sessions.toml`, `settings.toml`, `known_hosts`, `known_rdp`, checks the result and deletes the plain files.
 
 ## The lock (`src/lock.rs`)
