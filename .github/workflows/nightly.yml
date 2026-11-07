@@ -14,8 +14,8 @@ name: nightly
 
 on:
   schedule:
-    # 01:17 UTC: off the hour, when GitHub's scheduler is busiest.
-    - cron: "17 1 * * *"
+    # 01:30 UTC: 03:30 in Athens in winter (04:30 in summer; cron runs on UTC).
+    - cron: "30 1 * * *"
   workflow_dispatch:
 
 concurrency:
