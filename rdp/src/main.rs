@@ -487,6 +487,10 @@ fn config(user: String, password: String, domain: String, width: u16, height: u1
         1 => (true, 32, looks | lean),
         _ => (true, 16, lean | F::DISABLE_THEMING | F::DISABLE_CURSOR_SHADOW | F::DISABLE_CURSORSETTINGS),
     };
+    // xrdp has no NLA and reads the Client Info password only when INFO_AUTOLOGON is set, else it
+    // shows its own login screen. Windows authenticates through CredSSP first and accepts it too
+    // (mstsc and FreeRDP set it whenever they have a password).
+    let autologon = !password.is_empty();
     connector::Config {
         credentials: Credentials::UsernamePassword { username: user, password },
         domain: (!domain.is_empty()).then_some(domain),
@@ -521,7 +525,7 @@ fn config(user: String, password: String, domain: String, width: u16, height: u1
         },
         hardware_id: None,
         request_data: None,
-        autologon: false,
+        autologon,
         enable_audio_playback: false,
         performance_flags,
         license_cache: None,
@@ -546,6 +550,16 @@ mod tests {
         assert!(signed_out(&other(Code::RpcInitiatedDisconnectByuser)));
         assert!(!signed_out(&other(Code::IdleTimeout)));
         assert!(!signed_out(&R::ServerInitiated));
+    }
+
+    /// xrdp uses the password only with autologon (else it shows its login screen); without a
+    /// password the server's own login screen is the way in, so autologon stays off.
+    #[test]
+    fn a_password_logs_on_by_itself() {
+        let with = super::config("u".into(), "p".into(), String::new(), 1920, 1080, 0);
+        assert!(with.autologon);
+        let without = super::config("u".into(), String::new(), String::new(), 1920, 1080, 0);
+        assert!(!without.autologon);
     }
 
     #[test]
