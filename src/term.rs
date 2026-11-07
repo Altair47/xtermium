@@ -971,16 +971,7 @@ impl Tab {
 
     /// The last `lines` lines (screen and scrollback) as plain text, without trailing blanks.
     pub fn text(&self, lines: usize) -> String {
-        let i = self.inner.lock().unwrap();
-        let screen = i.term.screen();
-        let total = screen.scrollback_rows();
-        // The last lines with text: the screen's blank rows below the prompt don't count.
-        let rows = screen.lines_in_phys_range(total.saturating_sub(lines + screen.physical_rows)..total);
-        let mut text: Vec<String> = rows.iter().map(|l| l.as_str().trim_end().to_string()).collect();
-        while text.last().is_some_and(String::is_empty) {
-            text.pop();
-        }
-        text[text.len().saturating_sub(lines)..].join("\n")
+        rows_text(self.inner.lock().unwrap().term.screen(), 0, lines)
     }
 
     /// The cursor's row, as a stable index (it keeps naming the same line as output scrolls):
@@ -994,15 +985,8 @@ impl Tab {
     pub fn text_from(&self, from: StableRowIndex, max: usize) -> String {
         let i = self.inner.lock().unwrap();
         let screen = i.term.screen();
-        let total = screen.scrollback_rows();
         // A row that scrolled out of the scrollback: everything there is.
-        let start = screen.stable_row_to_phys(from).unwrap_or(0).max(total.saturating_sub(max));
-        let rows = screen.lines_in_phys_range(start..total);
-        let mut text: Vec<String> = rows.iter().map(|l| l.as_str().trim_end().to_string()).collect();
-        while text.last().is_some_and(String::is_empty) {
-            text.pop();
-        }
-        text.join("\n")
+        rows_text(screen, screen.stable_row_to_phys(from).unwrap_or(0), max)
     }
 
     /// Size in cells, and the cursor (column, row on screen).
@@ -2269,9 +2253,40 @@ fn run_serial(
     Ok(())
 }
 
+/// The text from physical row `start` on, at most its last `max` lines with text. The screen's
+/// blank rows below the prompt don't count: on a tall screen right after `clear`, the last `max`
+/// rows can all be blank (`run … until` once returned nothing that way).
+fn rows_text(screen: &wezterm_term::Screen, start: usize, max: usize) -> String {
+    let total = screen.scrollback_rows();
+    let start = start.max(total.saturating_sub(max + screen.physical_rows));
+    let mut text: Vec<String> =
+        screen.lines_in_phys_range(start..total).iter().map(|l| l.as_str().trim_end().to_string()).collect();
+    while text.last().is_some_and(String::is_empty) {
+        text.pop();
+    }
+    text.split_off(text.len().saturating_sub(max)).join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A command's output is found below its line even on a screen taller than the line limit,
+    /// with only blank rows under it (as right after `clear`).
+    #[test]
+    fn text_from_skips_blank_rows_below() {
+        let mut i = inner(40, 80, None);
+        i.term.advance_bytes("\x1b[H\x1b[2J$ ");
+        let s = i.term.screen();
+        let from = s.visible_row_to_stable_row(i.term.cursor_pos().y);
+        i.term.advance_bytes("echo marker\r\nmarker\r\n$ ");
+        let s = i.term.screen();
+        let at = |r| s.stable_row_to_phys(r).unwrap();
+        assert_eq!(rows_text(s, at(from), 50), "$ echo marker\nmarker\n$");
+        assert_eq!(rows_text(s, at(from + 1), 50), "marker\n$");
+        assert_eq!(rows_text(s, at(from), 2), "marker\n$");
+        assert_eq!(rows_text(s, 0, 1), "$");
+    }
 
     /// Host and user stay PowerShell string literals, whatever quotes they hold.
     #[test]
