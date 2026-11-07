@@ -12,6 +12,11 @@ issue first so we can agree on the approach before you write it.
   open the pull request against `xtermium/xtermium`'s `main`.
 - One topic per pull request. Keep the diff to the change: don't reformat or reorder code you
   didn't touch.
+- A change that adds, changes, removes, breaks or deprecates a feature needs its documentation in
+  the wiki (https://github.com/xtermium/xtermium/wiki). The wiki's pages live outside this repository, so say in the pull
+  request what the wiki should say (what it does, where it is, its limits, what changed); a
+  maintainer updates it once the change ships. Keep the README a light overview: no new detail
+  there.
 - Run the checks before you open it. A plain `cargo` command needs the RDP helper built once:
   run `npm run rdp` first.
 

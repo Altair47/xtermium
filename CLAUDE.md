@@ -2,7 +2,8 @@
 
 A terminal with a session manager (SSH, SFTP, RDP, VNC, telnet, serial, BMC consoles, websites,
 tunnels) for sysadmins. Rust backend on tokio + Tauri 2, Svelte 5 UI.
-README.md lists the features for users; this file is how it's built and how the owner works.
+README.md is a light overview for users; the details (menus, limits, formats, flows) live in the
+wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and how the owner works.
 
 ## How it fits together
 
@@ -160,7 +161,7 @@ README.md lists the features for users; this file is how it's built and how the 
 
 New user-facing capabilities usually get a tool: add it in `automation::tools()` (schema and
 description) and `call()`, a CLI word in `cli.rs` (`USAGE`, `COMMANDS`, `parse`, the `commands`
-test), the list sentence in Settings › MCP, and a README line. Tools never reveal
+test), the list sentence in Settings › MCP, and its entry on the wiki's AI agents page. Tools never reveal
 passwords; AI-agent sessions/tabs are invisible to automation. UI-side actions are done by
 emitting an event to the main window (`automation-open`, `automation-detach`, `automation-layout`).
 
@@ -196,6 +197,10 @@ npm run tauri build -- --debug --no-bundle   # standalone debug exe: target/debu
 
 ## How the owner works
 
+- **Every change that adds, changes, removes, breaks or deprecates a feature, or changes the
+  project, is documented in the wiki** (https://github.com/xtermium/xtermium/wiki; its pages are kept in the website's
+  repository and pushed once the change has shipped). The README stays light: what xtermium is,
+  install, a short feature list and links to the wiki; never add menus, limits or steps to it.
 - Requests come as numbered lists; do all of them, verify in the running app, then report briefly
   per item with what was tested and what couldn't be.
 - "commit, merge to main and rebuild": branch `feat/<topic>` from main, commit (message body as
