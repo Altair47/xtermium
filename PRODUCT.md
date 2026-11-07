@@ -30,6 +30,9 @@ right way, in seconds, and trusts what they type to land where they meant.
   at once.
 - **Encrypted and synced:** everything on disk is encrypted with a data key kept in the OS
   keychain (a recovery passphrase can restore it); workspaces sync end-to-end encrypted.
+  Uploading needs Pro; downloading and deleting your data stay free.
+- **Terminal Co-op (Pro):** share tabs with up to two more people, peer to peer; the sync server
+  only introduces them.
 - **Automatable:** an MCP server and the `xtermium` command line drive the same tools, so AI
   agents and scripts can open sessions, type commands and read output.
 - **Fast and native-feeling:** a Rust backend and a GPU-drawn terminal; the terminal's speed and
@@ -44,7 +47,9 @@ by hand and through an AI agent or script.
 
 ## Capabilities and Constraints
 
-- Cross-platform with equal priority: Windows, macOS and Linux.
+- Cross-platform with equal priority: Windows, macOS and Linux. A few features exist on one
+  system only for now: screenshots of website tabs and File Explorer's "Open in xtermium" are
+  Windows only.
 - Keyboard-first: every action is reachable from the keyboard and has a rebindable shortcut; the
   command palette reaches everything; dialogs hold the keyboard so nothing typed into them ever
   reaches a server.

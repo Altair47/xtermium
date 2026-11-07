@@ -10,7 +10,8 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
 - **Backend owns all state and connections** (`src/main.rs`: `App` in Tauri state, every
   `#[tauri::command]`, registered in `generate_handler!`). The UI calls commands and listens to
   events (`emit_to("main", …)`; `emit` reaches every window). Commands that create windows must be
-  `async` (a sync one deadlocks on Windows).
+  `async` (a sync one deadlocks on Windows). Background connection tasks ask the UI for
+  passwords and confirmations through `src/prompt.rs`.
 - **Terminal tabs** (`src/term.rs`): wezterm-term VT engine; `Inner::frame()` diffs the visible rows
   and streams only changed rows (runs of same-styled cells), meta (cursor, title, scroll…) and the
   style over a per-tab `Channel`. `ui/lib/Terminal.svelte` keeps the screen model and paints it
@@ -21,8 +22,11 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
   The helper reconnects by itself after a network loss (same trusted key, no prompt) and keeps
   input in one ordered queue, typed text paced (`PACE`); the UI sends `release` when the view
   loses the keyboard and lock-key states as `sync`.
-  VNC is in-process (`src/vnc.rs`). Websites and BMC consoles are native child webviews laid over
-  the tab (`src/web.rs`, `src/kvm/`), hidden while a dialog/menu overlaps them.
+  VNC is in-process (`src/vnc.rs`), and so is telnet (`src/telnet.rs`, with RFC 854 option
+  negotiation). Websites and BMC consoles are native child webviews laid over
+  the tab (`src/web.rs`, `src/kvm/`), hidden while a dialog/menu overlaps them; for iDRAC
+  consoles `src/kvm/relay.rs` is a local WebSocket-to-TLS relay that trusts only the BMC's
+  pinned certificate.
 - **Windows have no system title bar** (`own_bar` in main.rs: no decorations on Windows and Linux,
   the overlay style with its own three buttons on macOS). `ui/lib/TitleBar.svelte` draws the bar
   in the main window and detached ones: Tauri's `data-tauri-drag-region` moves the window, the
@@ -52,7 +56,9 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
   **cloud sync** (`src/sync.rs`, end-to-end encrypted), **tray / keep running** (`src/tray.rs`),
   **one instance per data folder** (`src/instance.rs`; a second start passes on `--open-here
   <folder>` from File Explorer's "Open in xtermium", `src/explorer.rs`, HKCU registry, Windows),
-  importers (`src/formats/`), and **around the app itself** (`src/support.rs`): desktop
+  importers (`src/formats/`), **AI agent sessions' MCP servers and skills** (`src/agent_mcp.rs`:
+  read from each tool's own config, turned off per session), **Settings › SSH keys**
+  (`src/sshkeys.rs`: the key pairs in `~/.ssh`), path-field suggestions (`src/paths.rs`), and **around the app itself** (`src/support.rs`): desktop
   notifications and start-at-login (Tauri plugins), the process priority, the build number
   (`XTERMIUM_BUILD`, stamped by release.yml) with the GitHub release check, the troubleshooting
   bundle, `custom.css` in the data folder (the UI applies it; a changed one is kept only on a yes
@@ -99,7 +105,7 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
   the lock's hashes and passkey (`src/lock.rs`; never sent to the UI, changed only after an unlock),
   `background.xtm`, `background-sidebar.xtm`, `background-bar.xtm` the backgrounds of terminals,
   the sidebar and the tab bar (a `data:` picture or shader source; `background_set` and a sync pull
-  are the only writers, `save_settings` keeps each `Settings::background_of` but its `show`). `Backdrop.svelte`
+  are the only writers, `save_settings` keeps each `Settings::background_of` but its `show` and `fit`). `Backdrop.svelte`
   draws one under a place (its parent isolates stacking), `BackgroundPicker.svelte` picks one.
   Shaders run in `ui/lib/shader.ts`: one WebGL 2 context per window compiles each once and draws
   one frame for every view showing it.
@@ -173,12 +179,13 @@ emitting an event to the main window (`automation-open`, `automation-detach`, `a
 ```
 npm run check                      # svelte-check, must be 0 errors 0 warnings
 npm test                           # UI tests incl. locale consistency
+npm run rdp                        # the RDP helper into binaries/, once, before any plain cargo command
 cargo clippy --all-targets && cargo test
-npm run tauri build -- --debug --no-bundle   # standalone debug exe: target/debug/xtermium.exe
+CARGO_TARGET_DIR=target/work npm run tauri build -- --debug --no-bundle   # a test exe: target/work/debug/xtermium.exe
 ```
 
-- The owner runs `target/debug/xtermium.exe` day to day. While it runs, `target/debug` is locked:
-  build and test in `CARGO_TARGET_DIR=target/work`. Never kill their process.
+- Build and test in `CARGO_TARGET_DIR=target/work`. The owner uses the Scoop install, not a
+  local build, so no rebuild follows a merge.
 - Visual checks: launch the target/work exe with its own `XTERMIUM_HOME` (a scratch folder),
   `WEBVIEW2_USER_DATA_FOLDER` (scratch) and
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`, then drive/screenshot the
@@ -206,17 +213,17 @@ npm run tauri build -- --debug --no-bundle   # standalone debug exe: target/debu
   install, a short feature list and links to the wiki; never add menus, limits or steps to it.
 - Requests come as numbered lists; do all of them, verify in the running app, then report briefly
   per item with what was tested and what couldn't be.
-- "commit, merge to main and rebuild": branch `feat/<topic>` from main, commit (message body as
+- "commit and merge to main": branch `feat/<topic>` from main, commit (message body as
   bullets, ending with the Co-Authored-By line), push, `gh pr create --fill-first` with a short
-  body, `gh pr merge <n> --merge --delete-branch`, switch to main and pull, check xtermium isn't
-  running, then `npm run tauri build -- --debug --no-bundle`. Don't commit unless asked.
+  body, `gh pr merge <n> --merge --delete-branch`, switch to main and pull. The next nightly
+  carries it. Don't commit unless asked.
 - **Releases follow semver.** `Cargo.toml`'s version is the app's (tauri.conf.json has none; keep
   package.json's in step). A PR that raises it publishes `v<version>` when merged; merges without
   a bump publish nothing (release.yml skips a version already tagged). Pre-1.0: a new feature or
   a breaking change bumps the minor, a fix the patch. Bump only when asked to release.
 - **Merged work ships as nightly builds first; releases are seldom.** `nightly.yml` builds main
   every night it has changed (all three systems, or nothing) and replaces the files of the one
-  rolling `nightly` pre-release, under names without a version (`xtermium_nightly_…`); the Scoop
+  rolling `nightly` pre-release, under names without a version (`xtermium_nightly_…`, but the RPM is `xtermium-nightly-1.x86_64.rpm`); the Scoop
   bucket's `xtermium-nightly` and the site link to them. A nightly build carries the last
   release's version, `XTERMIUM_NIGHTLY` (its commit) makes it say "nightly" in Settings › About,
   and its update check reads the commit on the first line of that pre-release's notes
