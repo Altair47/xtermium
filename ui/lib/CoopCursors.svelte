@@ -3,6 +3,7 @@
   // marker in their colour with their picture beside it; their name shows on hover. The host
   // (Terminal.svelte, Rdp.svelte) says where a cell, or a pixel of a desktop, is in its box.
   import { COLORS } from "./api";
+  import { memberColor } from "./coop";
   import CoopPic from "./CoopPic.svelte";
   import { app } from "./state.svelte";
 
@@ -13,7 +14,7 @@
   /** A pointer reported at -1 has left the tab. */
   const here = $derived(app.coop.cursors.filter((c) => c.tab === tab && c.col >= 0 && c.row >= 0));
   /** Everyone keeps one colour, the same on every computer, from their id. */
-  const colorOf = (id: string) => COLORS[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLORS.length];
+  const colorOf = (id: string) => COLORS[memberColor(id, COLORS.length)];
 </script>
 
 {#each here as c (c.user_id)}

@@ -234,8 +234,10 @@
     }
     // Shift+Insert / Ctrl+Shift+V: type the local clipboard into the session.
     const paste = (e.shiftKey && e.code === "Insert") || (e.ctrlKey && e.shiftKey && e.code === "KeyV");
-    // A viewer's paste would type the owner's clipboard on their desktop: not offered.
-    if (paste) return down && !peer && send({ t: "paste" });
+    // Shared desktops take nothing to or from a clipboard (the owner's app refuses it too, coop.rs
+    // `desktop_ok`): a viewer's paste chord only says so.
+    if (paste && peer) return void (down && (app.status = _("Copy and paste aren't available in shared desktops.")));
+    if (paste) return down && send({ t: "paste" });
     // The lock keys go over as their states here, not as presses that would toggle whatever the
     // desktop had (Num Lock on there would turn the arrows of a numpad here into digits).
     sync(e);

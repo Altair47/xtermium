@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clock, pace, passcode, PASSCODE_ALPHABET, rate, throttle, traffic } from "./coop.ts";
+import { clock, memberColor, pace, passcode, PASSCODE_ALPHABET, rate, throttle, traffic } from "./coop.ts";
 
 test("a passcode is upper case, from the alphabet, and 8 characters at most", () => {
   assert.equal(passcode("a7k2m9qx"), "A7K2M9QX");
@@ -71,4 +71,11 @@ test("throttle sends the first call, then the last one of the wait", () => {
   send(4);
   assert.deepEqual(seen, [1, 3, 4]);
   mock.timers.reset();
+});
+
+test("a ring member keeps one colour, the same everywhere, and members differ", () => {
+  const n = 12;
+  assert.equal(memberColor("user_abc123", n), memberColor("user_abc123", n));
+  for (const id of ["", "a", "user_abc123", "x".repeat(200)]) assert.ok(memberColor(id, n) >= 0 && memberColor(id, n) < n);
+  assert.notEqual(memberColor("user_abc123", n), memberColor("user_abc124", n));
 });

@@ -12,8 +12,8 @@
   import { onDestroy, onMount, tick as nextTick, untrack } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { OS, wheelAction } from "./actions";
-  import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
-  import { throttle } from "./coop";
+  import { bytes, COLORS, css, fontStack, openUrl, type Meta, type Session } from "./api";
+  import { memberColor, throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
   import { close, decode, frameAt, type Pic } from "./images";
   import { glRenderer, type Renderer, type Run } from "./glyphs";
@@ -71,6 +71,11 @@
   let box: HTMLDivElement = $state()!;
   /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
   const ringTab = $derived(remote || shared);
+  /** A guest's own selection wears their ring colour, the one their pointer has for everyone. */
+  const mineColor = $derived.by(() => {
+    const me = app.coop.ring?.members.find((m) => m.you);
+    return me ? COLORS[memberColor(me.id, COLORS.length)] : null;
+  });
   /** A remote tab's canvas in CSS pixels, and `k` (at most 1) shrinking what the font size can't fit. */
   let view = $state({ w: 0, h: 0, k: 1 });
   /** A remote tab's font size (CSS pixels), picked so the owner's grid fills the box; 0 until fitted. */
@@ -106,6 +111,15 @@
   let meta: Meta = { cursor: null, title: "", alive: true, ended: false, lost: false, link: false, scrolled: false, images: [] };
   /** Ctrl is over a link: the pointer is a hand. */
   let overLink = $state(false);
+  /** A remote tab: the stable row number of the top row on screen (`meta.shared`), which a viewer's
+   *  own selection is kept in, so it stays on its text as the screen scrolls. */
+  let top = $state(0);
+  /** A viewer's own selection in a remote tab (stable row, column): everyone in a ring has their
+   *  own, drawn by their own window; the owner's copy reads its text. Null: none. */
+  let mine = $state<{ a: [number, number]; b: [number, number]; block: boolean } | null>(null);
+  /** The left button is down on a selection of `mine`: `unit` 1 words, 2 lines (a double or triple
+   *  click); `moved` once it is more than a click. */
+  let picking: { unit: number; moved: boolean } | null = null;
   let look: Look | null = null;
   /** Decoded images by hash; null while decoding. */
   const images = new Map<string, Pic | null>();
@@ -175,6 +189,7 @@
         }
       }
       overLink = meta.link;
+      if (meta.shared) top = meta.shared[0];
       onmeta(meta);
       if (meta.ended && !ended) onexit(true);
       ended = meta.ended;
@@ -498,26 +513,100 @@
     else invoke("term_text", { id, text: t });
   }
 
-  /** What a viewer sends the owner goes one message after another, so it arrives in the order typed. */
+  /** What a viewer sends the owner goes one message after another, so it arrives in the order typed.
+   *  `loud`: a refusal shows in the status bar (a copy or paste the owner's app can't take, say). */
   let queue: Promise<unknown> = Promise.resolve();
-  const toOwner = (command: string, args: Record<string, unknown>) =>
-    void (queue = queue.then(() => invoke(command, { ringTab: remote, ...args })).catch(() => {}));
+  const toOwner = (command: string, args: Record<string, unknown>, loud = false) =>
+    void (queue = queue.then(() => invoke(command, { ringTab: remote, ...args })).catch((e) => void (loud && (app.status = String(e)))));
 
-  /** Copy and paste belong to this computer's clipboard, which the owner's terminal must never read: a
-   *  viewer's paste is typed there as text, and copying does nothing. True for those chords. */
+  /** A viewer's paste: this computer's clipboard, read here, pasted into the owner's terminal. */
+  function pasteToOwner() {
+    navigator.clipboard
+      .readText()
+      .then((text) => text && toOwner("coop_remote_paste", { text }, true))
+      .catch(() => {});
+  }
+
+  /** Copy and paste belong to this computer's clipboard; the owner's is never read or written. A
+   *  viewer's copy asks the owner's app for the text of their own selection, which comes back to this
+   *  clipboard (`ask`), and a paste sends this clipboard's text. True for those chords. */
   function clipboardChord(e: KeyboardEvent) {
     // Ctrl+Shift or, on macOS, ⌘ with C or V: the chords term.rs `key` copies and pastes with.
     const clip = (e.ctrlKey && e.shiftKey) || (e.metaKey && !e.ctrlKey && !e.altKey);
     const paste = (clip && e.code === "KeyV") || (e.shiftKey && e.code === "Insert");
     if (!paste && !(clip && e.code === "KeyC")) return false;
     e.preventDefault();
-    if (paste)
-      navigator.clipboard
-        .readText()
-        .then((t) => t && typed(t))
-        .catch(() => {});
+    if (paste) pasteToOwner();
+    else if (mine) ask(0, true);
     return true;
   }
+
+  /** Asks the owner's app for the text of `mine`, widened to words (`unit` 1) or lines (2): its ends
+   *  come back (and are kept, if it is still the selection), and with `copy` the text lands on this
+   *  computer's clipboard. */
+  async function ask(unit: number, copy: boolean) {
+    const s = mine;
+    if (!s) return;
+    const r = await invoke<{ a: [number, number]; b: [number, number]; cut: boolean }>("coop_remote_select", { ringTab: remote, a: s.a, b: s.b, block: s.block, unit, copy }).catch((e) => void (app.status = String(e)));
+    if (!r) return;
+    if (mine === s) mine = { ...s, a: r.a, b: r.b };
+    if (copy && r.cut) app.status = _("Copied the first 512 KB of the selection.");
+  }
+
+  /** A viewer's left button over a remote tab makes their own selection here, as it would in a tab of
+   *  their own (a double click a word, a triple click a line, Alt a rectangle); copy on select is
+   *  their setting. Unless the program takes the mouse: then it goes to the program, and Shift or Alt
+   *  still select. True when the event was the selection's. */
+  function own(kind: string, e: MouseEvent, clicks: number) {
+    const shared = meta.shared;
+    if (!shared || !size || kind === "wheel") return false;
+    if (kind === "move" ? !picking : e.button !== 0 || (shared[1] && !e.shiftKey && !e.altKey)) return false;
+    const dpr = devicePixelRatio;
+    const col = Math.min(size[0] - 1, Math.max(0, Math.floor((e.offsetX * dpr) / cell.w)));
+    const row = Math.min(size[1] - 1, Math.max(0, Math.floor((e.offsetY * dpr) / cell.h)));
+    const at: [number, number] = [top + row, col];
+    const copy = app.settings?.copy_on_select ?? true;
+    if (kind === "down") {
+      mine = { a: at, b: at, block: e.altKey && clicks === 1 };
+      picking = { unit: Math.min(2, clicks - 1), moved: clicks > 1 };
+      if (picking.unit) ask(picking.unit, copy);
+    } else if (kind === "move") {
+      if (mine && (mine.b[0] !== at[0] || mine.b[1] !== at[1])) {
+        mine = { ...mine, b: at };
+        picking!.moved = true;
+      }
+    } else if (kind === "up" && picking) {
+      // A click clears the selection; a drag ends it, widened and copied as asked.
+      if (!picking.moved) mine = null;
+      else if (picking.unit || copy) ask(picking.unit, copy);
+      picking = null;
+    }
+    return true;
+  }
+
+  /** `mine` on screen: one box per row (CSS pixels from the tab's corner). */
+  const lit = $derived.by(() => {
+    if (!remote || !mine || !size || !box) return [];
+    let [a, b] = [mine.a, mine.b];
+    if (mine.block)
+      [a, b] = [
+        [Math.min(a[0], b[0]), Math.min(a[1], b[1])],
+        [Math.max(a[0], b[0]), Math.max(a[1], b[1])],
+      ];
+    else if (b[0] < a[0] || (b[0] === a[0] && b[1] < a[1])) [a, b] = [b, a];
+    const boxes: { x: number; y: number; w: number; h: number }[] = [];
+    for (let y = 0; y < size[1]; y++) {
+      const r = top + y;
+      if (r < a[0] || r > b[0]) continue;
+      const from = mine.block || r === a[0] ? a[1] : 0;
+      const to = mine.block || r === b[0] ? b[1] + 1 : size[0];
+      if (to <= from) continue;
+      const [x0, y0] = cellAt(from, y);
+      const [x1, y1] = cellAt(to, y + 1);
+      boxes.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    }
+    return boxes;
+  });
 
   // ---- auto-reconnect (Settings > SSH connections): a dropped connection comes back by itself ----
 
@@ -616,8 +705,10 @@
   let pointer: { x: number; y: number } | null = null;
 
   function mouse(kind: string, e: MouseEvent, lines = 0, clicks = 1) {
-    // A viewer's middle and right buttons stay here: pasting is the clipboard's, and the owner's is theirs.
-    if (remote && e.button > 0) return;
+    // A viewer's middle and right buttons stay here; a right click pastes this computer's clipboard
+    // when Settings › Terminal says so.
+    if (remote && e.button > 0) return void (kind === "down" && e.button === 2 && app.settings?.right_click_paste && pasteToOwner());
+    if (remote && own(kind, e, clicks)) return;
     pointer = { x: e.offsetX, y: e.offsetY };
     // Moves report button -1; the backend takes 0 (left), 1 (middle) or 2 (right).
     report({ kind, button: Math.max(0, e.button), x: e.offsetX, y: e.offsetY, lines, ctrl: LINK_KEY === "Meta" ? e.metaKey || e.ctrlKey : e.ctrlKey, alt: e.altKey, shift: e.shiftKey, clicks });
@@ -870,6 +961,7 @@
       ></div>
     </div>
   {/if}
+  {#each lit as r, i (i)}<div class="mine" style:--mine={mineColor} style:left="{r.x}px" style:top="{r.y}px" style:width="{r.w}px" style:height="{r.h}px"></div>{/each}
   {#if ringTab && box}<CoopCursors tab={ringTab} at={cellAt} />{/if}
   {#if retryAt}
     <div class="retry" role="status">
@@ -918,6 +1010,12 @@
     width: calc(100% - 2 * var(--pad));
     height: calc(100% - 2 * var(--pad));
     cursor: text;
+  }
+  /* a viewer's own selection in a remote tab, over the text */
+  .mine {
+    position: absolute;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--mine, var(--gold)) 35%, transparent);
   }
   /* thin, over the terminal's right edge; clearer while the pointer is on it */
   .scrollbar {
