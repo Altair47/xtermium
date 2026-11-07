@@ -260,8 +260,12 @@ pub fn typed(text: &str) -> Vec<Typed> {
 impl Look {
     /// The clipboard's text, ready to paste.
     fn pasted(&self) -> Option<String> {
-        let s = clipboard(|c| c.get_text())?;
-        Some(if self.strip_paste { s.trim().to_owned() } else { s })
+        clipboard(|c| c.get_text()).map(|s| self.strip(s))
+    }
+
+    /// Text to paste, trimmed when Settings › Terminal says so.
+    fn strip(&self, s: String) -> String {
+        if self.strip_paste { s.trim().to_owned() } else { s }
     }
 }
 
@@ -357,6 +361,19 @@ struct Meta {
     /// For the scroll bar: rows scrolled back from the bottom, and rows of scrollback above the screen.
     scrollback: (usize, usize),
     images: Vec<Placement>,
+    /// While Co-op shares the tab: the stable index of the top row on screen (a viewer keeps its
+    /// own selection in stable rows), and whether the program takes the mouse (a viewer's drag
+    /// goes to it then, else it selects).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shared: Option<(StableRowIndex, bool)>,
+}
+
+/// What a receiver of frames has: the rows, meta and images the next frame is a difference from.
+#[derive(Default)]
+struct Sent {
+    rows: Vec<Vec<Run>>,
+    meta: Option<Meta>,
+    images: HashSet<[u8; 32]>,
 }
 
 #[derive(Serialize)]
@@ -421,6 +438,9 @@ struct Inner {
     sent: Vec<Vec<Run>>,
     meta: Option<Meta>,
     images: HashSet<[u8; 32]>,
+    /// While shared, what the Co-op viewers have, when it isn't what the window has: their frames
+    /// leave out this side's selection. None: they get the window's very bytes.
+    theirs: Option<Sent>,
     /// Highlight spans of the rows on screen, by row, with the row's change number: a row that
     /// didn't change isn't matched again (the frame builder visits every row on every frame).
     highlighted: HashMap<StableRowIndex, (wezterm_surface::SequenceNo, Vec<Span>)>,
@@ -724,6 +744,7 @@ impl Inner {
             sent: vec![],
             meta: None,
             images: HashSet::new(),
+            theirs: None,
             highlighted: HashMap::new(),
             last_output: std::time::Instant::now(),
             share: None,
@@ -862,7 +883,8 @@ impl Tab {
             i.alive = true;
             i.ended = false;
             i.lost = false;
-            (i.scroll, i.sel, i.drag, i.meta, i.find, i.hover) = (0, None, None, None, None, None);
+            (i.scroll, i.sel, i.drag, i.find, i.hover) = (0, None, None, None, None);
+            i.resend();
             i.generation
         };
         self.tx = tx;
@@ -883,9 +905,9 @@ impl Tab {
         self.notify.notify_one();
     }
 
-    /// Terminal Co-op: from now on the bytes the window gets go to `sink` as well (None stops it).
-    /// Setting a sink, and calling this again for a viewer who joins, sends everything again, so
-    /// every viewer starts from the same state as the owner's window.
+    /// Terminal Co-op: from now on the frames go to `sink` as well (None stops it): the window's
+    /// bytes, but without the owner's selection (`next_frames`). Setting a sink, and calling this
+    /// again for a viewer who joins, sends viewers everything again.
     pub fn share(&self, sink: Option<UnboundedSender<Vec<u8>>>) {
         let mut i = self.inner.lock().unwrap();
         let on = sink.is_some();
@@ -902,7 +924,7 @@ impl Tab {
         i.highlighted.clear();
         i.term.set_config(Arc::new(TermConfig(look.palette.clone(), look.scrollback)));
         i.look = look;
-        i.meta = None;
+        i.resend();
         drop(i);
         self.notify.notify_one();
     }
@@ -1077,20 +1099,68 @@ impl Tab {
     }
 
     /// A Co-op viewer's pointer event, in pixels of their cells (`theirs`, width and height): it
-    /// acts on the screen like the owner's, at the same cell, but never reads or writes the
-    /// owner's clipboard (copy on select, right-click paste).
+    /// reaches the program at the same cell as the owner's would, and scrolls, but never selects
+    /// (a viewer's selection is their own, see `pick`) nor reads or writes the owner's clipboard.
     pub fn mouse_remote(&self, m: &Mouse, theirs: (f32, f32)) {
         self.pointer(m, Some(theirs));
     }
 
-    /// `theirs`: a Co-op viewer's cell size, else None.
+    /// A Co-op viewer's selection from `a` to `b` (stable row, column; `block`: the rectangle
+    /// between them), widened to whole words (`unit` 1) or lines (2) as a double or triple click
+    /// widens one: its ends and its text. This tab's own selection is left alone.
+    pub fn pick(&self, a: Cell, b: Cell, block: bool, unit: u8) -> ((Cell, Cell), Option<String>) {
+        self.inner.lock().unwrap().pick(a, b, block, unit)
+    }
+
+    /// A Co-op viewer's paste of their own clipboard's text: a paste like the owner's own (one
+    /// bracketed paste when the program asked for that, trimmed when Settings › Terminal says so),
+    /// into this tab alone.
+    pub fn paste(&self, text: &str) {
+        let s = self.inner.lock().unwrap().look.strip(text.to_owned());
+        self.apply(&[Typed::Paste(s)]);
+    }
+
     fn pointer(&self, m: &Mouse, theirs: Option<(f32, f32)>) -> Option<String> {
+        let (link, redraw) = self.inner.lock().unwrap().pointer(m, theirs);
+        if redraw {
+            self.notify.notify_one();
+        }
+        link
+    }
+}
+
+impl Inner {
+    /// `Tab::pick`.
+    fn pick(&self, a: Cell, b: Cell, block: bool, unit: u8) -> ((Cell, Cell), Option<String>) {
+        let i = self;
+        let screen = i.term.screen();
+        let total = screen.scrollback_rows();
+        // Inside the rows that exist: whatever a viewer sends, the walk over rows stays short.
+        let (first, last) = (screen.phys_to_stable_row_index(0), screen.phys_to_stable_row_index(total.max(1) - 1));
+        let cols = screen.physical_cols.max(1);
+        let fit = |(r, c): Cell| (r.clamp(first, last), c.min(cols - 1));
+        let (mut a, mut b) = (fit(a), fit(b));
+        if !block {
+            if b < a {
+                std::mem::swap(&mut a, &mut b);
+            }
+            match unit {
+                1 => (a, b) = (word_at(&i.term, a).0, word_at(&i.term, b).1),
+                2 => (a, b) = (line_at(&i.term, a.0).0, line_at(&i.term, b.0).1),
+                _ => {}
+            }
+        }
+        ((a, b), sel_range(Some((a, b)), block).and_then(|r| range_text(&i.term, r)))
+    }
+
+    /// `theirs`: a Co-op viewer's cell size, else None. Returns the link a Ctrl+click opens, and
+    /// whether the screen needs drawing again.
+    fn pointer(&mut self, m: &Mouse, theirs: Option<(f32, f32)>) -> (Option<String>, bool) {
         let remote = theirs.is_some();
-        let mut guard = self.inner.lock().unwrap();
-        let i = &mut *guard;
+        let i = self;
         let (cols, rows) = i.size;
         if cols == 0 {
-            return None;
+            return (None, false);
         }
         let (cw, ch) = i.cell;
         let (mx, my) = in_our_cells((m.x, m.y), (cw, ch), theirs);
@@ -1123,16 +1193,10 @@ impl Tab {
         let hover_changed = span != i.hover;
         i.hover = span;
         if m.kind == MouseKind::Down && m.button == 0 && link.is_some() {
-            drop(guard);
-            self.notify.notify_one();
-            return link.map(|l| l.0);
+            return (link.map(|l| l.0), true);
         }
         if !i.alive || (m.ctrl && m.kind == MouseKind::Up && link.is_some()) {
-            drop(guard);
-            if hover_changed {
-                self.notify.notify_one();
-            }
-            return None;
+            return (None, hover_changed);
         }
         match m.kind {
             MouseKind::Wheel => {
@@ -1159,12 +1223,14 @@ impl Tab {
             MouseKind::Move if grabbed => {
                 let _ = i.term.mouse_event(ev(MouseEventKind::Move, MouseButton::None));
             }
+            // Everyone in a ring has a selection of their own: a viewer's is kept and drawn by
+            // their window (coop.rs `Msg::Copy` reads its text), never this one, nor the clipboard.
+            MouseKind::Down | MouseKind::Up | MouseKind::Move if remote => {}
             MouseKind::Down if m.button == 0 && m.clicks >= 2 => {
                 let unit = if m.clicks == 2 { word_at(&i.term, (stable, x)) } else { line_at(&i.term, stable) };
                 i.sel = Some(unit);
                 (i.block, i.drag, i.unit) = (false, Some(true), Some((m.clicks > 2, unit)));
                 if i.look.copy_on_select
-                    && !remote
                     && let Some(s) = selection_text(i)
                 {
                     clipboard(|c| c.set_text(s));
@@ -1174,7 +1240,7 @@ impl Tab {
                 i.sel = Some(((stable, x), (stable, x)));
                 (i.block, i.drag, i.unit) = (m.alt, Some(false), None);
             }
-            MouseKind::Down if m.button == 2 && i.look.right_click_paste && !remote => {
+            MouseKind::Down if m.button == 2 && i.look.right_click_paste => {
                 if let Some(s) = i.look.pasted() {
                     let _ = i.term.send_paste(&s);
                 }
@@ -1196,7 +1262,7 @@ impl Tab {
             MouseKind::Up if m.button == 0 => {
                 i.unit = None;
                 match i.drag.take() {
-                    Some(true) if i.look.copy_on_select && !remote => {
+                    Some(true) if i.look.copy_on_select => {
                         if let Some(s) = selection_text(i) {
                             clipboard(|c| c.set_text(s));
                         }
@@ -1206,11 +1272,9 @@ impl Tab {
                 }
             }
             _ if hover_changed => {}
-            _ => return None,
+            _ => return (None, false),
         }
-        drop(guard);
-        self.notify.notify_one();
-        None
+        (None, true)
     }
 }
 
@@ -1282,21 +1346,53 @@ impl Inner {
     /// The messages for the window, and for the Co-op sink when the tab is shared. Taken under
     /// the tab's lock, so a sink set just now starts with the full frame `set_share` asks for.
     fn next_frames(&mut self) -> Vec<Vec<u8>> {
-        let msgs = contained("terminal frame", || self.frame()).unwrap_or_default();
-        // A sink nobody reads any more (the ring ended) is dropped; no copy is made without one.
-        if let Some(s) = &self.share
-            && msgs.iter().any(|m| s.send(m.clone()).is_err())
-        {
-            self.share = None;
+        // Co-op viewers see the screen without this side's selection (each draws their own). While
+        // there is none and they have what the window has, they get the window's very bytes; a
+        // selection appearing starts them off from what they have.
+        if self.share.is_some() && self.theirs.is_none() && self.sel.is_some() {
+            self.theirs =
+                Some(Sent { rows: self.sent.clone(), meta: self.meta.clone(), images: self.images.clone() });
+        }
+        let msgs = contained("terminal frame", || self.frame(true)).unwrap_or_default();
+        // No copy is made without a sink.
+        let Some(sink) = self.share.clone() else { return msgs };
+        let theirs = match self.theirs.take() {
+            None => msgs.clone(),
+            Some(mut t) => {
+                self.swap_sent(&mut t);
+                let theirs = contained("terminal frame", || self.frame(false)).unwrap_or_default();
+                self.swap_sent(&mut t);
+                let alike = self.sel.is_none() && t.rows == self.sent && t.meta == self.meta && t.images == self.images;
+                if !alike {
+                    self.theirs = Some(t);
+                }
+                theirs
+            }
+        };
+        // A sink nobody reads any more (the ring ended) is dropped.
+        if theirs.into_iter().any(|m| sink.send(m).is_err()) {
+            (self.share, self.theirs) = (None, None);
         }
         msgs
     }
 
-    fn set_share(&mut self, sink: Option<UnboundedSender<Vec<u8>>>) {
-        if sink.is_some() {
-            self.meta = None;
-            self.images.clear();
+    fn swap_sent(&mut self, t: &mut Sent) {
+        std::mem::swap(&mut self.sent, &mut t.rows);
+        std::mem::swap(&mut self.meta, &mut t.meta);
+        std::mem::swap(&mut self.images, &mut t.images);
+    }
+
+    /// Everything is sent again, to the window and to Co-op viewers.
+    fn resend(&mut self) {
+        self.meta = None;
+        if let Some(t) = &mut self.theirs {
+            t.meta = None;
         }
+    }
+
+    /// A new sink, or a viewer joining: the viewers get everything again (the window doesn't).
+    fn set_share(&mut self, sink: Option<UnboundedSender<Vec<u8>>>) {
+        self.theirs = sink.is_some().then(Sent::default);
         self.share = sink;
     }
 
@@ -1321,7 +1417,8 @@ impl Inner {
     }
 
     /// Messages bringing the UI up to date: new images first, then the frame. Empty if nothing changed.
-    fn frame(&mut self) -> Vec<Vec<u8>> {
+    /// `own`: with this side's selection (the window), or without it (Co-op viewers).
+    fn frame(&mut self, own: bool) -> Vec<Vec<u8>> {
         let (cols, rows) = self.size;
         if cols == 0 {
             // Not sized yet: the UI needs the font to work out the grid.
@@ -1333,7 +1430,7 @@ impl Inner {
         let start = total.saturating_sub(rows + self.scroll);
         let pal = self.term.palette();
         let default_bg = rgb32(pal.background);
-        let sel = sel_range(self.sel, self.block);
+        let sel = if own { sel_range(self.sel, self.block) } else { None };
         let sel_fg = rgb32(if pal.selection_fg.3 == 0.0 { pal.foreground } else { pal.selection_fg });
         let sel_bg = rgb32(pal.selection_bg);
         let screen = self.term.screen();
@@ -1469,6 +1566,7 @@ impl Inner {
             scrolled: self.scroll > 0,
             scrollback: (self.scroll, total.saturating_sub(rows)),
             images: placed.iter().map(|(k, d, u, _)| Placement { hash: hex(&k.0), dst: *d, uv: *u }).collect(),
+            shared: self.share.as_ref().map(|_| (first, self.term.is_mouse_grabbed())),
         };
 
         let full = self.meta.is_none() || self.sent.len() != rows;
@@ -1727,8 +1825,13 @@ fn sel_range(sel: Option<(Cell, Cell)>, block: bool) -> Option<SelRange> {
 }
 
 fn selection_text(i: &Inner) -> Option<String> {
-    let SelRange { a: (r0, c0), b: (r1, c1), block } = sel_range(i.sel, i.block)?;
-    let screen = i.term.screen();
+    range_text(&i.term, sel_range(i.sel, i.block)?)
+}
+
+/// The text of a range of cells: wrapped rows joined, trailing blanks dropped.
+fn range_text(term: &Terminal, r: SelRange) -> Option<String> {
+    let SelRange { a: (r0, c0), b: (r1, c1), block } = r;
+    let screen = term.screen();
     let mut s = String::new();
     if block {
         // A rectangle: the same columns of every row, one line each.
@@ -2337,7 +2440,7 @@ mod tests {
             at = end;
             chunks += 1;
             if chunks % 3 == 0 {
-                i.frame();
+                i.frame(true);
             }
             match chunks {
                 200 => {
@@ -2354,7 +2457,7 @@ mod tests {
                 _ => {}
             }
         }
-        i.frame();
+        i.frame(true);
         let _ = selection_text(&i);
     }
 
@@ -2421,6 +2524,29 @@ mod tests {
         i
     }
 
+    /// A Co-op viewer's paste (`Tab::paste`) is the owner's kind of paste: trimmed when the owner
+    /// strips pastes, and one bracketed paste when the program asked for it, so a newline in it
+    /// doesn't run anything by itself.
+    #[test]
+    fn a_viewers_paste_is_a_paste() {
+        let mut i = inner(20, 3, None);
+        let (tx, mut rx) = unbounded_channel();
+        i.term = new_term(&i.look, Arc::new(Mutex::new(tx)));
+        let size = terminal_size(&i);
+        i.term.resize(size);
+        i.term.advance_bytes(b"\x1b[?2004h");
+        apply(&mut i.term, &Typed::Paste(i.look.strip(" rm -rf build\necho done\n".into())));
+        // wezterm writes from a thread of its own: wait for the whole paste.
+        let (mut sent, until) = (vec![], std::time::Instant::now() + std::time::Duration::from_secs(5));
+        while !sent.ends_with(b"\x1b[201~") && std::time::Instant::now() < until {
+            match rx.try_recv() {
+                Ok(Ctl::Input(b)) => sent.extend(b),
+                _ => std::thread::sleep(std::time::Duration::from_millis(5)),
+            }
+        }
+        assert_eq!(String::from_utf8(sent).unwrap(), "\x1b[200~rm -rf build\necho done\x1b[201~");
+    }
+
     /// A viewer with bigger cells clicks the same cell on the owner's screen.
     #[test]
     fn viewer_pointers_land_on_the_same_cell() {
@@ -2430,15 +2556,22 @@ mod tests {
         assert_eq!(in_our_cells((25.0, 30.0), (8.0, 16.0), None), (25.0, 30.0));
     }
 
-    /// A shared tab's sink gets the very bytes the window gets, starts with a full frame (the one
-    /// that carries the style), and gets a full frame again when a viewer joins.
+    /// A shared tab's sink starts from a full frame (the one that carries the style), gets one
+    /// again when a viewer joins, and otherwise the window's very bytes, except that the owner's
+    /// selection is the owner's alone: viewers' frames leave it out.
     #[test]
-    fn the_co_op_sink_gets_what_the_window_gets() {
+    fn the_co_op_sink_gets_the_screen_without_our_selection() {
         let full = |m: &[u8]| m[0] == MSG_FRAME && std::str::from_utf8(&m[1..]).unwrap().contains("\"style\"");
+        let drain = |rx: &mut UnboundedReceiver<Vec<u8>>| {
+            let mut got = vec![];
+            while let Ok(m) = rx.try_recv() {
+                got.push(m);
+            }
+            got
+        };
         let mut i = inner(20, 3, None);
         i.term.advance_bytes(b"hello");
-        let window = i.next_frames();
-        assert!(!window.is_empty());
+        assert!(!i.next_frames().is_empty());
 
         // Not shared: nothing is copied anywhere.
         assert!(i.share.is_none());
@@ -2446,29 +2579,82 @@ mod tests {
         let (tx, mut rx) = unbounded_channel();
         i.set_share(Some(tx.clone()));
         let first = i.next_frames();
-        assert!(full(&first[0]), "sharing starts from the whole screen");
-        let mut got = vec![];
-        while let Ok(m) = rx.try_recv() {
-            got.push(m);
-        }
-        assert_eq!(got, first, "the sink and the window get the same bytes");
+        assert!(full(&drain(&mut rx)[0]), "sharing starts viewers from the whole screen");
+        assert!(first.iter().all(|m| !full(m)), "the window isn't sent everything again");
+        assert!(i.theirs.is_none(), "with no selection, viewers follow the window's bytes");
 
-        // A change after that is a small frame, to both.
+        // A change after that is a small frame, the same to both.
         i.term.advance_bytes(b"!");
         let diff = i.next_frames();
         assert!(!diff.is_empty() && !full(&diff[0]));
-        assert_eq!(rx.try_recv().ok().as_ref(), diff.first());
+        assert_eq!(drain(&mut rx), diff);
 
-        // A viewer joining: everything again.
+        // The owner selects: their window shows it, the viewers' frames don't.
+        let sel_bg = rgb32(i.term.palette().selection_bg);
+        let lit = |ms: &[Vec<u8>]| ms.iter().any(|m| String::from_utf8_lossy(&m[1..]).contains(&format!(",{sel_bg},")));
+        let r0 = i.term.screen().phys_to_stable_row_index(0);
+        i.sel = Some(((r0, 0), (r0, 4)));
+        let ours = i.next_frames();
+        assert!(lit(&ours), "the window shows the selection");
+        let theirs = drain(&mut rx);
+        assert!(!lit(&theirs), "the viewers don't");
+        // Output while it lasts reaches the viewers, still without it.
+        i.term.advance_bytes(b"\r\nmore");
+        i.next_frames();
+        let theirs = drain(&mut rx);
+        assert!(!theirs.is_empty() && !lit(&theirs));
+
+        // Gone again: the viewers have what the window has, and follow its bytes once more.
+        i.sel = None;
+        i.next_frames();
+        assert!(drain(&mut rx).is_empty(), "nothing changed for the viewers");
+        assert!(i.theirs.is_none());
+        i.term.advance_bytes(b"?");
+        let diff = i.next_frames();
+        assert_eq!(drain(&mut rx), diff);
+
+        // A viewer joining: everything again, to the viewers.
         i.set_share(Some(tx));
-        let again = i.next_frames();
-        assert!(full(&again[0]));
+        i.next_frames();
+        assert!(full(&drain(&mut rx)[0]));
 
         // A sink nobody listens to is let go.
         drop(rx);
         i.term.advance_bytes(b"?");
         i.next_frames();
         assert!(i.share.is_none());
+    }
+
+    /// A Co-op viewer's selection is their own: their pointer never selects here, and their copy
+    /// reads any range (widened to words or lines like a double or triple click) without touching
+    /// the owner's selection; whatever range they send, the walk stays inside the rows there are.
+    #[test]
+    fn a_viewers_selection_is_their_own() {
+        let mut i = inner(20, 3, None);
+        i.term.advance_bytes(b"ls /var/log\r\nsecond line");
+        let r0 = i.term.screen().phys_to_stable_row_index(0);
+        let owners = Some(((r0, 0), (r0, 1)));
+        i.sel = owners;
+
+        // The viewer drags over the first row: nothing selected here.
+        let mouse = |kind, x: f32| Mouse { kind, button: 0, x, y: 8.0, lines: 0, ctrl: false, alt: false, shift: false, clicks: 1 };
+        for (kind, x) in [(MouseKind::Down, 4.0), (MouseKind::Move, 60.0), (MouseKind::Up, 60.0)] {
+            i.pointer(&mouse(kind, x), Some((8.0, 16.0)));
+        }
+        let double = Mouse { clicks: 2, ..mouse(MouseKind::Down, 40.0) };
+        i.pointer(&double, Some((8.0, 16.0)));
+        assert!(i.sel == owners && i.drag.is_none(), "the owner's selection stays as it was");
+
+        assert_eq!(i.pick((r0, 4), (r0, 4), false, 1), (((r0, 3), (r0, 10)), Some("/var/log".into())));
+        assert_eq!(i.pick((r0, 5), (r0, 5), false, 2), (((r0, 0), (r0, 19)), Some("ls /var/log".into())));
+        // Backwards is the same selection.
+        assert_eq!(i.pick((r0 + 1, 0), (r0, 3), false, 0), (((r0, 3), (r0 + 1, 0)), Some("/var/log\ns".into())));
+        assert_eq!(i.pick((r0, 3), (r0 + 1, 5), true, 0).1.as_deref(), Some("/va\nond"));
+        // Out of range: the rows there are.
+        let ((a, b), text) = i.pick((isize::MIN, 0), (isize::MAX, usize::MAX), false, 0);
+        assert!(a.0 >= r0 - 10_000 && b.0 <= r0 + 3 && b.1 == 19);
+        assert_eq!(text.as_deref().map(str::trim_end), Some("ls /var/log\nsecond line"));
+        assert_eq!(i.sel, owners);
     }
 
     /// The log holds the text as the screen showed it: no colours, redrawn progress bars once in
@@ -2526,7 +2712,7 @@ mod tests {
         assert_eq!(i.find("absent", false, 0), (0, 0));
         assert_eq!(i.find("error", false, 1), (3, 1));
         i.scroll = 3; // the first rows on screen
-        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        let f = String::from_utf8(i.frame(true).pop().unwrap()[1..].to_vec()).unwrap();
         assert!(f.contains(&format!(",{HIT_FG},{HIT_NOW_BG},")), "current match highlighted: {f}");
         assert!(f.contains(&format!(",{HIT_FG},{HIT_BG},")), "other matches highlighted: {f}");
     }
@@ -2537,7 +2723,7 @@ mod tests {
         let mut i = inner(60, 3, None);
         i.look.highlights = Arc::new(crate::settings::Highlight::compile(true, &crate::settings::Highlight::defaults()));
         i.term.advance_bytes("ERROR at 192.0.2.12:22 then \x1b[35mERROR\x1b[0m [2001:db8::1:2] at 10:22\r\n");
-        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        let f = String::from_utf8(i.frame(true).pop().unwrap()[1..].to_vec()).unwrap();
         assert_eq!(f.matches(&format!("\"ERROR\",{}", 0xef5f6b)).count(), 1, "{f}");
         assert!(f.contains(&format!("\"192.0.2.12:22\",{}", 0x5fa8f5)), "{f}");
         assert!(f.contains(&format!("\"2001:db8::1:2\",{}", 0x5fa8f5)), "shortened IPv6: {f}");
@@ -2583,13 +2769,13 @@ mod tests {
         i.term.advance_bytes("ab\r\ncdef\r\n");
         let (r0, r1) = (i.term.screen().phys_to_stable_row_index(0), i.term.screen().phys_to_stable_row_index(1));
         i.sel = Some(((r0, 1), (r1, 2)));
-        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        let f = String::from_utf8(i.frame(true).pop().unwrap()[1..].to_vec()).unwrap();
         let (fg, bg) = (rgb32(i.term.palette().foreground), rgb32(i.term.palette().selection_bg));
         assert!(f.contains(&format!("[2,18,\"{}\",{fg},{bg},0]", " ".repeat(18))), "the first row's blanks past the text: {f}");
         assert!(!f.contains("[3,17,"), "the last row stops at the end cell: {f}");
         assert!(f.contains(&format!("[0,3,\"cde\",{fg},{bg},0]")) && f.contains("[3,1,"), "the last row's selected text, then the rest: {f}");
         i.sel = Some(((r0, 5), (r1, 0)));
-        let f = String::from_utf8(i.frame().pop().unwrap()[1..].to_vec()).unwrap();
+        let f = String::from_utf8(i.frame(true).pop().unwrap()[1..].to_vec()).unwrap();
         assert!(f.contains(&format!("[5,15,\"{}\",{fg},{bg},0]", " ".repeat(15))), "a selection that starts past the text: {f}");
     }
 
@@ -2702,7 +2888,7 @@ mod tests {
             i.term.advance_bytes(chunk);
             parse += t.elapsed();
             let t = Instant::now();
-            let m = i.frame();
+            let m = i.frame(true);
             build += t.elapsed();
             frames += 1;
             bytes += m.iter().map(Vec::len).sum::<usize>();

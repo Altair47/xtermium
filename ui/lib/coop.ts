@@ -62,3 +62,7 @@ export function throttle<A extends unknown[]>(fn: (...args: A) => void, ms: numb
   };
   return (...args) => (waiting ? void (later = args) : go(args));
 }
+
+/** Which of `n` colours a ring member keeps: the same on every computer, from their user id. Their
+ *  pointer (CoopCursors.svelte) and their own selection in a shared terminal (Terminal.svelte) wear it. */
+export const memberColor = (id: string, n: number) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % n;

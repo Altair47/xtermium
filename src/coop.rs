@@ -7,8 +7,9 @@
 //!
 //! The ring is a star. The owner shares tabs and every viewer connects to the owner, on one QUIC
 //! bi-stream for control (Hello, shares, resizes, cursors, the viewers' input) and one uni-stream
-//! per shared tab for its frames, the very bytes the tab's own window gets (`Tab::share`). A viewer's
-//! backend (`Remote`) hands them unchanged to a Tauri channel, so `Terminal.svelte` and
+//! per shared tab for its frames, the bytes the tab's own window gets (`Tab::share`; a terminal's
+//! leave out the owner's selection, as everyone has their own). A viewer's backend (`Remote`)
+//! hands them unchanged to a Tauri channel, so `Terminal.svelte` and
 //! `Rdp.svelte` draw them with the decoders they have. The UI hears about everything through one
 //! `coop` event (`Payload`), at most 20 times a second.
 //!
@@ -56,6 +57,20 @@ const MAX_CTL: usize = 1 << 20;
 const MAX_FRAME: usize = (1 << 28) + (1 << 16);
 /// How long a frame stream may hold unsent bytes before a slow viewer is resynced instead.
 const BACKLOG: usize = 32 << 20;
+/// The most a viewer may paste into a shared terminal tab, in bytes.
+const MAX_PASTE: usize = 128 << 10;
+/// The most of a selection a viewer's copy takes, in bytes (the rest is cut off, and they're told).
+const MAX_COPY: usize = 512 << 10;
+const TOO_LONG: &str = "That's too long to paste into a shared tab: 128 KB at most.";
+/// The most text one of a viewer's key presses may type on a shared desktop (a character, or an
+/// accent with its letter): longer would be a paste, which shared desktops don't take.
+const KEY_TEXT: usize = 4;
+const GONE_TAB: &str = "That tab isn't shared with you any more.";
+/// What this app speaks of the protocol, sent after the Hello's own bytes (`encode`): 1 the first
+/// version, 2 copy and paste in terminal tabs (`Msg::Copy`, `Msg::Selection`, `Hands::Paste`). An older app reads
+/// the Hello and ignores the byte, but drops the connection over a message it doesn't know, so
+/// those go only to an app that said 2 (`needs`).
+const WIRE: u8 = 2;
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const PRO_EVERY: Duration = Duration::from_secs(5 * 60);
 /// The UI hears of changes at most this often (20 Hz): cursors would flood it otherwise.
@@ -102,6 +117,9 @@ pub struct Hello {
     pub user_id: String,
     pub name: String,
     pub image_url: Option<String>,
+    /// The protocol version the sender speaks (`WIRE`); travels after the Hello, see `encode`.
+    #[serde(skip)]
+    pub wire: u8,
 }
 
 /// What a viewer does to a shared tab. A desktop's input stays JSON (`rdp::Input` is an internally
@@ -113,6 +131,8 @@ pub enum Hands {
     /// A pointer event with the size in pixels of the viewer's cells, so it lands on the same cell here.
     Mouse(term::Mouse, f32, f32),
     Desktop(Vec<u8>),
+    /// The viewer's own clipboard text, pasted (`WIRE` 2).
+    Paste(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -150,18 +170,58 @@ pub enum Msg {
     },
     Kicked,
     Ended,
+    /// A viewer's own selection in a shared text tab, from `a` to `b` (stable row, column, as the
+    /// tab's frames number them; `block` and `unit` as `term::Tab::pick` takes them): the owner
+    /// answers with `Selection` number `ask` (`WIRE` 2).
+    Copy {
+        ask: u32,
+        tab: u32,
+        a: At,
+        b: At,
+        block: bool,
+        unit: u8,
+    },
+    /// The answer to `Copy` number `ask`: the selection's ends, widened to words or lines, and its
+    /// text ("" when there is none or the owner's xtermium is locked); `cut` when it was longer
+    /// than `MAX_COPY` (`WIRE` 2).
+    Selection {
+        ask: u32,
+        a: At,
+        b: At,
+        text: String,
+        cut: bool,
+    },
+}
+
+/// A cell of a shared text tab: stable row, column.
+pub type At = (i64, u32);
+
+/// The protocol version a peer needs to read `m` (see `WIRE`).
+fn needs(m: &Msg) -> u8 {
+    match m {
+        Msg::Copy { .. } | Msg::Selection { .. } | Msg::Input { input: Hands::Paste(_), .. } => 2,
+        _ => 1,
+    }
 }
 
 fn encode(m: &Msg) -> Res<Vec<u8>> {
-    let body = postcard::to_allocvec(m).map_err(|e| e.to_string())?;
+    let mut body = postcard::to_allocvec(m).map_err(|e| e.to_string())?;
+    if let Msg::Hello(h) = m {
+        body.push(h.wire);
+    }
     let mut out = Vec::with_capacity(4 + body.len());
     out.extend_from_slice(&(body.len() as u32).to_be_bytes());
     out.extend_from_slice(&body);
     Ok(out)
 }
 
+/// A message; a Hello's version is the byte after it, 1 when there is none (an app before `WIRE`).
 fn decode(body: &[u8]) -> Res<Msg> {
-    postcard::from_bytes(body).map_err(|e| e.to_string())
+    let (mut m, rest) = postcard::take_from_bytes::<Msg>(body).map_err(|e| e.to_string())?;
+    if let Msg::Hello(h) = &mut m {
+        h.wire = rest.first().copied().unwrap_or(1);
+    }
+    Ok(m)
 }
 
 async fn write_msg<W: AsyncWrite + Unpin>(w: &mut W, m: &Msg) -> Res<()> {
@@ -307,10 +367,28 @@ fn key_ok(k: &term::Key) -> bool {
         || (k.shift && matches!(k.key.as_str(), "Insert" | "PageUp" | "PageDown")))
 }
 
-/// What a viewer may do to a desktop: keys, text, the pointer and the wheel. Not "paste" (the
-/// owner's clipboard), nor the owner's window size, nor their lock keys.
+/// A paste a viewer may send into a terminal: not more than `MAX_PASTE` bytes.
+fn paste_ok(text: &str) -> Res<()> {
+    if text.len() > MAX_PASTE { Err(TOO_LONG.into()) } else { Ok(()) }
+}
+
+/// A selection cut to `MAX_COPY` bytes, at a character's edge, and whether it was cut.
+fn clip(mut s: String) -> (String, bool) {
+    let cut = s.len() > MAX_COPY;
+    s.truncate(s.floor_char_boundary(MAX_COPY));
+    (s, cut)
+}
+
+/// What a viewer may do to a desktop: keys, a key's text, the pointer and the wheel. Nothing to
+/// or from a clipboard: not "paste" (the owner's clipboard), nor text longer than a key types (a
+/// paste typed out). Nor the owner's window size or lock keys. (Files have no way in at all: a
+/// desktop's input carries none.)
 fn desktop_ok(ev: &rdp::Input) -> bool {
-    !matches!(ev, rdp::Input::Paste | rdp::Input::Resize { .. } | rdp::Input::Sync { .. })
+    match ev {
+        rdp::Input::Paste | rdp::Input::Resize { .. } | rdp::Input::Sync { .. } => false,
+        rdp::Input::Text { text } => text.chars().count() <= KEY_TEXT,
+        _ => true,
+    }
 }
 
 /// A user id is what the server made: letters, digits, `_` and `-`. Checked before it goes in a path.
@@ -545,12 +623,16 @@ struct Peer {
     conn: Connection,
     ctl: UnboundedSender<Msg>,
     queues: HashMap<u32, Queue>,
+    /// The protocol version their app speaks (`WIRE`).
+    wire: u8,
 }
 
 /// The owner's connection, seen from a viewer.
 struct Link {
     conn: Connection,
     ctl: UnboundedSender<Msg>,
+    /// The protocol version the owner's app speaks (`WIRE`).
+    wire: u8,
 }
 
 /// A tab the owner shares. `sink` is what the tab's frames go into (weak: when the tab goes, so
@@ -580,6 +662,9 @@ struct State {
     hosted: BTreeMap<u32, Hosted>,
     remote: BTreeMap<u32, Remote>,
     cursors: HashMap<(u32, String), (i32, i32)>,
+    /// A viewer's selections waiting for the owner's answer (`coop_remote_select`), by number.
+    asks: HashMap<u32, tokio::sync::oneshot::Sender<Picked>>,
+    next_ask: u32,
 }
 
 struct Ring {
@@ -655,6 +740,8 @@ impl Ring {
                 hosted: BTreeMap::new(),
                 remote: BTreeMap::new(),
                 cursors: HashMap::new(),
+                asks: HashMap::new(),
+                next_ask: 0,
             }),
             tasks: Mutex::new(vec![]),
         })
@@ -675,7 +762,7 @@ impl Ring {
 
     fn hello(&self) -> Hello {
         let me = self.st().me.clone();
-        Hello { user_id: me.id, name: me.name, image_url: me.image }
+        Hello { user_id: me.id, name: me.name, image_url: me.image, wire: WIRE }
     }
 
     /// Everything the UI shows, as of now.
@@ -877,8 +964,13 @@ impl Ring {
             if self.over.load(Relaxed) || (!st.peers.contains_key(&person.id) && st.peers.len() >= MAX_PEERS) {
                 return Err("The ring is full.".into());
             }
-            let mut peer =
-                Peer { person: person.clone(), conn: conn.clone(), ctl: ctl.clone(), queues: HashMap::new() };
+            let mut peer = Peer {
+                person: person.clone(),
+                conn: conn.clone(),
+                ctl: ctl.clone(),
+                queues: HashMap::new(),
+                wire: hello.wire,
+            };
             let tabs: Vec<ShareInfo> = st.hosted.values().map(|h| h.info.clone()).collect();
             for info in &tabs {
                 self.add_queue(&mut peer, info.tab);
@@ -932,6 +1024,11 @@ impl Ring {
     fn on_peer(&self, from: &Person, m: Msg) {
         match m {
             Msg::Input { tab, input } => self.drive(tab, input),
+            Msg::Copy { ask, tab, a, b, block, unit } => {
+                let ((a, b), text) = self.pick(tab, (a, b), block, unit);
+                let (text, cut) = clip(text.unwrap_or_default());
+                self.give(&from.id, Msg::Selection { ask, a, b, text, cut });
+            }
             Msg::Refresh { tab } => self.refresh(tab),
             Msg::Cursor { tab, col, row, .. } => {
                 let mut st = self.st();
@@ -955,8 +1052,35 @@ impl Ring {
         }
     }
 
-    /// A viewer types or clicks in a shared tab: the owner's own paths for it, unless the owner
-    /// has locked xtermium. Never through broadcast, never to the owner's clipboard.
+    /// Sends a viewer `m`, if their app can read it.
+    fn give(&self, user: &str, m: Msg) {
+        if let Some(p) = self.st().peers.get(user).filter(|p| p.wire >= needs(&m)) {
+            let _ = p.ctl.send(m);
+        }
+    }
+
+    /// A viewer's own selection in a shared text tab, widened and read (`term::Tab::pick`); the
+    /// tab's own selection stays as it is. Nothing while xtermium is locked.
+    fn pick(&self, tab: u32, (a, b): (At, At), block: bool, unit: u8) -> ((At, At), Option<String>) {
+        let none = ((a, b), None);
+        if crate::lock::is_locked() || !self.st().hosted.contains_key(&tab) {
+            return none;
+        }
+        let cell = |(r, c): At| (r.clamp(isize::MIN as i64, isize::MAX as i64) as isize, c as usize);
+        let at = |(r, c): (isize, usize)| (r as i64, c as u32);
+        with_tab(&self.handle, tab, |t| match t {
+            Tab::Term(t) => {
+                let ((a, b), text) = t.pick(cell(a), cell(b), block, unit);
+                ((at(a), at(b)), text)
+            }
+            _ => none.clone(),
+        })
+        .unwrap_or(none)
+    }
+
+    /// A viewer types, pastes or clicks in a shared tab: the owner's own paths for it, unless the
+    /// owner has locked xtermium. Never through broadcast, never to or from the owner's clipboard,
+    /// never the owner's selection.
     fn drive(&self, tab: u32, hands: Hands) {
         if crate::lock::is_locked() || !self.st().hosted.contains_key(&tab) {
             return;
@@ -974,6 +1098,7 @@ impl Ring {
                 }
             }
             (Some(Tab::Term(t)), Hands::Text(s)) => t.apply(&term::typed(&s.chars().take(4096).collect::<String>())),
+            (Some(Tab::Term(t)), Hands::Paste(s)) if paste_ok(&s).is_ok() => t.paste(&s),
             (Some(Tab::Term(t)), Hands::Mouse(m, cw, ch)) => t.mouse_remote(&m, (cw, ch)),
             (Some(Tab::Rdp(t)), Hands::Desktop(json)) => {
                 if let Ok(ev) = serde_json::from_slice::<rdp::Input>(&json)
@@ -1228,7 +1353,7 @@ impl Ring {
         let ctl = control_writer(send);
         {
             let mut st = self.st();
-            st.link = Some(Link { conn: conn.clone(), ctl });
+            st.link = Some(Link { conn: conn.clone(), ctl, wire: hello.wire });
             st.stage = "joined";
         }
         let ring = self.clone();
@@ -1284,6 +1409,12 @@ impl Ring {
                     drop(st);
                     self.notify();
                 }
+                // The answer to one of our selections (`coop_remote_select` waits for it).
+                Msg::Selection { ask, a, b, text, cut } => {
+                    if let Some(tx) = self.st().asks.remove(&ask) {
+                        let _ = tx.send(Picked { a, b, text, cut });
+                    }
+                }
                 Msg::Kicked => return self.finish(Some("kicked"), "The owner removed you from the ring."),
                 Msg::Ended => return self.finish(Some("ended"), "The owner ended the ring."),
                 _ => {}
@@ -1307,9 +1438,14 @@ impl Ring {
         }
     }
 
-    /// Something to the owner, if we are connected.
-    fn to_owner(&self, m: Msg) -> bool {
-        self.st().link.as_ref().is_some_and(|l| l.ctl.send(m).is_ok())
+    /// Something to the owner, if we are connected and their app can read it.
+    fn to_owner(&self, m: Msg) -> Res<()> {
+        let st = self.st();
+        let l = st.link.as_ref().ok_or(GONE_TAB)?;
+        if l.wire < needs(&m) {
+            return Err(format!("{} needs a newer xtermium for copy and paste in shared tabs.", st.host.name));
+        }
+        l.ctl.send(m).map_err(|_| GONE_TAB.to_string())
     }
 }
 
@@ -1705,7 +1841,7 @@ pub fn coop_open_remote(ring_tab: u32, out: Channel) -> bool {
     let channel = ring.st().remote.get(&ring_tab).map(|r| r.channel.clone());
     let Some(channel) = channel else { return false };
     *channel.lock().unwrap() = Some(out);
-    ring.to_owner(Msg::Refresh { tab: ring_tab })
+    ring.to_owner(Msg::Refresh { tab: ring_tab }).is_ok()
 }
 
 /// The window that showed a tab shared with you is gone: its frames stop going to its channel, and
@@ -1725,12 +1861,65 @@ pub fn coop_close_remote(ring_tab: u32, channel: u32) {
 }
 
 fn hands(ring_tab: u32, input: Hands) -> Res<()> {
+    to_tab(ring_tab, Msg::Input { tab: ring_tab, input })
+}
+
+fn to_tab(ring_tab: u32, m: Msg) -> Res<()> {
     let ring = viewer()?;
-    if ring.st().remote.contains_key(&ring_tab) && ring.to_owner(Msg::Input { tab: ring_tab, input }) {
-        Ok(())
-    } else {
-        Err("That tab isn't shared with you any more.".into())
+    if !ring.st().remote.contains_key(&ring_tab) {
+        return Err(GONE_TAB.into());
     }
+    ring.to_owner(m)
+}
+
+/// The owner's answer to a viewer's selection: its ends, and (for the clipboard) its text.
+#[derive(Serialize)]
+pub struct Picked {
+    a: At,
+    b: At,
+    #[serde(skip)]
+    text: String,
+    /// The text was longer than `MAX_COPY`: the clipboard got its start.
+    cut: bool,
+}
+
+/// Your own selection in a remote text tab, from `a` to `b` (stable row and column, as its frames
+/// number them; `block`: the rectangle between them), widened to words (`unit` 1) or lines (2) as
+/// a double or triple click widens one. Its ends come back; with `copy` its text lands on your
+/// clipboard, never the owner's. The owner's selection stays as it is.
+#[tauri::command]
+pub async fn coop_remote_select(ring_tab: u32, a: At, b: At, block: bool, unit: u8, copy: bool) -> Res<Picked> {
+    let ring = viewer()?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let ask = {
+        let mut st = ring.st();
+        st.next_ask = st.next_ask.wrapping_add(1);
+        let n = st.next_ask;
+        st.asks.insert(n, tx);
+        n
+    };
+    let sent = to_tab(ring_tab, Msg::Copy { ask, tab: ring_tab, a, b, block, unit });
+    let got = match sent {
+        Ok(()) => tokio::time::timeout(Duration::from_secs(10), rx).await,
+        Err(e) => {
+            ring.st().asks.remove(&ask);
+            return Err(e);
+        }
+    };
+    ring.st().asks.remove(&ask);
+    let picked = got.map_err(|_| "The owner's xtermium didn't answer.".to_string())?.map_err(|_| GONE_TAB.to_string())?;
+    if copy && !picked.text.is_empty() {
+        term::clipboard(|c| c.set_text(picked.text.clone()));
+    }
+    Ok(picked)
+}
+
+/// Your clipboard's text pasted into a remote text tab: the owner's terminal takes it as a paste
+/// (bracketed when the program asked for that), never through their clipboard or broadcast.
+#[tauri::command]
+pub async fn coop_remote_paste(ring_tab: u32, text: String) -> Res<()> {
+    paste_ok(&text)?;
+    hands(ring_tab, Hands::Paste(text))
 }
 
 /// A key pressed in a remote text tab.
@@ -1766,7 +1955,7 @@ mod tests {
     use super::*;
 
     fn hello(user: &str) -> Hello {
-        Hello { user_id: user.into(), name: "Sam".into(), image_url: None }
+        Hello { user_id: user.into(), name: "Sam".into(), image_url: None, wire: WIRE }
     }
 
     fn member(id: &str, state: &str, node: &str) -> ApiMember {
@@ -1814,6 +2003,10 @@ mod tests {
             Msg::Refresh { tab: 7 },
             Msg::Kicked,
             Msg::Ended,
+            Msg::Input { tab: 7, input: Hands::Paste("echo hi
+".into()) },
+            Msg::Copy { ask: 3, tab: 7, a: (-5, 2), b: (12, 0), block: true, unit: 1 },
+            Msg::Selection { ask: 3, a: (-5, 0), b: (12, 79), text: "ls /var/log".into(), cut: false },
         ];
         for m in &msgs {
             let wire = encode(m).unwrap();
@@ -1907,6 +2100,80 @@ mod tests {
         assert!(desktop_ok(&rdp::Input::Wheel { dx: 0.0, dy: 1.0 }));
         assert!(!desktop_ok(&rdp::Input::Paste));
         assert!(!desktop_ok(&rdp::Input::Resize { width: 1, height: 1 }));
+        assert!(desktop_ok(&rdp::Input::Release));
+    }
+
+    /// Shared desktops take nothing to or from a clipboard: no paste of the owner's clipboard, and
+    /// no paste typed out either (more text than a key types); a key's character still goes.
+    #[test]
+    fn shared_desktops_take_no_paste() {
+        assert!(!desktop_ok(&rdp::Input::Paste));
+        assert!(desktop_ok(&rdp::Input::Text { text: "a".into() }));
+        assert!(desktop_ok(&rdp::Input::Text { text: "e\u{301}".into() }), "an accent with its letter");
+        assert!(!desktop_ok(&rdp::Input::Text { text: "rm -rf /".into() }));
+        assert!(desktop_ok(&rdp::Input::Key { code: "KeyV".into(), down: true }));
+        assert!(desktop_ok(&rdp::Input::Button { button: 0, down: true, x: 1, y: 1 }));
+        // What a modified viewer would send instead, as the owner reads it: nothing gets through.
+        for ev in [rdp::Input::Paste, rdp::Input::Text { text: "x".repeat(KEY_TEXT + 1) }] {
+            let json = serde_json::to_vec(&ev).unwrap();
+            let back = serde_json::from_slice::<rdp::Input>(&json).unwrap();
+            assert!(!desktop_ok(&back));
+        }
+    }
+
+    /// A Hello carries its sender's protocol version after its own bytes: an app from before reads
+    /// the Hello as it always did, and its Hello (no byte) reads as version 1 here.
+    #[test]
+    fn hellos_say_which_version_they_speak() {
+        let new = encode(&Msg::Hello(hello("u1"))).unwrap();
+        let Msg::Hello(h) = decode(&new[4..]).unwrap() else { panic!("not a Hello") };
+        assert_eq!((h.user_id.as_str(), h.wire), ("u1", WIRE));
+        // What an older app does with it: postcard's plain read, which leaves the byte alone.
+        let Msg::Hello(old) = postcard::from_bytes::<Msg>(&new[4..]).unwrap() else { panic!("not a Hello") };
+        assert_eq!(old.user_id, "u1");
+        // An older app's Hello.
+        let before = postcard::to_allocvec(&Msg::Hello(hello("u2"))).unwrap();
+        let Msg::Hello(h) = decode(&before).unwrap() else { panic!("not a Hello") };
+        assert_eq!((h.user_id.as_str(), h.wire), ("u2", 1));
+    }
+
+    /// Copy and paste go only to an app that reads them: an older one would drop the connection
+    /// over a message it doesn't know (postcard can't skip an unknown variant).
+    #[test]
+    fn copy_and_paste_wait_for_an_app_that_knows_them() {
+        let paste = Msg::Input { tab: 1, input: Hands::Paste("x".into()) };
+        let picked = Msg::Selection { ask: 1, a: (0, 0), b: (0, 1), text: "x".into(), cut: false };
+        let ask = Msg::Copy { ask: 1, tab: 1, a: (0, 0), b: (0, 1), block: false, unit: 0 };
+        for m in [&paste, &picked, &ask] {
+            assert_eq!(needs(m), 2);
+            assert!(decode(&encode(m).unwrap()[4..]).is_ok());
+            // What an app from before (version 1) knows ends at `Ended`: these are past it.
+            let b = postcard::to_allocvec(m).unwrap();
+            assert!(if let Msg::Input { .. } = m { b[2] > 3 } else { b[0] > 9 });
+        }
+        assert_eq!(needs(&Msg::Input { tab: 1, input: Hands::Text("x".into()) }), 1);
+        assert_eq!(needs(&Msg::Refresh { tab: 1 }), 1);
+    }
+
+    /// A paste has a limit that keeps it inside one control message, and says it; a copy is cut
+    /// at a character's edge, and says so.
+    #[test]
+    fn pastes_and_copies_have_limits() {
+        assert!(paste_ok(&"a".repeat(MAX_PASTE)).is_ok());
+        assert_eq!(paste_ok(&"a".repeat(MAX_PASTE + 1)).unwrap_err(), TOO_LONG);
+        assert!(TOO_LONG.contains("128 KB"));
+        let m = Msg::Input { tab: 1, input: Hands::Paste("a".repeat(MAX_PASTE)) };
+        assert!(encode(&m).unwrap().len() - 4 <= MAX_CTL);
+        // A copy fits as well.
+        let (text, cut) = clip("é".repeat(MAX_COPY));
+        let m = Msg::Selection { ask: 1, a: (0, 0), b: (0, 0), text, cut };
+        assert!(encode(&m).unwrap().len() - 4 <= MAX_CTL);
+        assert_eq!(clip("ab".into()), ("ab".to_string(), false));
+        let (text, cut) = clip("é".repeat(MAX_COPY));
+        assert_eq!((text.len(), cut), (MAX_COPY, true), "two bytes each: cut between two");
+        let (text, _) = clip(format!("a{}", "é".repeat(MAX_COPY)));
+        assert_eq!(text.len(), MAX_COPY - 1, "never inside a character");
+        assert!(!clip("a".repeat(MAX_COPY)).1);
     }
 
     #[test]

@@ -292,6 +292,9 @@ export type Meta = {
   link: boolean;
   scrolled: boolean;
   images: { hash: string; dst: number[]; uv: number[] }[];
+  /** While Terminal Co-op shares the tab: the stable row number of the top row on screen, and
+   *  whether the program takes the mouse (terminals). */
+  shared?: [number, boolean];
 };
 
 export type TunnelStats = {
