@@ -63,6 +63,30 @@ export function throttle<A extends unknown[]>(fn: (...args: A) => void, ms: numb
   return (...args) => (waiting ? void (later = args) : go(args));
 }
 
+/** A selection in a shared terminal: its ends (stable row, column) and whether it is a rectangle. */
+export type RingSelection = { a: [number, number]; b: [number, number]; block: boolean };
+
+/** The rows of selection `s` on a screen `cols` wide and `rows` high whose top row is stable row
+ *  `top`: [row on screen, first column, one past the last]. Only what is on screen. */
+export function selectionRows(s: RingSelection, top: number, cols: number, rows: number): [number, number, number][] {
+  let [a, b] = [s.a, s.b];
+  if (s.block)
+    [a, b] = [
+      [Math.min(a[0], b[0]), Math.min(a[1], b[1])],
+      [Math.max(a[0], b[0]), Math.max(a[1], b[1])],
+    ];
+  else if (b[0] < a[0] || (b[0] === a[0] && b[1] < a[1])) [a, b] = [b, a];
+  const out: [number, number, number][] = [];
+  for (let y = Math.max(0, a[0] - top); y < rows && top + y <= b[0]; y++) {
+    const r = top + y;
+    const from = s.block || r === a[0] ? a[1] : 0;
+    const to = Math.min(cols, s.block || r === b[0] ? b[1] + 1 : cols);
+    if (to > from) out.push([y, from, to]);
+  }
+  return out;
+}
+
 /** Which of `n` colours a ring member keeps: the same on every computer, from their user id. Their
- *  pointer (CoopCursors.svelte) and their own selection in a shared terminal (Terminal.svelte) wear it. */
+ *  pointer (CoopCursors.svelte) and their selection in a shared terminal (CoopSelections.svelte,
+ *  Terminal.svelte) wear it. */
 export const memberColor = (id: string, n: number) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % n;

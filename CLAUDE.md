@@ -44,8 +44,9 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
   **Terminal Co-op** (`src/coop.rs`: Pro people share tabs with up to two more over iroh, QUIC
   with our own relay; the sync server only introduces them, see `docs/sync.md`. A shared tab's frames
   are teed to a second sink, `Tab::share` in term.rs, rdp.rs and vnc.rs (a terminal's without the
-  owner's selection: everyone has their own, a viewer's drawn by their window and read by
-  `Tab::pick`), and a viewer's backend hands
+  owner's selection: everyone selects on their own, a viewer's read by `Tab::pick`, and every
+  selection travels as `Msg::Selected` for all windows to draw in the selecting person's ring
+  colour), and a viewer's backend hands
   them unchanged to the channel `Terminal.svelte` / `Rdp.svelte` already decode; viewers' input goes
   through the owner's own key and mouse paths, never broadcast, and stops while xtermium is locked),
   **cloud sync** (`src/sync.rs`, end-to-end encrypted), **tray / keep running** (`src/tray.rs`),

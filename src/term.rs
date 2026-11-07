@@ -405,6 +405,12 @@ struct Frame<'a> {
 /// Message types on a tab's channel (first byte).
 const MSG_FRAME: u8 = 0;
 const MSG_IMAGE: u8 = 1;
+/// On a Co-op sink only (coop.rs `fan_out` takes it off, it never reaches a window): `[7]` and the
+/// owner's selection as JSON, `[[row, col], [row, col], block]` in stable rows, or `null`.
+pub const MSG_SELECTION: u8 = 7;
+
+/// A selection's ends (stable row, column) and whether it is a rectangle.
+pub type Picked = (Cell, Cell, bool);
 
 struct Inner {
     term: Terminal,
@@ -441,6 +447,8 @@ struct Inner {
     /// While shared, what the Co-op viewers have, when it isn't what the window has: their frames
     /// leave out this side's selection. None: they get the window's very bytes.
     theirs: Option<Sent>,
+    /// The selection the Co-op sink last heard of (`MSG_SELECTION`); None: not told yet.
+    told: Option<Option<Picked>>,
     /// Highlight spans of the rows on screen, by row, with the row's change number: a row that
     /// didn't change isn't matched again (the frame builder visits every row on every frame).
     highlighted: HashMap<StableRowIndex, (wezterm_surface::SequenceNo, Vec<Span>)>,
@@ -745,6 +753,7 @@ impl Inner {
             meta: None,
             images: HashSet::new(),
             theirs: None,
+            told: None,
             highlighted: HashMap::new(),
             last_output: std::time::Instant::now(),
             share: None,
@@ -1346,7 +1355,8 @@ impl Inner {
     /// The messages for the window, and for the Co-op sink when the tab is shared. Taken under
     /// the tab's lock, so a sink set just now starts with the full frame `set_share` asks for.
     fn next_frames(&mut self) -> Vec<Vec<u8>> {
-        // Co-op viewers see the screen without this side's selection (each draws their own). While
+        // Co-op viewers see the screen without this side's selection (they draw it from coop.rs
+        // `Msg::Selected`, in the owner's ring colour, as they draw everyone's). While
         // there is none and they have what the window has, they get the window's very bytes; a
         // selection appearing starts them off from what they have.
         if self.share.is_some() && self.theirs.is_none() && self.sel.is_some() {
@@ -1369,6 +1379,16 @@ impl Inner {
                 theirs
             }
         };
+        // The owner's selection, for the ring to draw in their colour: told when it changes.
+        let mut theirs = theirs;
+        let picked = sel_range(self.sel, self.block).map(|r| (r.a, r.b, r.block));
+        if self.told != Some(picked) {
+            self.told = Some(picked);
+            let mut m = vec![MSG_SELECTION];
+            if serde_json::to_writer(&mut m, &picked).is_ok() {
+                theirs.push(m);
+            }
+        }
         // A sink nobody reads any more (the ring ended) is dropped.
         if theirs.into_iter().any(|m| sink.send(m).is_err()) {
             (self.share, self.theirs) = (None, None);
@@ -1393,6 +1413,7 @@ impl Inner {
     /// A new sink, or a viewer joining: the viewers get everything again (the window doesn't).
     fn set_share(&mut self, sink: Option<UnboundedSender<Vec<u8>>>) {
         self.theirs = sink.is_some().then(Sent::default);
+        self.told = None;
         self.share = sink;
     }
 
@@ -2562,10 +2583,16 @@ mod tests {
     #[test]
     fn the_co_op_sink_gets_the_screen_without_our_selection() {
         let full = |m: &[u8]| m[0] == MSG_FRAME && std::str::from_utf8(&m[1..]).unwrap().contains("\"style\"");
+        // The sink's frames; the owner's selection as told (`MSG_SELECTION`) goes to `told`.
+        let told = std::cell::RefCell::new(vec![]);
         let drain = |rx: &mut UnboundedReceiver<Vec<u8>>| {
             let mut got = vec![];
             while let Ok(m) = rx.try_recv() {
-                got.push(m);
+                if m[0] == MSG_SELECTION {
+                    told.borrow_mut().push(String::from_utf8(m[1..].to_vec()).unwrap());
+                } else {
+                    got.push(m);
+                }
             }
             got
         };
@@ -2582,6 +2609,7 @@ mod tests {
         assert!(full(&drain(&mut rx)[0]), "sharing starts viewers from the whole screen");
         assert!(first.iter().all(|m| !full(m)), "the window isn't sent everything again");
         assert!(i.theirs.is_none(), "with no selection, viewers follow the window's bytes");
+        assert_eq!(told.take(), ["null"], "the ring hears there is no selection");
 
         // A change after that is a small frame, the same to both.
         i.term.advance_bytes(b"!");
@@ -2598,16 +2626,19 @@ mod tests {
         assert!(lit(&ours), "the window shows the selection");
         let theirs = drain(&mut rx);
         assert!(!lit(&theirs), "the viewers don't");
+        assert_eq!(told.take(), [format!("[[{r0},0],[{r0},4],false]")], "the ring hears of it, to draw it");
         // Output while it lasts reaches the viewers, still without it.
         i.term.advance_bytes(b"\r\nmore");
         i.next_frames();
         let theirs = drain(&mut rx);
         assert!(!theirs.is_empty() && !lit(&theirs));
+        assert!(told.borrow().is_empty(), "told once, not with every frame");
 
         // Gone again: the viewers have what the window has, and follow its bytes once more.
         i.sel = None;
         i.next_frames();
-        assert!(drain(&mut rx).is_empty(), "nothing changed for the viewers");
+        assert!(drain(&mut rx).is_empty(), "nothing changed for the viewers' frames");
+        assert_eq!(told.take(), ["null"]);
         assert!(i.theirs.is_none());
         i.term.advance_bytes(b"?");
         let diff = i.next_frames();

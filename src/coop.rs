@@ -8,7 +8,7 @@
 //! The ring is a star. The owner shares tabs and every viewer connects to the owner, on one QUIC
 //! bi-stream for control (Hello, shares, resizes, cursors, the viewers' input) and one uni-stream
 //! per shared tab for its frames, the bytes the tab's own window gets (`Tab::share`; a terminal's
-//! leave out the owner's selection, as everyone has their own). A viewer's backend (`Remote`)
+//! leave out the owner's selection, drawn like everyone's from `Msg::Selected`). A viewer's backend (`Remote`)
 //! hands them unchanged to a Tauri channel, so `Terminal.svelte` and
 //! `Rdp.svelte` draw them with the decoders they have. The UI hears about everything through one
 //! `coop` event (`Payload`), at most 20 times a second.
@@ -67,10 +67,11 @@ const TOO_LONG: &str = "That's too long to paste into a shared tab: 128 KB at mo
 const KEY_TEXT: usize = 4;
 const GONE_TAB: &str = "That tab isn't shared with you any more.";
 /// What this app speaks of the protocol, sent after the Hello's own bytes (`encode`): 1 the first
-/// version, 2 copy and paste in terminal tabs (`Msg::Copy`, `Msg::Selection`, `Hands::Paste`). An older app reads
+/// version, 2 copy and paste in terminal tabs (`Msg::Copy`, `Msg::Selection`, `Hands::Paste`), 3
+/// everyone's selection drawn for the ring (`Msg::Selected`). An older app reads
 /// the Hello and ignores the byte, but drops the connection over a message it doesn't know, so
 /// those go only to an app that said 2 (`needs`).
-const WIRE: u8 = 2;
+const WIRE: u8 = 3;
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const PRO_EVERY: Duration = Duration::from_secs(5 * 60);
 /// The UI hears of changes at most this often (20 Hz): cursors would flood it otherwise.
@@ -191,15 +192,31 @@ pub enum Msg {
         text: String,
         cut: bool,
     },
+    /// Someone's own selection on a shared text tab changed (None: they have none now), for
+    /// everyone else to draw in their colour. A viewer sends theirs (the owner fills in who it is
+    /// from) and the owner tells the others, with their own (`WIRE` 3).
+    Selected {
+        tab: u32,
+        user_id: String,
+        sel: Option<Sel>,
+    },
 }
 
 /// A cell of a shared text tab: stable row, column.
 pub type At = (i64, u32);
+/// A selection in a shared text tab: its ends, and whether it is a rectangle.
+pub type Sel = (At, At, bool);
+
+/// The owner's terminal's selection as the ring numbers it.
+fn sel_of(((ar, ac), (br, bc), block): term::Picked) -> Sel {
+    ((ar as i64, ac as u32), (br as i64, bc as u32), block)
+}
 
 /// The protocol version a peer needs to read `m` (see `WIRE`).
 fn needs(m: &Msg) -> u8 {
     match m {
         Msg::Copy { .. } | Msg::Selection { .. } | Msg::Input { input: Hands::Paste(_), .. } => 2,
+        Msg::Selected { .. } => 3,
         _ => 1,
     }
 }
@@ -562,6 +579,8 @@ pub struct Payload {
     /// Tabs shared with you; `id` is the owner's number for the tab.
     remote: Vec<RemoteOut>,
     cursors: Vec<CursorOut>,
+    /// The others' selections on shared text tabs.
+    selections: Vec<SelOut>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ended: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -605,6 +624,15 @@ struct RemoteOut {
     w: u32,
     h: u32,
     owner_name: String,
+}
+
+#[derive(Serialize, Clone)]
+struct SelOut {
+    tab: u32,
+    user_id: String,
+    a: At,
+    b: At,
+    block: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -662,6 +690,9 @@ struct State {
     hosted: BTreeMap<u32, Hosted>,
     remote: BTreeMap<u32, Remote>,
     cursors: HashMap<(u32, String), (i32, i32)>,
+    /// Everyone's selections on shared text tabs, by tab and person (the owner's own among them,
+    /// on the owner's side, to tell viewers who join).
+    selections: HashMap<(u32, String), Sel>,
     /// A viewer's selections waiting for the owner's answer (`coop_remote_select`), by number.
     asks: HashMap<u32, tokio::sync::oneshot::Sender<Picked>>,
     next_ask: u32,
@@ -740,6 +771,7 @@ impl Ring {
                 hosted: BTreeMap::new(),
                 remote: BTreeMap::new(),
                 cursors: HashMap::new(),
+                selections: HashMap::new(),
                 asks: HashMap::new(),
                 next_ask: 0,
             }),
@@ -804,6 +836,13 @@ impl Ring {
             })
             .collect();
         cursors.sort_by(|a, b| (a.tab, &a.user_id).cmp(&(b.tab, &b.user_id)));
+        let mut selections: Vec<SelOut> = st
+            .selections
+            .iter()
+            .filter(|((_, user), _)| *user != st.me.id)
+            .map(|((tab, user), (a, b, block))| SelOut { tab: *tab, user_id: user.clone(), a: *a, b: *b, block: *block })
+            .collect();
+        selections.sort_by(|a, b| (a.tab, &a.user_id).cmp(&(b.tab, &b.user_id)));
         Payload {
             ring: Some(RingOut {
                 id: self.id.clone(),
@@ -829,6 +868,7 @@ impl Ring {
                 })
                 .collect(),
             cursors,
+            selections,
             ended: None,
             message: None,
         }
@@ -851,6 +891,7 @@ impl Ring {
             let mut st = self.st();
             st.remote.clear();
             st.cursors.clear();
+            st.selections.clear();
             (std::mem::take(&mut st.peers), st.link.take(), std::mem::take(&mut st.hosted))
         };
         let code = if reason == Some("kicked") { KICKED } else { ENDED };
@@ -919,6 +960,7 @@ impl Ring {
         for (p, kicked) in cut {
             let _ = p.ctl.send(if kicked { Msg::Kicked } else { Msg::Ended });
             p.conn.close(if kicked { KICKED } else { LEFT }.into(), b"removed");
+            self.unselect(&p.person.id);
         }
         self.notify();
         Ok(())
@@ -984,9 +1026,14 @@ impl Ring {
         for info in &shares {
             let _ = ctl.send(Msg::Share(info.clone()));
         }
-        // Every viewer starts from the same state as the owner's window: whole frames again.
+        // Every viewer starts from the same state as the owner's window: whole frames again, and
+        // everyone's selections.
         for info in &shares {
             self.refresh(info.tab);
+        }
+        let sels: Vec<_> = self.st().selections.iter().map(|((t, u), s)| (*t, u.clone(), *s)).collect();
+        for (tab, user_id, sel) in sels.into_iter().filter(|(_, u, _)| *u != person.id) {
+            self.give(&person.id, Msg::Selected { tab, user_id, sel: Some(sel) });
         }
         self.notify();
 
@@ -1006,9 +1053,49 @@ impl Ring {
                     let _ = c.send(Msg::Cursor { tab: *tab, user_id: person.id.clone(), col: -1, row: -1 });
                 }
             }
-            self.notify();
+            self.unselect(&person.id);
         }
         Ok(())
+    }
+
+    /// `user`'s selection on shared tab `tab` changed (None: gone): kept, and told to everyone else
+    /// in the ring who can read it. Nothing while xtermium is locked.
+    fn selected(&self, tab: u32, user: &str, sel: Option<Sel>) {
+        if crate::lock::is_locked() {
+            return;
+        }
+        let others: Vec<String> = {
+            let mut st = self.st();
+            if !st.hosted.contains_key(&tab) {
+                return;
+            }
+            let key = (tab, user.to_string());
+            match sel {
+                Some(s) => st.selections.insert(key, s),
+                None => st.selections.remove(&key),
+            };
+            st.peers.keys().filter(|id| *id != user).cloned().collect()
+        };
+        for id in others {
+            self.give(&id, Msg::Selected { tab, user_id: user.into(), sel });
+        }
+        self.notify();
+    }
+
+    /// Someone left or was taken out: their selections go, here and for the others.
+    fn unselect(&self, user: &str) {
+        let (tabs, ids) = {
+            let mut st = self.st();
+            let tabs: Vec<u32> = st.selections.keys().filter(|(_, u)| u == user).map(|(t, _)| *t).collect();
+            st.selections.retain(|(_, u), _| u != user);
+            (tabs, st.peers.keys().cloned().collect::<Vec<_>>())
+        };
+        for tab in tabs {
+            for id in &ids {
+                self.give(id, Msg::Selected { tab, user_id: user.into(), sel: None });
+            }
+        }
+        self.notify();
     }
 
     /// A new frame stream for one viewer and one tab.
@@ -1030,6 +1117,7 @@ impl Ring {
                 self.give(&from.id, Msg::Selection { ask, a, b, text, cut });
             }
             Msg::Refresh { tab } => self.refresh(tab),
+            Msg::Selected { tab, sel, .. } => self.selected(tab, &from.id, sel),
             Msg::Cursor { tab, col, row, .. } => {
                 let mut st = self.st();
                 if !st.hosted.contains_key(&tab) {
@@ -1182,6 +1270,7 @@ impl Ring {
                 p.queues.remove(&tab);
             }
             st.cursors.retain(|(t, _), _| *t != tab);
+            st.selections.retain(|(t, _), _| *t != tab);
             (h, st.peers.values().map(|p| p.ctl.clone()).collect::<Vec<_>>())
         };
         h.tasks.iter().for_each(JoinHandle::abort);
@@ -1195,6 +1284,14 @@ impl Ring {
     /// Hands a tab's frames to every viewer's queue. Ends when the tab is gone.
     async fn fan_out(self: Arc<Self>, tab: u32, mut rx: UnboundedReceiver<Vec<u8>>) {
         while let Some(bytes) = rx.recv().await {
+            // The owner's selection, told by the terminal (term.rs `MSG_SELECTION`): for the ring.
+            if bytes.first() == Some(&term::MSG_SELECTION) {
+                if let Ok(picked) = serde_json::from_slice::<Option<term::Picked>>(&bytes[1..]) {
+                    let me = self.st().me.id.clone();
+                    self.selected(tab, &me, picked.map(sel_of));
+                }
+                continue;
+            }
             let queues: Vec<Queue> = self.st().peers.values().filter_map(|p| p.queues.get(&tab).cloned()).collect();
             for q in queues {
                 q.push(bytes.clone());
@@ -1388,6 +1485,7 @@ impl Ring {
                     let mut st = self.st();
                     st.remote.remove(&tab);
                     st.cursors.retain(|(t, _), _| *t != tab);
+                    st.selections.retain(|(t, _), _| *t != tab);
                     drop(st);
                     self.notify();
                 }
@@ -1405,6 +1503,17 @@ impl Ring {
                         } else {
                             st.cursors.insert((tab, user_id), (col, row));
                         }
+                    }
+                    drop(st);
+                    self.notify();
+                }
+                Msg::Selected { tab, user_id, sel } => {
+                    let mut st = self.st();
+                    if user_id != st.me.id && st.remote.contains_key(&tab) {
+                        match sel {
+                            Some(s) => st.selections.insert((tab, user_id), s),
+                            None => st.selections.remove(&(tab, user_id)),
+                        };
                     }
                     drop(st);
                     self.notify();
@@ -1670,7 +1779,7 @@ pub async fn coop_kick(user: String) -> Res<Payload> {
         let _ = p.ctl.send(Msg::Kicked);
         p.conn.close(KICKED.into(), b"kicked");
         ring.st().cursors.retain(|(_, u), _| *u != user);
-        ring.notify();
+        ring.unselect(&user);
     }
     Ok(payload)
 }
@@ -1870,6 +1979,14 @@ fn to_tab(ring_tab: u32, m: Msg) -> Res<()> {
         return Err(GONE_TAB.into());
     }
     ring.to_owner(m)
+}
+
+/// Your own selection in a remote text tab changed (None: you have none now): the others in the
+/// ring draw it in your colour. An owner's app from before draws nothing; nothing is said then.
+#[tauri::command]
+pub async fn coop_selection(ring_tab: u32, sel: Option<Sel>) -> Res<()> {
+    let _ = to_tab(ring_tab, Msg::Selected { tab: ring_tab, user_id: String::new(), sel });
+    Ok(())
 }
 
 /// The owner's answer to a viewer's selection: its ends, and (for the clipboard) its text.
@@ -2153,6 +2270,15 @@ mod tests {
         }
         assert_eq!(needs(&Msg::Input { tab: 1, input: Hands::Text("x".into()) }), 1);
         assert_eq!(needs(&Msg::Refresh { tab: 1 }), 1);
+        // Everyone's selection is version 3: an app of version 2 never gets one.
+        let sel = Msg::Selected { tab: 1, user_id: "u1".into(), sel: Some(((-3, 0), (2, 79), false)) };
+        assert_eq!(needs(&sel), 3);
+        assert!(needs(&sel) > 2 && WIRE >= 3);
+        assert_eq!(postcard::to_allocvec(&sel).unwrap()[0], 12, "past what a version 2 app knows");
+        let Msg::Selected { sel: back, .. } = decode(&encode(&sel).unwrap()[4..]).unwrap() else { panic!("not Selected") };
+        assert_eq!(back, Some(((-3, 0), (2, 79), false)));
+        let gone = Msg::Selected { tab: 1, user_id: "u1".into(), sel: None };
+        assert!(matches!(decode(&encode(&gone).unwrap()[4..]).unwrap(), Msg::Selected { sel: None, .. }));
     }
 
     /// A paste has a limit that keeps it inside one control message, and says it; a copy is cut
