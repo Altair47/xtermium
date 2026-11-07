@@ -129,7 +129,7 @@ components:
     textColor: "{colors.gold}"
   button-flat:
     backgroundColor: "transparent"
-    textColor: "{colors.weak}"
+    textColor: "{colors.fg}"
   button-flat-hover:
     backgroundColor: "{colors.raised}"
   button-icon-only:
@@ -236,7 +236,7 @@ components:
     padding: "5px 13px"
   kbd:
     backgroundColor: "{colors.deep}"
-    typography: "{typography.label}"
+    typography: "{typography.label-short}"
     rounded: "{rounded.control}"
     padding: "0 5px"
 ---
@@ -274,13 +274,13 @@ enforces the spacing and type scales in `npm test`, so they are rules, not guide
 - Near-black neutrals in six tonal steps (the website's ground, surfaces and hairlines), a dark
   theme by default and a full light theme.
 - One accent, Phosphor Amber, which the user can change. It is never decoration.
-- Ten cable colours, one per kind of connection, used only to say "this is an SSH/RDP/… thing".
+- Eleven cable colours, one per kind of connection, used only to say "this is an SSH/RDP/… thing".
 - JetBrains Mono for short text, the system face for long text and lists.
 - The brand kit's horizontal logo on the start screen and in Settings › About; its own amber and
   white stay inside it.
 - Fibonacci spacing (1 2 3 5 8 13 21 34px) and five type sizes, both enforced by a test.
 - Rounded panels on a darker window. Flat at rest; shadows only on floating layers.
-- Icon-only tool buttons with tooltips. Boxicons SVGs, animated only on session rows and tabs.
+- Icon-only tool buttons with tooltips. Boxicons SVGs. Session and folder icons move on hover; interface icons only spin or pulse while something waits.
 - Right-to-left ready: logical properties throughout, with flips for chevrons, menus and carets.
 
 ## Colors
@@ -301,10 +301,13 @@ colours.
   value (`ACCENTS` in `api.ts`); any other colour is darkened toward the text on the light theme,
   as the amber is. The app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink` and
   `gold-soft` from it at runtime, so never hard-code its hex in a component; use `var(--gold)`.
+  The one exception is the Amber (default) swatch in Settings › Appearance, which hard-codes it
+  so it shows the default whatever accent is picked.
 - **Amber Ink** (`gold-ink`): text on a solid amber fill (the primary button): the ground,
   `#050506`, on dark; white on light.
 - **Amber Wash** (`gold-soft`): the translucent tint (14%) behind picked rows, search hits, a
-  setting a search points at, tags and drop zones.
+  setting a search points at, tags and drop zones. The sidebar's drop-into-folder highlight is a
+  stronger mix, 18% amber, to tell "into" from "before" (the amber line).
 
 The broadcast marker in a status bar reads the accent through `--broadcast`, an alias of `--gold`
 (as `--fwd` and `--back` alias kind hues for tunnels).
@@ -410,7 +413,7 @@ own font is the user's setting and is not part of this system.
 - **Prompt** (mono 400, 13px `--t`, 1.4, in `weak`): the start screen's `~/xtermium $`, with the
   `$` at 500 in amber and a blinking amber block cursor after it; decorative, hidden from
   assistive tech. Nowhere else.
-- **Headline** (mono 600, 16.5px `--t-xl`, 1.4, -0.025em, the website's title tracking): the
+- **Headline** (mono 600, 16.5px `--t-xl`, 1.618 (φ), -0.025em, the website's title tracking): the
   lead sentence under the logo.
 - **Title** (mono 600, 14.5px `--t-l`, 1.4, -0.01em): dialog and page titles (`h2`). Section
   heads inside a page (`h3`) are mono 600 at body size.
@@ -421,12 +424,12 @@ own font is the user's setting and is not part of this system.
   as tall as a list row. Measure is capped at 62–70ch.
 - **Label** (400, 11.5px `--t-s`): counts, hints and secondary lines in the system face; the
   status bar, tags and `kbd` at the same size in the mono. Counts use `tabular-nums`.
-- **Mono** (0.92em, JetBrains Mono): `code`, `kbd`, `pre`, and tunnel addresses (`.addr` in the
-  tunnel drawing). It always runs left to right, even in Arabic.
+- **Mono** (0.92em, JetBrains Mono): `code`, `pre`; `kbd` in the mono at label size (`--t-s`). It always runs left to right, even in
+  Arabic.
 
-`--t-xxl` (18.5px) is used twice: the status centred over an RDP desktop while it connects or
-after it closes, and the sign-in code a person approves in the browser (in the mono, letters
-0.1em apart). The logo is drawn, not set: it takes its size from its width (`min(377px, 100%)` on
+`--t-xxl` (18.5px) is used three times: the status centred over an RDP desktop while it connects
+or after it closes, the sign-in code a person approves in the browser (in the mono, letters
+0.1em apart) and the Co-op passcode (in the mono, 0.2em apart). The logo is drawn, not set: it takes its size from its width (`min(377px, 100%)` on
 the start screen, 233px in Settings › About).
 
 ### Named Rules
@@ -473,7 +476,7 @@ be moved, minimized and closed; full screen has no bar.
 Every control in the bar is as tall as the field (`--control`), so the row shares one top and
 bottom edge, centred in the bar. The sidebar has no header: its first row's middle sits on the tab
 strip's middle beside it (`calc((var(--bar) - var(--row)) / 2)` above it), and the collapsed rail
-holds only the sidebar's foot. Finding a session is the palette's job (it searches names, addresses, folders and
+holds the sidebar's foot and, while there is a message, a button for it that opens the sidebar. Finding a session is the palette's job (it searches names, addresses, folders and
 folder tags).
 
 Under the bar the window is padded by the gap (`--gap`, 5px) and holds up to three floating panels in a row:
@@ -499,7 +502,7 @@ shell." Settings › About shows the same logo at 233px.
 
 For someone new, the ways to start give way to **Getting started** (`ui/lib/Guide.svelte`): one
 panel (hairline, `--r-menu`) headed by its title in the short face (`--t-l`, 600), "n of 8 done"
-in `weak` and a flat Hide, over eight rows, most important first: a local shell, a saved server
+in `weak` ("All done" once every step is) and a flat Hide, over eight rows, most important first: a local shell, a saved server
 (with an import link under it), the palette, panes, a tunnel, broadcast, the lock, sync. A row is
 a flat button in three columns: its number in a 21px hairline ring (a tick on an `ok` tint once
 done; the next step's ring and number in `fg`, the rest `weak`), the step in the short face at
@@ -549,7 +552,8 @@ drag-insertion bars) are drawn as inset `box-shadow` lines so they take no room.
 ### Shadow Vocabulary
 Three tokens on `:root` in `ui/app.css`, from lowest to highest:
 - **Float** (`--shadow-float`: `0 4px 14px rgba(0, 0, 0, 0.3)`): bars floating over a view
-  (find, reconnect) and the hint over a detached window.
+  (find, reconnect), the insecure-connection bar over an unencrypted VNC desktop, and the hint
+  over a detached window.
 - **Menu** (`--shadow-menu`: `0 6px 20px rgba(0, 0, 0, 0.36)`): context menus, dropdown lists
   and toasts.
 - **Dialog** (`--shadow-dialog`: `0 8px 28px rgba(0, 0, 0, 0.4)`): modal dialogs and the command
@@ -564,8 +568,9 @@ away again, and takes it from one of the three tokens. Panels, tabs, rows and bu
 
 Three corners, all small: 3px (`--r-control`) for controls, fields, tags and panes; 5px
 (`--r-menu`) for menus, toasts, the palette, split panes and cards; 8px (`--r-window`) for the
-floating panels and dialogs. Status dots (7px), colour swatches (16–18px) and the dot on a live
-session's icon are circles. Borders are a 1px hairline everywhere. Dashed hairlines mean "empty
+floating panels and dialogs. Status dots (7px), colour swatches (18px; 21px for the mark swatches in Settings › Appearance) and the dot on a live
+session's icon are circles. Borders are a 1px hairline everywhere, bar the pane drop zones, which
+draw a 2px dashed line so they read over a live terminal. Dashed lines mean "empty
 or droppable" (an empty pane, a drop zone). A 2px amber border means "picked" (a colour scheme
 card).
 
@@ -590,8 +595,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   fill with `error-ink` (`button.primary.danger`). Something that can be put back is not asked
   about at all: it happens, and a toast offers Undo.
 - **On / selected:** amber wash, amber text, and a 55% amber border, for toggles and picked options.
-- **Flat:** transparent at rest, `raised` on hover. Tool buttons in bars are flat, icon-only
-  (`3px 5px`), in `weak`, turning amber when on, and always carry a tooltip.
+- **Flat:** transparent at rest, `raised` on hover, text in `fg`. Tool buttons in bars are flat,
+  icon-only (`3px 5px`), in `weak` (the title bar and the tab strip set that themselves), turning
+  amber when on, and always carry a tooltip.
 - **Link:** text that names another place is a borderless amber `button.link` (underline on
   hover). A whole sentence that links is `.quiet`: body colour, dotted underline, amber on hover.
 - **Focus:** a 1px amber outline drawn inside the edge (`outline-offset: -1px`).
@@ -615,6 +621,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   without one are indented to line up with the others' text.
 - **Groups:** `.sep` starts a group with a hairline 8px in from each side.
 - **Destructive:** comes last, as `.danger`, and turns red on a 14% red wash when pointed at.
+- **Saved-layouts menu:** one row per layout (icon, name, pane count) with a trash button at its
+  end, then "Save the panes as a layout…" (dim with nothing on screen). Deleting is a row's own
+  button, so the menu ends with its way to add: an accepted exception to "destructive item last".
 - Keyboard-driven, kept on screen, and opening leftwards in right-to-left languages.
 - Menus open instantly, with no arrival motion: they follow the pointer and the keyboard, and
   any delay there reads as lag.
@@ -623,8 +632,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
 - **Tab strip:** a 34px panel bar. Tabs are flat, split by hairlines, `weak` when idle. The
   active tab takes the content's `bg` and drops its bottom line so it joins its pane. A 2px
   connector sits on top of each tab, in its mark (the tab's own, else its session's or folder's)
-  or else its kind hue: hidden when idle, at 50% when the tab is visible in a split, and full on
-  the active one. The tab's icon is always in its kind hue, and the active tab's name is in
+  or else its kind hue: drawn dim (30%) on every tab, whether it is connected or idle, at 50% when
+  the tab is visible in a split, and full on the active one. A tab whose connection is gone draws
+  it in `warn`. The tab's icon is always in its kind hue, and the active tab's name is in
   `short-strong`, as the title bar's field names it (the mono's widths don't change with weight,
   so the strip doesn't shift). A drag shows a 2px amber insertion bar.
 - **Session rack:** 21px rows, folders with a rotating caret (0.12s) and a hairline guide under
@@ -632,30 +642,46 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Chosen rows
   take the amber wash. A marked session's or folder's name is in its mark.
 - **Sidebar foot:** the status pill (an inset well, label size in `weak`, fading in over 0.16s
-  when a message arrives), then Settings and
-  the account, in that order, at the foot's trailing end. The account is a flat icon button; signed
-  in, it shows an 18px round avatar with the first letter of the name, ringed 2px in `error` when
+  when a message arrives) on a row of its own, then, at the trailing end of the foot's row,
+  Settings, Lock (when a lock is set), Terminal Co-op (in a ring, or signed in with Pro or its
+  button turned on) and the account, in that order. The account is a flat icon button; signed
+  in, it shows an 18px round avatar: the account's picture when it has one, else the first letter
+  of the name on a solid amber disc. It is ringed 2px in `error` when
   sync fails or the quota is full and in `warn` when it is nearly full. Its menu opens upwards,
   led by a `.head` block (name, address, last sync, the quota bar) under a hairline.
 - **Focus ring:** one 2px amber ring around the focused pane, outside it in the gap (5px corners
-  in a split). When the focus moves it glides to the next pane (0.2s, `--ease-out`; Static in
+  in a split), drawn only when the layout has more than one pane. When the focus moves it glides to the next pane (0.2s, `--ease-out`; Static in
   Settings › Appearance makes it jump), so you see which way it went. While a pane edge is
   dragged it follows the edge with no delay.
 - **Settings pages:** a 183px column. The current page is `raised` with a 2px amber edge on its
   leading side. Its search replaces the pages with hits; while it's open the page follows the
   best hit and lights that setting (`.lit`: its label and field in the amber wash, ringed 3px in
   it), and the hit is lit in the list too. Enter closes the search and puts the keyboard on the
-  setting's control, whose light then fades over 2.6s (`.found`). Pages: General, Appearance,
-  Shortcuts, Security (encryption, recovery passphrase, the lock), Sync, MCP (sub-sections "AI
-  assistants (MCP)" and "Command line", whose commands and configuration sit in `.snippet`
-  wells: `deep`, `8px 13px`, 3px corners, in the mono) and About.
+  setting's control, whose light then fades over 2.6s (`.found`). Pages, in this order: General,
+  Appearance, Terminal, Shortcuts, Defaults, Workspaces, Saved logins, SSH keys, Import and
+  export, Account and sync, Security (encryption, recovery passphrase, the lock), MCP
+  (sub-sections "AI assistants (MCP)" and "Command line", whose commands and configuration sit in
+  `.snippet` wells: `deep`, `8px 13px`, 3px corners, in the mono), Troubleshoot and About.
 - **Status bar:** a 21px panel strip under a tab's view, label size in the mono, in `weak`, items
   13px apart.
-  It leads with where the keyboard goes: `user@host`, then the session's folder with the folder's
+  It leads with where the keyboard goes: the session's icon (14px) and its address (`user@host:port`
+  for SSH), then the session's folder with the folder's
   tags as amber chips (`Production/Web · prod`), so a production box says so under its pane. Then a
-  state dot (green / amber / red / grey) and, at the end, the amber broadcast marker.
-- **Tab-strip tools** come as the tabs do: Saved layouts always (it opens sessions), File
-  Browser and Snippets once a tab is open, Broadcast and the layout segment with two or more.
+  state dot with the uptime ("up 3m"; "connecting…" in amber, "stopped" in red) and, on an SSH
+  session, the cipher (and "+ zlib" when compressed) and the round-trip time, which turns `warn`
+  past 200 ms. At the end come the amber broadcast marker and the terminal's columns × rows. With
+  no tab it says "No tab".
+- **Tab-strip tools** come as the tabs do, at the strip's end: Tasks (a layers glyph and a count)
+  while a tab runs in the background or in a window of its own; File Browser and Snippets once a
+  terminal-type tab is open (File Browser stays dim until a connected SSH, RDP or VNC tab is on
+  screen); Broadcast with two or more tabs. Saved layouts and the layout segment live in the title
+  bar, not here.
+- **Tasks menu:** a menu (`.tasks-list`) hung from the Tasks button's end, one row per background
+  or detached tab: its icon in its kind hue, its name, and "running", "done" or "in its own window"
+  in `weak`. A click brings the tab back into the strip; a flat X closes it.
+- **File-panel chips:** when more tabs have files than there are file panels (three at most), a row
+  of chips under the panels, one per tab: its icon (13px) and name, `weak` and label size, with the
+  tabs shown lit (`raised`, `fg`). A click shows that tab's files.
 
 ### Dialogs and the Command Palette
 - **Dialog:** a panel at `--float-alpha` with 8px corners, a hairline header (`8px 8px 8px 13px`), and a 13px
@@ -668,6 +694,8 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   person can see, never one in a closed `<details>` or a shortcut that fills the others in
   (`data-not-first`, as "Copy the server from"), else on the dialog itself. Dialogs and menus
   draw over everything wherever they're opened from (they move to the end of the page while open).
+  A dialog opened over another is solid (98%, whatever the Opacity) and the ones under it step
+  back behind a 3px blur: the last opened has the keyboard.
 - **Sign in:** a 377 dialog. Sync needs an account and nothing else does; the browser opens on
   the sign-in page (Google, GitHub or Discord) and the dialog shows the code to approve there,
   centred, in the mono at `--t-xxl`, with a flat copy button beside it and an amber spinner while
@@ -688,8 +716,10 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   (`fade-in`) over the same 0.16s.
 - **Palette:** 610px wide, 12vh from the top, at most 1/φ of the window tall, with 5px corners.
   A search well over 26px rows; the picked row takes the amber wash, with its shortcut in a `kbd`
-  at the end of the row. Empty, it lists the open tabs, then the saved sessions, then the actions:
-  a machine before a verb. A typed word has to sit in one stretch of a row's text (an abbreviation
+  at the end of the row. Empty, it lists the open tabs, then the saved sessions, then the actions,
+  the saved layouts, the snippets and the tunnels to start or stop: a machine before a verb. Under
+  the search well, Sessions, Snippets and Hosts filter buttons, each with its count; Tab steps
+  through them without leaving the field, and picking one again gives back everything. A typed word has to sit in one stretch of a row's text (an abbreviation
   like `prd` for `prod`), never letters scattered across it.
 
 ### Tags, Keys and Toasts
@@ -704,10 +734,17 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   `--float-alpha`, hairline, 5px corners, `3px 8px`, label size on golden lines, Menu shadow, at most 377px
   wide; its shortcut follows in a `kbd` in `weak`. It hangs under what it explains (above when
   there is no room) and takes no pointer.
-- **Quota bar (`Quota.svelte`):** sync storage used, in the account menu and Settings › Sync. A
+- **Quota bar (`Quota.svelte`):** sync storage used, in the account menu and Settings › Account and sync. A
   3px track in `line` with 2px corners, filled in amber; the fill turns `warn` when nearly full
   and `error` when full, and a label-size line under it says how much. Not a native `progress`:
   the webview paints that flat grey whatever the accent.
+- **Quality bar (`QualityBar.svelte`):** the RDP picture against speed, in the session editor and
+  Settings. A native range with the step names under it, Quality at the start to Speed at the
+  end, the picked name in amber at 600, and a `weak` line saying what it means. At most 420px
+  wide, 55% opacity when off. It applies on the next connect.
+- **Hint (`Hint.svelte`):** a dismissible tip in a `.form` grid, under the field it explains: a
+  14px info icon and `weak` text, ending in a quiet underlined "Don't remind me again"
+  (`settings.quiet_hints`). Settings › General brings the dismissed tips back.
 
 ### Kind Glyph (signature)
 A 21px tile with 3px corners, the kind's hue as the icon colour on 15% of the same hue (`.glyph`
@@ -746,7 +783,9 @@ and, last and in `error`, Kick; the seat whose menu is open wears the focus outl
 room for all that: it is a plain list of pictures and names, with Rename… and Kick as quiet
 buttons on each row for the owner, and no traffic. Over a shared or remote pane, each other person's pointer is an 8px ring in
 a mark colour (`COLORS`, held per person) with their 13px picture beside it, the name on hover. It
-moves in 80ms and stands still under reduced motion.
+moves in 80ms and stands still under reduced motion. In a terminal tab of the ring, what each
+other person has selected is drawn row by row in their ring colour at 30%, under the pointers
+(`CoopSelections.svelte`); everyone selects on their own and sees all of it.
 
 ### Backgrounds
 A picture or a GLSL shader behind the terminals, the sidebar or the tab bar (each its own),
@@ -757,9 +796,13 @@ centred at its size (`FITS`). A shader always fills. The place isolates its stac
 backdrop stays under everything in it.
 
 ### Session Icons
-Boxicons SVGs through `Icon.svelte`, 16–18px. Session and folder icons (`SessionIcon.svelte`)
-have small moving parts (blink, flow, spin, bob…) that play only while the pointer is over that
-session's row or tab, never on the interface's own buttons, and never under reduced motion.
+Interface icons are Boxicons SVGs through `Icon.svelte`: 16–18px in controls, 13–15 in tabs and
+the status bar, 21 in the title bar, 34 on the lock. They stand still, except a loader that spins
+(in amber) or a live dot that pulses while something is in progress. Session and folder icons
+(`SessionIcon.svelte`) are a Boxicon, or the user's own picture, or a Dashboard Icon picked from
+the catalogue (`dashicons.ts`). A Boxicon has small moving parts (blink, flow, spin, bob…) that
+play only while the pointer is over that session's row or tab, never on the interface's own
+buttons, and never under reduced motion.
 
 ## Do's and Don'ts
 
@@ -801,9 +844,10 @@ session's row or tab, never on the interface's own buttons, and never under redu
 - **Don't** use a kind hue to show state, or a status colour to mean a kind of connection.
 - **Don't** let a user's colour recolour a session's icon: marks go on names (`.tinted`) and tab
   lines, and accent presets stay off the kind hues and the error red.
-- **Don't** hard-code the accent's hex, or the chrome as an opaque hex.
-- **Don't** animate the interface's own icons. Only session and folder icons move, and only on
-  hover.
+- **Don't** hard-code the accent's hex (but for the Amber (default) swatch in Settings ›
+  Appearance), or the chrome as an opaque hex.
+- **Don't** animate the interface's own icons, bar a spinner or a pulse that says something is
+  waiting. Only session and folder icons move for their own sake, and only on hover.
 - **Don't** add big padding or wide gaps. The densest comfortable layout is the house style.
 - **Don't** set a list, a menu or a five-to-a-row grid in the mono: the names stop fitting and it
   no longer reads down.
