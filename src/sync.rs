@@ -282,13 +282,16 @@ pub enum Trouble {
     /// 429, 503, Cloudflare's "origin down" or bot block, or no connection at all: try again in
     /// `after` seconds, with backoff.
     Later { after: u64 },
+    /// A 429 from the server itself, on a `call`: its sentence ("Too many tries at a passcode…")
+    /// for the person, and like `Later`, worth trying again in `after` seconds.
+    Busy { message: String, after: u64 },
 }
 
 impl std::fmt::Display for Trouble {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::SignedOut => write!(f, "Signed out: sign in again to sync."),
-            Self::NeedsPro { message } => write!(f, "{message}"),
+            Self::NeedsPro { message } | Self::Busy { message, .. } => write!(f, "{message}"),
             Self::Later { .. } => write!(f, "The sync server can't be reached right now."),
         }
     }
@@ -346,10 +349,18 @@ pub async fn call(url: &str, token: &str, method: reqwest::Method, path: &str, b
     let (status, body, after) = fetch(req).await?;
     match status {
         200..=299 => Ok(serde_json::from_slice(&body).unwrap_or_default()),
-        // Only the server's own 401 (a JSON sentence) is a dead token; Cloudflare's HTML is not.
-        401 if said(&body).is_none() => Err(Trouble::Later { after }.into()),
-        502..=504 | 520..=530 => Err(Trouble::Later { after }.into()),
-        s => bail!("{}", said(&body).unwrap_or_else(|| format!("sync server: HTTP {s}"))),
+        s => Err(refused(s, after, &body)),
+    }
+}
+
+/// A `call`'s refusal. The server always refuses in JSON, so its sentence is shown; Cloudflare's
+/// own pages (a bot block or challenge as 401/403, a limit as 429, the origin down) are `Later`,
+/// and so is a 429 at all: a poller waits and tries again instead of giving up.
+fn refused(status: u16, after: u64, body: &[u8]) -> anyhow::Error {
+    match (status, said(body)) {
+        (401 | 403 | 429, None) | (502..=504 | 520..=530, _) => Trouble::Later { after }.into(),
+        (429, Some(message)) => Trouble::Busy { message, after }.into(),
+        (s, message) => anyhow!(message.unwrap_or_else(|| format!("sync server: HTTP {s}"))),
     }
 }
 
@@ -771,6 +782,25 @@ mod tests {
         let cf = b"<!DOCTYPE html><html><title>Just a moment...</title></html>";
         assert_eq!(trouble(403, 30, cf), Some(Trouble::Later { after: 30 }));
         assert_eq!(trouble(401, 30, b""), Some(Trouble::Later { after: 30 }));
+    }
+
+    /// Co-op's calls: Cloudflare's pages and any 429 wait and retry; the server's own words show.
+    #[test]
+    fn a_calls_refusals() {
+        let later = |e: anyhow::Error| e.downcast::<Trouble>().ok();
+        let cf = b"<!DOCTYPE html><html><title>Just a moment...</title></html>";
+        for s in [401, 403, 429, 502, 522] {
+            assert_eq!(later(refused(s, 9, cf)), Some(Trouble::Later { after: 9 }), "{s}");
+        }
+        let busy = br#"{"error": "Too many tries at a passcode. Wait a minute."}"#;
+        let e = refused(429, 60, busy);
+        assert_eq!(e.to_string(), "Too many tries at a passcode. Wait a minute.");
+        assert!(matches!(later(e), Some(Trouble::Busy { after: 60, .. })));
+        let owner = br#"{"error": "Only the person who started the ring can do that."}"#;
+        let e = refused(403, 30, owner);
+        assert!(e.downcast_ref::<Trouble>().is_none(), "not a sign-out, not a retry");
+        assert_eq!(e.to_string(), "Only the person who started the ring can do that.");
+        assert_eq!(refused(500, 30, b"").to_string(), "sync server: HTTP 500");
     }
 
     /// The API of docs/sync.md, in memory: (revision, files, recovery) or nothing.

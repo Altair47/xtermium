@@ -741,7 +741,7 @@ fn said(e: &anyhow::Error) -> String {
 }
 
 fn later(e: &anyhow::Error) -> bool {
-    matches!(e.downcast_ref::<sync::Trouble>(), Some(sync::Trouble::Later { .. }))
+    matches!(e.downcast_ref::<sync::Trouble>(), Some(sync::Trouble::Later { .. } | sync::Trouble::Busy { .. }))
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: serde_json::Value) -> Res<T> {
