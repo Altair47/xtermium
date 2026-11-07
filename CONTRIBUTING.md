@@ -3,6 +3,9 @@
 Thanks for helping. Bug reports, fixes and features are all welcome. For anything large, open an
 issue first so we can agree on the approach before you write it.
 
+Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md); report problems to
+abuse@xtermium.com.
+
 ## Branches and pull requests
 
 - Nobody pushes to `main`, maintainers included. Every change reaches it as a pull request from a
