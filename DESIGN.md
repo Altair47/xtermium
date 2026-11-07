@@ -176,6 +176,20 @@ components:
     textColor: "{colors.fg}"
     rounded: "{rounded.control}"
     size: "{spacing.control}"
+  guide:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.menu}"
+    padding: "3px"
+    width: "min(610px, 100%)"
+  guide-step:
+    backgroundColor: "transparent"
+    textColor: "{colors.fg}"
+    typography: "{typography.short-strong}"
+    rounded: "2px"
+    padding: "5px 8px"
+  guide-step-done:
+    textColor: "{colors.weak}"
+    typography: "{typography.short}"
   title-field:
     backgroundColor: "{colors.deep}"
     textColor: "{colors.weak}"
@@ -482,6 +496,21 @@ prompt (`~/xtermium $` and a blinking amber block cursor), then the brand kit's 
 `ui/lib/Logo.svelte`) at `min(377px, 100%)` wide, arriving with `float-in`, then the lead
 sentence and the ways to start, and a `weak` line that says "Start typing to open a local
 shell." Settings › About shows the same logo at 233px.
+
+For someone new, the ways to start give way to **Getting started** (`ui/lib/Guide.svelte`): one
+panel (hairline, `--r-menu`) headed by its title in the short face (`--t-l`, 600), "n of 8 done"
+in `weak` and a flat Hide, over eight rows, most important first: a local shell, a saved server
+(with an import link under it), the palette, panes, a tunnel, broadcast, the lock, sync. A row is
+a flat button in three columns: its number in a 21px hairline ring (a tick on an `ok` tint once
+done; the next step's ring and number in `fg`, the rest `weak`), the step in the short face at
+500 with a `weak` hint under it in the long face at `--t-s`, and its shortcut in a `kbd`. The
+words wrap, so a narrow window never puts them under the shortcut. Clicking a row does the step for real (panes and
+broadcast open two local shells to show on). A step is done when the state it leads to is there
+(a saved session, a tunnel, a lock, an account) or once it was done; done rows step back to
+`weak`. While the list shows with nothing saved, the "No saved sessions yet" line goes (the list
+says it). A new install starts with it on; installs from before it don't. Hide puts it away with
+an Undo toast; Settings › General › Getting started turns it on again and Start over clears its
+ticks.
 
 The prompt is real. A character typed there (outside any field, with no dialog, palette or menu
 open) opens a local shell, and every key typed is held until the shell can take it, then handed

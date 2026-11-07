@@ -9,6 +9,7 @@
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Filter, type Sizes } from "./lib/actions";
   import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
+  import Guide, { type Step } from "./lib/Guide.svelte";
   import Logo from "./lib/Logo.svelte";
   import Account from "./lib/Account.svelte";
   import Coop from "./lib/Coop.svelte";
@@ -30,7 +31,7 @@
   import Credentials from "./lib/Credentials.svelte";
   import StatusBar from "./lib/StatusBar.svelte";
   import { _, N_, setLanguage } from "./lib/i18n.svelte";
-  import { app, boot, dismiss, lock, lookOf, notify, saveStore, shortcut, tell, tip, toast, toasts, sessionKey, siteIcon, syncNow, takeRestore, workspaceOp, type SyncSide } from "./lib/state.svelte";
+  import { app, boot, dismiss, guideDone, lock, lookOf, notify, saveStore, shortcut, tell, tip, toast, toasts, sessionKey, siteIcon, syncNow, takeRestore, workspaceOp, type SyncSide } from "./lib/state.svelte";
   import Terminal, { IGNORED } from "./lib/Terminal.svelte";
   import TitleBar from "./lib/TitleBar.svelte";
   import Tunnels from "./lib/Tunnels.svelte";
@@ -438,6 +439,7 @@
 
   /** The tab that had the keyboard stays on screen and keeps it. */
   function setLayout(l: Layout) {
+    if (l !== "single") guideDone("split");
     const was = panes[focus];
     layout = l;
     const n = count(l);
@@ -850,7 +852,7 @@
 
   // ---- dialogs ----
   const createSession = () => (editor = { session: newSession(), index: null });
-  const localShell = () => open(newSession("shell", "", "local"));
+  const localShell = () => (guideDone("shell"), open(newSession("shell", "", "local")));
 
   function answer(ok: boolean) {
     const p = prompts.shift()!;
@@ -992,6 +994,7 @@
     if (!canBroadcast) return void (broadcastAlone = true); // from the keyboard: say why nothing happened
     broadcasting = !broadcasting;
     if (broadcasting) {
+      guideDone("broadcast");
       untiled = layout;
       setLayout("tiles"); // already tiled: the unticked tabs come back
     } else if (layout === "tiles" && untiled !== "tiles") setLayout(untiled);
@@ -1058,10 +1061,12 @@
       case "palette":
         paletteFilter = null;
         showPalette = !showPalette;
+        if (showPalette) guideDone("palette");
         break;
       case "find":
         paletteFilter = "sessions";
         showPalette = true;
+        guideDone("palette");
         break;
       case "find-text":
         if (t) views[t.key]?.find();
@@ -1217,6 +1222,34 @@
     // The list's own padding and a scroll bar.
     app.settings!.sidebar_width = Math.round(Math.max(180, Math.min(600, w + 8 + 14)));
     app.settings!.sidebar_collapsed = false;
+  }
+
+  /** A getting-started step, done for real: panes and broadcast open two local shells to show on. */
+  async function guideStep(step: Step) {
+    const two = async () => {
+      for (let n = tabs.filter((t) => joinsBroadcast(t.session.kind)).length; n < 2; n++) localShell();
+      await tick();
+    };
+    switch (step) {
+      case "shell":
+        return void localShell();
+      case "session":
+        return createSession();
+      case "palette":
+        return run("palette");
+      case "split":
+        await two();
+        return setLayout("columns");
+      case "tunnel":
+        return void (showTunnels = true);
+      case "broadcast":
+        await two();
+        return toggleBroadcast();
+      case "lock":
+        return openSettings("security");
+      case "sync":
+        return openSettings("sync");
+    }
   }
 
   /** Every level of every session's folder: Prod/Web counts Prod as well. */
@@ -1437,6 +1470,8 @@
               <p class="prompt" aria-hidden="true">~/xtermium <b>$</b> <i class="cursor"></i></p>
               <div class="logo"><Logo /></div>
               <p class="lead">{_("Terminals, SSH, SFTP, RDP and tunnels in one window.")}</p>
+              <!-- with nothing saved yet, the getting-started list says it, as its second step -->
+              {#if app.store.session.length || !app.settings?.guide}
               <p class="weak">
                 {#if app.store.session.length}
                   {@const counts = { sessions: app.store.session.length, folders, tunnels: app.store.tunnel.length }}
@@ -1451,20 +1486,25 @@
                   {_("No saved sessions yet. Create one, or import them from MobaXterm or your ~/.ssh/config.")}
                 {/if}
               </p>
-              <div class="starts">
-                <button class="flat" onclick={localShell} style:--kind="var(--k-shell)" title={_("A terminal on this computer")}>
-                  <span class="glyph"><Icon name="terminal" size={16} /></span>{_("Open a local shell")}
-                </button>
-                <button class="flat" onclick={createSession} style:--kind="var(--k-ssh)" title={_("SSH, RDP, serial port or website")}>
-                  <span class="glyph"><Icon name="plus" size={16} /></span>{_("New session")}
-                </button>
-                <button class="flat" onclick={() => (showImport = true)} style:--kind="var(--k-rdp)" title={_("From MobaXterm, ~/.ssh/config or an xtermium export")}>
-                  <span class="glyph"><Icon name="import" size={16} /></span>{_("Import sessions")}
-                </button>
-                <button class="flat" onclick={() => (showTunnels = true)} style:--kind="var(--gold)" title={_("Forward ports over SSH")}>
-                  <span class="glyph"><Icon name="transfer-alt" size={16} /></span>{_("Tunnels")}
-                </button>
-              </div>
+              {/if}
+              {#if app.settings?.guide}
+                <Guide onstep={guideStep} onimport={() => (showImport = true)} />
+              {:else}
+                <div class="starts">
+                  <button class="flat" onclick={localShell} style:--kind="var(--k-shell)" title={_("A terminal on this computer")}>
+                    <span class="glyph"><Icon name="terminal" size={16} /></span>{_("Open a local shell")}
+                  </button>
+                  <button class="flat" onclick={createSession} style:--kind="var(--k-ssh)" title={_("SSH, RDP, serial port or website")}>
+                    <span class="glyph"><Icon name="plus" size={16} /></span>{_("New session")}
+                  </button>
+                  <button class="flat" onclick={() => (showImport = true)} style:--kind="var(--k-rdp)" title={_("From MobaXterm, ~/.ssh/config or an xtermium export")}>
+                    <span class="glyph"><Icon name="import" size={16} /></span>{_("Import sessions")}
+                  </button>
+                  <button class="flat" onclick={() => (showTunnels = true)} style:--kind="var(--gold)" title={_("Forward ports over SSH")}>
+                    <span class="glyph"><Icon name="transfer-alt" size={16} /></span>{_("Tunnels")}
+                  </button>
+                </div>
+              {/if}
               <p class="weak">
                 {#if app.settings?.quick_shell !== false}{_("Start typing to open a local shell.")}{/if}
                 {_("Keyboard shortcuts are listed, and can be changed, in")}
