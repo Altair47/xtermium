@@ -9,6 +9,7 @@
   import type { CoopMember } from "./api";
   import { pace, traffic, type RingFlow } from "./coop";
   import CoopPic from "./CoopPic.svelte";
+  import { coopColor } from "./state.svelte";
   import Icon from "./Icon.svelte";
 
   let {
@@ -106,10 +107,10 @@
         onclick={(e) => pick(e, p.m)}
         oncontextmenu={(e) => pick(e, p.m)}
       >
-        <CoopPic name={p.m.name} image={p.m.image} size={PIC} />
+        <CoopPic name={p.m.name} image={p.m.image} size={PIC} color={coopColor(p.m.id)} />
       </button>
     {:else}
-      <span class="seat" class:off={p.m.online === false} style:left><CoopPic name={p.m.name} image={p.m.image} size={PIC} /></span>
+      <span class="seat" class:off={p.m.online === false} style:left><CoopPic name={p.m.name} image={p.m.image} size={PIC} color={coopColor(p.m.id)} /></span>
     {/if}
     <div class="who {p.side}" class:above={p.above}>
       <span class="name" title={p.m.name}>{p.m.you ? _("{name} (you)", { name: p.m.name }) : p.m.name}</span>

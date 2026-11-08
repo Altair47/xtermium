@@ -132,8 +132,11 @@ pub struct Settings {
     pub status_bar: bool,
     /// Open sessions in the sidebar with one click instead of two.
     pub single_click_open: bool,
-    /// With no tabs open, typing on the start screen opens a local shell and hands it the keys.
+    /// With no tabs open, what is typed on the start screen shows at its prompt, and Enter runs it
+    /// in a shell.
     pub quick_shell: bool,
+    /// The program that shell runs (arguments allowed); empty = `shell`, Local shell's.
+    pub start_shell: String,
     /// Reopen the sidebar's folders that were open last time; `open_folders` are those.
     pub remember_folders: bool,
     pub open_folders: Vec<String>,
@@ -181,6 +184,8 @@ pub struct Settings {
     /// The app's own icon (Settings › Appearance): a square `data:image/png` URL shown on the
     /// windows, the taskbar, the tray, the title bar and the start screen; "" = the mark.
     pub app_icon: String,
+    /// An http(s) address the start screen's logo opens in the browser when clicked; "" = none.
+    pub logo_link: String,
     /// Terminal colour schemes the user imported, next to the built-in `SCHEMES`.
     pub custom_schemes: Vec<Scheme>,
     /// Images used as session or folder icons, kept to pick again (ui/lib/Appearance.svelte).
@@ -331,6 +336,7 @@ impl Default for Settings {
             status_bar: true,
             single_click_open: false,
             quick_shell: true,
+            start_shell: String::new(),
             remember_folders: true,
             open_folders: vec![],
             quiet_hints: vec![],
@@ -352,6 +358,7 @@ impl Default for Settings {
             focus_animated: true,
             accent: String::new(),
             app_icon: String::new(),
+            logo_link: String::new(),
             custom_schemes: vec![],
             custom_icons: vec![],
             workspace: String::new(),

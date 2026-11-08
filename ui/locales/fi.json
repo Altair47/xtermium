@@ -210,7 +210,6 @@
   "From": "Lähde",
   "From MobaXterm, ~/.ssh/config or an xtermium export": "MobaXtermistä, ~/.ssh/configista tai xtermium-viennistä",
   "From a file": "Tiedostosta",
-  "Full screen": "Koko näyttö",
   "Gateway host / port": "Yhdyskäytävän isäntä / portti",
   "Gateway password": "Yhdyskäytävän salasana",
   "Gateway private key": "Yhdyskäytävän yksityinen avain",

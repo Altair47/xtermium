@@ -7,7 +7,7 @@
   let failed = $state("");
 </script>
 
-<span class="pic" class:small={size < 21} class:big={size > 21} style:--size="{size}px" style:--c={color || null}>
+<span class="pic" class:small={size < 21} class:big={size > 21} class:ringed={!!color} style:--size="{size}px" style:--c={color || null}>
   {#if image && image !== failed}
     <img src={image} alt="" onerror={() => (failed = image)} />
   {:else}
@@ -29,6 +29,10 @@
     font-size: var(--t-s);
     font-weight: 700;
     line-height: 1;
+  }
+  /* the person's ring colour, round a photo as well as behind a letter */
+  .ringed {
+    box-shadow: 0 0 0 2px var(--c);
   }
   .small {
     font-size: 0.6em;

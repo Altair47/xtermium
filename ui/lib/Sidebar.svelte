@@ -74,11 +74,15 @@
     onopen,
     onedit,
     live = new Map(),
+    current = "",
   }: {
     onopen: (s: Session) => void;
     onedit: (s: Session, index: number | null) => void;
     /** Sessions with a tab, by `sessionKey`: true while one is connected. */
     live?: Map<string, boolean>;
+    /** The `sessionKey` of the focused tab's session: its row is marked, so the green dots say
+     *  which sessions are open and this says which one has the keyboard. */
+    current?: string;
   } = $props();
 
   /** `path`: `/`-separated like a session's folder; `count`: sessions in it and below. */
@@ -523,6 +527,7 @@
     class:after={drag?.row === i && drag.after}
     class:live={on === true}
     class:idle={on === false}
+    class:current={current === sessionKey(s)}
     class:chosen={chosen.has("s" + i)}
     data-session={i}
     tabindex="-1"
@@ -785,6 +790,16 @@
   }
   .item.chosen {
     background: var(--gold-soft);
+  }
+  /* the session whose tab has the keyboard: a lifted row with the focus ring's amber at its edge,
+     as the focused pane wears it */
+  .item.current {
+    background: var(--raised);
+    color: var(--fg);
+    box-shadow: inset 2px 0 0 var(--gold);
+  }
+  :global([dir="rtl"]) .item.current {
+    box-shadow: inset -2px 0 0 var(--gold);
   }
   /* the selection menu's colour row, lined up with the items' text */
   .tints {

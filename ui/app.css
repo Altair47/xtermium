@@ -147,11 +147,6 @@ body,
 #app {
   padding-top: var(--titlebar);
 }
-/* Full screen has no title bar. */
-:root.fullscreen {
-  --titlebar: 0px;
-}
-
 body {
   font: 400 var(--t)/1.4 var(--ui);
   color: var(--fg);

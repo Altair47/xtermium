@@ -12,7 +12,7 @@
   import Icon from "./Icon.svelte";
   import { menu } from "./menu";
   import Modal from "./Modal.svelte";
-  import { app, CHECKOUT, copyText, loadAccount } from "./state.svelte";
+  import { app, CHECKOUT, coopColor, copyText, loadAccount } from "./state.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -115,8 +115,8 @@
 <!-- A click anywhere closes the menu, but the click on a seat that opened it. -->
 <svelte:window onclick={(e) => (e.target as Element).closest?.(".seat") || (picked = null)} />
 
-{#snippet person(m: { name: string; image: string | null })}
-  <CoopPic name={m.name} image={m.image} />
+{#snippet person(m: { id: string; name: string; image: string | null })}
+  <CoopPic name={m.name} image={m.image} color={coopColor(m.id)} />
   <span class="grow name" title={m.name}>{m.name}</span>
 {/snippet}
 

@@ -832,7 +832,13 @@
     <h3>{_("Sessions")}</h3>
     <div class="col">
       <label class="check"><input type="checkbox" bind:checked={s.single_click_open} />{_("Open a session with one click (instead of a double-click)")}</label>
-      <label class="check"><input type="checkbox" bind:checked={s.quick_shell} />{_("Start typing on the start screen to open a local shell")}</label>
+      <label class="check"><input type="checkbox" bind:checked={s.quick_shell} />{_("Type a command on the start screen and press Enter to run it in a shell")}</label>
+      {#if s.quick_shell}
+        <div class="form">
+          <span>{_("Shell for it")}</span>
+          <PathInput bind:value={s.start_shell} exec placeholder={_("Local shell's program (Settings › Defaults)")} />
+        </div>
+      {/if}
       <label class="check"><input type="checkbox" bind:checked={s.remember_folders} />{_("Remember which folders are open in the sidebar")}</label>
       {#if explorerMenu !== null}
         <label class="check"><input type="checkbox" checked={explorerMenu} onchange={(e) => setExplorerMenu((e.target as HTMLInputElement).checked)} />{_("Add \"Open in xtermium\" to folders in File Explorer: a local shell in that folder")}</label>
@@ -1103,6 +1109,11 @@ xtermium close 3`}</pre>
           <input bind:this={iconFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon" hidden onchange={pickAppIcon} />
         </div>
         <p class="weak">{_("Shown on the window, the taskbar, the tray, the title bar and the start screen. Shortcuts and the program's file keep the mark.")}</p>
+      </div>
+      <span>{_("Logo link")}</span>
+      <div class="col">
+        <input type="url" bind:value={s.logo_link} placeholder="https://" spellcheck="false" aria-label={_("Logo link")} />
+        <p class="weak">{_("A click on the start screen's logo opens this address in your browser. Empty, the logo is just a picture.")}</p>
       </div>
     </div>
     <h3>{_("Terminal colours")}</h3>

@@ -3,7 +3,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
-import { KIND_COLOR, KIND_ICON, type Background, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { memberColor } from "./coop";
+import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, type Background, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -100,6 +101,12 @@ function filled(s: Store): Store {
 
 // Automation (Settings > MCP) saved or deleted a session: show the sessions as stored.
 listen<Store>("store", ({ payload: s }) => (app.store = filled(s)));
+
+/** The colour a ring member wears everywhere, the same on every computer (coop.ts `memberColor`). */
+export const coopColor = (id: string) => {
+  const at = memberColor(id, app.coop.ring?.members ?? [], COLORS.length);
+  return at < 0 ? OWNER_COLOR : COLORS[at];
+};
 
 /** Takes a workspace switch's (or sync's) answer: the workspaces and the data of the one in use. */
 export function useWorkspaces(w: Workspaces) {
