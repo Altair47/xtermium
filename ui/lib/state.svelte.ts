@@ -10,7 +10,7 @@ import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
 
 export const app = $state({
-  store: { session: [], tunnel: [], folder: [], snippet: [], credential: [], layout: [] } as Store,
+  store: { session: [], tunnel: [], folder: [], snippet: [], credential: [], layout: [], agent_prompt: "" } as Store,
   /** Workspaces besides the default one (""), and the one in use. */
   workspaces: [] as string[],
   workspace: "",
@@ -96,6 +96,7 @@ function filled(s: Store): Store {
   s.snippet ??= [];
   s.credential ??= [];
   s.layout ??= [];
+  s.agent_prompt ??= "";
   return s;
 }
 

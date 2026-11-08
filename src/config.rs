@@ -38,6 +38,11 @@ pub struct Store {
     /// tunnels, snippets, layouts) is every workspace's. Synced and backed up with it.
     #[serde(default, rename = "workspace", skip_serializing_if = "Vec::is_empty")]
     pub workspaces: Vec<Workspace>,
+    /// A system prompt for this workspace's AI agent sessions (Settings › General), added to each
+    /// tool's own prompt as a tab opens (`automation::agent_launch`); each workspace keeps its own,
+    /// as `split` and `join` move the whole workspace record.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub agent_prompt: String,
 }
 
 /// Puts each of `from` into `to`, in place of the one `same` says it is, else at the end.
@@ -305,7 +310,8 @@ pub enum Kind {
     },
     /// An AI coding agent's command line, run locally in `dir` (empty: the home folder):
     /// `tool` is one of `AGENTS` (run with the flags for `mode`, `effort` and `model`, then
-    /// `args`), or "custom" (`args` is the whole command).
+    /// `args`), or "custom" (`args` is the whole command). Everything here is for that run
+    /// only: the tool's own configuration on this computer is never changed.
     Agent {
         tool: String,
         #[serde(default)]
@@ -327,8 +333,20 @@ pub enum Kind {
         mcp_off: Vec<String>,
         /// Skills turned off for this session, by name (`agent_mcp::turn_off`): the agent isn't
         /// told of them, which saves tokens; any other, a new one too, stays on.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[serde(default)]
         skills_off: Vec<String>,
+        /// Environment variables for the tool, one `NAME=value` a line (`Kind::agent_env`); they
+        /// go over the ones xtermium sets, so a session can point a tool at another key or host.
+        #[serde(default)]
+        env: String,
+        /// A past conversation to go on with, by the tool's id for it (the session history panel,
+        /// `agent_history`). Only a tab's session carries one; a saved session never (clean.rs).
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        resume: String,
+        /// The workspace's system prompt (`Store::agent_prompt`), filled in as the tab opens
+        /// (`Store::resolve`); never stored with the session.
+        #[serde(skip)]
+        prompt: String,
     },
     Vnc {
         host: String,
@@ -363,11 +381,15 @@ fn supermicro() -> String {
     KVM_VENDORS[0].into()
 }
 
-/// The agent tools (ui/lib/api.ts `AGENTS`); `Kind::agent_program` names what each one runs.
-pub const AGENTS: &[&str] = &["claude", "codex", "opencode", "copilot", "cursor"];
+/// The agent tools (ui/lib/api.ts `AGENTS`), each started as the command of its name: Claude
+/// Code, Codex and omp (Oh My Pi, omp.sh). Any other agent is a "custom" command.
+pub const AGENTS: &[&str] = &["claude", "codex", "omp"];
+/// Tools whose sessions were once built in (OpenCode, GitHub Copilot, Cursor's CLI); a saved one
+/// becomes a custom command with the same flags (clean.rs), so it still opens.
+pub const AGENTS_GONE: &[&str] = &["opencode", "copilot", "cursor"];
 /// How much an agent asks: before edits and commands, before commands only, or never.
 pub const AGENT_MODES: &[&str] = &["ask", "edit", "auto"];
-/// Reasoning effort levels, as Claude Code and Codex spell them.
+/// Reasoning effort levels, as Claude Code, Codex and omp spell them.
 pub const AGENT_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
 
 /// `f value` onto a command line, unless the value is empty.
@@ -378,25 +400,28 @@ fn flag(v: &mut Vec<String>, f: &str, value: &str) {
 }
 
 impl Kind {
-    /// The program an agent tool is started as.
-    pub fn agent_program(tool: &str) -> &str {
-        if tool == "cursor" { "agent" } else { tool }
-    }
-
     /// What an agent session runs, word by word: the program, the tool's own spelling of the mode,
     /// effort and model (left out where it has none), then the user's arguments, last so they win.
-    /// "custom" runs `args` as it is.
-    pub fn agent_argv(tool: &str, args: &str, mode: &str, effort: &str, model: &str) -> Vec<String> {
+    /// Every flag holds for that run only. "custom" runs `args` as it is.
+    pub fn agent_argv(tool: &str, args: &str, mode: &str, effort: &str, model: &str, resume: &str) -> Vec<String> {
         let mut v: Vec<String> = vec![];
         if tool != "custom" {
-            v.push(Self::agent_program(tool).into());
+            v.push(tool.into());
             match tool {
                 "claude" => {
-                    flag(&mut v, "--permission-mode", match mode { "ask" => "default", "edit" => "acceptEdits", "auto" => "auto", _ => "" });
+                    flag(&mut v, "--resume", resume);
+                    flag(&mut v, "--permission-mode", match mode { "ask" => "manual", "edit" => "acceptEdits", "auto" => "auto", _ => "" });
                     flag(&mut v, "--effort", effort);
                     flag(&mut v, "--model", model);
                 }
                 "codex" => {
+                    // Going on with a conversation is a subcommand; its options follow it.
+                    if !resume.is_empty() {
+                        v.extend(["resume".to_string(), resume.to_string()]);
+                    }
+                    // Without its shared background server every setting here, xtermium's MCP server
+                    // included, holds for this run alone instead of for every Codex on the computer.
+                    v.push("--no-daemon".into());
                     // A read-only sandbox asks before every write; workspace-write asks only at its edges.
                     flag(&mut v, "--ask-for-approval", match mode { "ask" | "edit" => "on-request", "auto" => "never", _ => "" });
                     flag(&mut v, "--sandbox", match mode { "ask" => "read-only", "edit" | "auto" => "workspace-write", _ => "" });
@@ -405,26 +430,10 @@ impl Kind {
                     }
                     flag(&mut v, "--model", model);
                 }
-                "copilot" => {
-                    if mode == "edit" {
-                        flag(&mut v, "--allow-tool", "write");
-                    } else if mode == "auto" {
-                        v.push("--allow-all-tools".into());
-                    }
-                    flag(&mut v, "--model", model);
-                }
-                "cursor" => {
-                    if mode == "ask" {
-                        flag(&mut v, "--mode", "ask");
-                    } else if mode == "auto" {
-                        v.push("--force".into());
-                    }
-                    flag(&mut v, "--model", model);
-                }
-                "opencode" => {
-                    if mode == "auto" {
-                        v.push("--auto".into());
-                    }
+                "omp" => {
+                    flag(&mut v, "--resume", resume);
+                    flag(&mut v, "--approval-mode", match mode { "ask" => "always-ask", "edit" => "write", "auto" => "yolo", _ => "" });
+                    flag(&mut v, "--thinking", effort);
                     flag(&mut v, "--model", model);
                 }
                 _ => {}
@@ -435,8 +444,20 @@ impl Kind {
     }
 
     /// The same on one line, for a tab's label.
-    pub fn agent_command(tool: &str, args: &str, mode: &str, effort: &str, model: &str) -> String {
-        Self::agent_argv(tool, args, mode, effort, model).join(" ")
+    pub fn agent_command(tool: &str, args: &str, mode: &str, effort: &str, model: &str, resume: &str) -> String {
+        Self::agent_argv(tool, args, mode, effort, model, resume).join(" ")
+    }
+
+    /// A session's environment variables from its `env` text: one `NAME=value` a line, blank lines
+    /// and `#` comments skipped, the value kept as written (quotes included).
+    pub fn agent_env(env: &str) -> Vec<(String, String)> {
+        env.lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .filter_map(|l| l.split_once('='))
+            .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            .filter(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+            .collect()
     }
 }
 
@@ -1010,6 +1031,10 @@ impl Store {
                 *password = Some(c.password.clone()).filter(|p| !p.is_empty());
                 None
             }
+            Kind::Agent { prompt, .. } => {
+                *prompt = self.agent_prompt.clone();
+                None
+            }
             _ => None,
         }
     }
@@ -1542,11 +1567,12 @@ mod tests {
     fn workspaces_split_and_join() {
         let s = |name: &str| Session::new(name, "", Kind::Shell { program: String::new(), dir: String::new() });
         let names = |st: &Store| st.sessions.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
-        let mut all = Store { sessions: vec![s("home")], ..Default::default() };
-        all.workspaces.push(Workspace { name: "Work".into(), data: Store { sessions: vec![s("job")], ..Default::default() } });
+        let mut all = Store { sessions: vec![s("home")], agent_prompt: "home rules".into(), ..Default::default() };
+        all.workspaces.push(Workspace { name: "Work".into(), data: Store { sessions: vec![s("job")], agent_prompt: "work rules".into(), ..Default::default() } });
 
         let (work, rest) = all.clone().split("Work");
         assert_eq!((names(&work), names(&rest)), (vec!["job".to_string()], vec!["home".to_string()]));
+        assert_eq!((work.agent_prompt.as_str(), rest.agent_prompt.as_str()), ("work rules", "home rules"), "each workspace keeps its own agent prompt");
         assert!(rest.workspaces[0].data.sessions.is_empty(), "the workspace's place is empty while it's out");
         let mut work = work;
         work.sessions.push(s("job2"));

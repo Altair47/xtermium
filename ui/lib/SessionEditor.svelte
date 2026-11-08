@@ -19,8 +19,6 @@
   // An editable copy: the stored session changes only on Save.
   // svelte-ignore state_referenced_locally
   let s = $state(structuredClone($state.snapshot(session)));
-  // Sessions saved before skills could be turned off have no list yet.
-  if (s.kind.type === "agent") s.kind.skills_off ??= [];
   /** Closing with changes asks first: a stray Escape mustn't lose a half-typed session. */
   const start = JSON.stringify($state.snapshot(s));
   let discarding = $state(false);
@@ -69,7 +67,13 @@
   /** Where a session connects: its host, or a website's host name. */
   const hostOf = (k: Kind) => ("host" in k ? k.host.trim() : k.type === "browser" ? (/^https?:\/\/([^\s/:]+)/.exec(k.url.trim())?.[1] ?? "") : "");
   /** What the session is called if Name stays empty: where it connects. */
-  const fallback = $derived(hostOf(s.kind) || (s.kind.type === "serial" ? s.kind.port.trim() : ""));
+  /** The name a session gets when none is typed: its host, serial port, or agent tool (a custom command's first word). */
+  const fallback = $derived.by(() => {
+    const k = s.kind;
+    if (k.type === "serial") return k.port.trim();
+    if (k.type === "agent") return k.tool === "custom" ? (k.args.trim().split(/\s+/)[0] ?? "") : (AGENTS.find(([id]) => id === k.tool)?.[1] ?? "");
+    return hostOf(k);
+  });
 
   /** Another type keeps the host and user typed so far, where it has them. */
   function setKind(t: KindName) {
@@ -200,11 +204,14 @@
         <span>{_("Arguments")}</span><input bind:value={a.args} placeholder={_("optional, e.g. --continue")} />
       {/if}
       <span>{_("Working folder")}</span><PathInput bind:value={a.dir} dirs placeholder={_("your home folder")} />
+      <span>{_("Environment")}</span>
+      <textarea bind:value={a.env} rows="2" placeholder={_("NAME=value, one a line")} spellcheck="false"></textarea>
       <span></span>
       <p class="weak">
         {_("Runs the tool in a local terminal. Install it first: its command has to be on your PATH.")}
-        {#if a.tool === "cursor"}{_("Cursor's CLI installs as the command agent.")}{/if}
-        {#if a.tool === "codex"}{_("Codex sessions share one background server (its daemon); xtermium starts it with its own tools on board.")}{/if}
+        {_("Nothing here changes the tool's own settings: every choice holds for this session only.")}
+        {#if a.tool === "codex"}{_("Codex runs without its shared background server, so the session's servers and settings stay its own.")}{/if}
+        {#if a.tool === "omp"}{_("omp takes MCP servers only from its own mcp.json: add xtermium's there yourself, with the token from Settings › MCP.")}{/if}
       </p>
     {:else if s.kind.type === "serial"}
       <span>{_("Port")}</span>
@@ -292,7 +299,7 @@
     )}
   {/if}
   {#if s.kind.type === "agent" && SKILL_TOOLS.includes(s.kind.tool)}
-    {@render toggles(_("Skills"), skills, (s.kind.skills_off ??= []), _("A skill turned off isn't listed to the agent, so it costs no tokens. The tool's own settings don't change."))}
+    {@render toggles(_("Skills"), skills, s.kind.skills_off, _("A skill turned off isn't listed to the agent, so it costs no tokens. The tool's own settings don't change."))}
   {/if}
   {#if s.kind.type === "ssh" || s.kind.type === "rdp" || broadcasts(s.kind)}
     <details>

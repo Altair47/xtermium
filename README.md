@@ -53,7 +53,7 @@ Every feature is free except two that need **Pro**, a hosted service: sync and T
 - **[In a terminal](https://github.com/xtermium/xtermium/wiki/Usage#in-a-terminal):** find, pictures, a status bar, highlight rules, logging, and Open in VS Code.
 - **[Files](https://github.com/xtermium/xtermium/wiki/Usage#files)** over SFTP and SMB, and **[tunnels](https://github.com/xtermium/xtermium/wiki/Usage#tunnels)** (local, remote, SOCKS5) with their traffic live.
 - **[Keeping it safe](https://github.com/xtermium/xtermium/wiki/Security):** encrypted on disk, a lock, host keys you trust once, restore points, your SSH keys.
-- **[Agents and scripts](https://github.com/xtermium/xtermium/wiki/AI-agents):** AI agents in tabs, an MCP server and the `xtermium` command line.
+- **[Agents and scripts](https://github.com/xtermium/xtermium/wiki/AI-agents):** Claude Code, Codex and omp in tabs with their session history and a prompt per workspace, an MCP server and the `xtermium` command line.
 - **[Looks](https://github.com/xtermium/xtermium/wiki/Customization):** themes, colour schemes, fonts, backgrounds, your own shortcuts, 13 languages and `custom.css`.
 - **[Sync](https://github.com/xtermium/xtermium/wiki/Usage#sync)** (Pro, not open yet): end-to-end encrypted, on every computer you sign in on.
 - **[Terminal Co-op](https://github.com/xtermium/xtermium/wiki/Usage#terminal-co-op)** (Pro): share tabs with up to two other people, straight between your computers.

@@ -4,6 +4,7 @@
 //! The backend: sessions, terminals, SSH/SFTP/RDP and tunnels, exposed to the UI (`ui/`) as
 //! Tauri commands. Terminal and RDP output streams to the UI over per-tab channels.
 
+mod agent_history;
 mod agent_mcp;
 mod automation;
 mod clean;
@@ -1341,6 +1342,24 @@ async fn agent_skills(tool: String, dir: String) -> Vec<String> {
     tauri::async_runtime::spawn_blocking(move || agent_mcp::skills(&tool, &dir)).await.unwrap_or_default()
 }
 
+/// The past conversations of an agent tool in `dir` (the session history panel, agent_history.rs).
+#[tauri::command]
+async fn agent_history(tool: String, dir: String) -> Vec<agent_history::Conversation> {
+    tauri::async_runtime::spawn_blocking(move || agent_history::list(&tool, &dir)).await.unwrap_or_default()
+}
+
+/// A conversation's title as shown here (kept by xtermium; "" takes the tool's own back).
+#[tauri::command]
+fn agent_history_rename(path: String, title: String) -> Res<()> {
+    agent_history::rename(&path, &title).map_err(fail)
+}
+
+/// Deletes a conversation's transcript, one of `tool`'s own files.
+#[tauri::command]
+fn agent_history_delete(tool: String, path: String) -> Res<()> {
+    agent_history::delete(&tool, &path).map_err(fail)
+}
+
 /// The system's file or folder picker; None if cancelled.
 #[tauri::command]
 async fn pick_path(window: tauri::Window, dirs: bool, start: String) -> Option<String> {
@@ -1451,6 +1470,7 @@ async fn open_in_code(app: State<'_, App>, id: u32, cwd: String) -> Res<()> {
         // VS Code's command is a batch file on Windows, which Rust only finds by its full name.
         let mut cmd = std::process::Command::new(if cfg!(windows) { "code.cmd" } else { "code" });
         cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        support::with_shell_env(&mut cmd);
         #[cfg(windows)]
         term::no_window(&mut cmd);
         match cmd.status() {
@@ -1982,6 +2002,9 @@ fn main() {
             pick_path,
             agent_mcp_servers,
             agent_skills,
+            agent_history,
+            agent_history_rename,
+            agent_history_delete,
             save_settings,
             save_tabs,
             regex_error,

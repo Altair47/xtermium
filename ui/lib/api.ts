@@ -42,8 +42,10 @@ export type Kind =
   /** A BMC's console (`vendor` from KVM_VENDORS), signed in with the shared login. */
   | { type: "kvm"; vendor: string; host: string; port: number; credential?: string }
   /** An AI agent's command line in folder `dir` ("" = home): `tool` from AGENTS, run with the flags for `mode`
-   *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command. */
-  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[]; skills_off?: string[] }
+   *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command.
+   *  `mcp_off` and `skills_off` name what stays off in the session; `env` is its variables, one NAME=value a line;
+   *  `resume` (a tab's session only) a past conversation to go on with, by the tool's id for it. */
+  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[]; skills_off: string[]; env: string; resume?: string }
   /** A tab someone in your Terminal Co-op ring shares with you (App.svelte `openRemote`): `tab` is its
    *  number at the owner, `picture` a remote desktop rather than a terminal. Never stored or saved. */
   | { type: "coop"; tab: number; picture: boolean; owner: string };
@@ -59,13 +61,11 @@ export const KVM_VENDORS: [string, string][] = [
   ["supermicro", "Supermicro"],
   ["idrac", "Dell iDRAC"],
 ];
-/** Agent tools (src/config.rs `AGENTS`) by the program that runs them, then "custom". */
+/** Agent tools (src/config.rs `AGENTS`) by the program that runs them, then "custom" for any other agent. */
 export const AGENTS: [string, string][] = [
   ["claude", "Claude Code"],
   ["codex", "Codex"],
-  ["opencode", "OpenCode"],
-  ["copilot", "GitHub Copilot"],
-  ["cursor", "Cursor CLI"],
+  ["omp", "omp (Oh My Pi)"],
   ["custom", N_("Custom command")],
 ];
 /** How much an agent asks (src/config.rs `AGENT_MODES`); "" leaves the tool's default. */
@@ -76,11 +76,11 @@ export const AGENT_MODES: [string, string][] = [
 ];
 /** Reasoning effort (`AGENT_EFFORTS`), for the tools that take it. */
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
-export const EFFORT_TOOLS = ["claude", "codex"];
-/** The agent tools whose sessions can turn MCP servers off (src/agent_mcp.rs `TOOLS`); Cursor's CLI has no way to. */
-export const MCP_TOOLS = ["claude", "codex", "opencode", "copilot"];
-/** The agent tools whose sessions can turn skills off (src/agent_mcp.rs `SKILL_TOOLS`); Copilot's and Cursor's CLIs have no way to for one run. */
-export const SKILL_TOOLS = ["claude", "codex", "opencode"];
+export const EFFORT_TOOLS = ["claude", "codex", "omp"];
+/** The agent tools whose sessions can turn MCP servers off (src/agent_mcp.rs `TOOLS`); omp has no way to for one run. */
+export const MCP_TOOLS = ["claude", "codex"];
+/** The agent tools whose sessions can turn skills off (src/agent_mcp.rs `SKILL_TOOLS`). */
+export const SKILL_TOOLS = ["claude", "codex", "omp"];
 /** `color`: `#rrggbb` or "" (folder's, else the kind's). `icon`: a built-in icon name, a `data:` image, or "". */
 export type Session = { name: string; folder: string; kind: Kind; style: Style; color: string; icon: string; /** A built-in icon doesn't move on hover. */ still?: boolean; notes: string };
 export type TunnelKind = "Local" | "Remote" | "Dynamic";
@@ -97,7 +97,8 @@ export type Tunnel = {
 };
 /** A folder with something to remember; folders also exist through their sessions' paths. */
 export type Folder = { path: string; tags: string[]; color: string; icon: string; still?: boolean; /** Place among its siblings from 1; 0 = by name, after. */ order?: number };
-export type Store = { session: Session[]; tunnel: Tunnel[]; folder: Folder[]; snippet: Snippet[]; credential: Credential[]; layout: SavedLayout[] };
+/** `agent_prompt`: this workspace's system prompt for AI agent sessions (Settings › General), added to each tool's own. */
+export type Store = { session: Session[]; tunnel: Tunnel[]; folder: Folder[]; snippet: Snippet[]; credential: Credential[]; layout: SavedLayout[]; agent_prompt: string };
 /** Sessions opened together in a pane arrangement (App.svelte `Layout`): `pane` in tab-strip
  *  order, `at` the pane each was in, `label` the name its tab was given ("" none), `sizes` the
  *  panes' sizes as dragged (none: even). Older layouts have only `pane`, one per pane in order. */
@@ -433,7 +434,7 @@ export function newKind(t: KindName): Kind {
     case "kvm":
       return { type: "kvm", vendor: "supermicro", host: "", port: 443, credential: "" };
     case "agent":
-      return { type: "agent", tool: "claude", args: "", dir: "", mode: "", effort: "", model: "", mcp_off: [] };
+      return { type: "agent", tool: "claude", args: "", dir: "", mode: "", effort: "", model: "", mcp_off: [], skills_off: [], env: "" };
     case "coop":
       return { type: "coop", tab: 0, picture: false, owner: "" };
   }
