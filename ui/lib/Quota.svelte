@@ -63,7 +63,7 @@
   }
   .row {
     align-items: flex-start;
-    gap: 5px;
+    gap: var(--gap);
   }
   .row :global(.icon) {
     margin-top: 2px;

@@ -569,9 +569,11 @@ pixels; a stray 4px or 12px there fails `npm test`. Widths, heights and line-hei
 tested: keep them on the scale or derived, or name the exception (pane sizers 6px, scrollbars
 10px, the title bar's 46px Windows buttons, `progress` 4px).
 
-**The Derived Value Rule.** A value worked out from others is written as `calc(…)` so it reads as
-derived: `calc(8px + 16px + 5px)` is a field's text start past its icon, and
-`calc(var(--r-menu) - 3px)` is a menu item's corner.
+**The Derived Value Rule.** A value worked out from others is written as `calc(…)` from the
+tokens it comes from, so it reads as derived and follows them: `calc(8px + var(--icon-s) +
+var(--gap))` is a search field's text start past its 16px icon (`--icon` is the 18px of controls
+and rows), `calc(var(--r-menu) - 3px)` a menu item's corner, and
+`calc(var(--control) + 2 * var(--gap) + 2px)` the collapsed rail.
 
 ## Elevation & Depth
 
@@ -622,7 +624,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   label is in the mono (`--short`); menu items (`.menu button`) and list rows (`button.item`)
   keep the system face.
 - **Default:** a `raised` face with no visible border (a transparent 1px keeps sizes equal when a
-  state adds one). Hover moves to `hover`. Disabled is 45% opacity.
+  state adds one). Hover moves to `hover`. Disabled is 45% opacity; something merely stepped back
+  (a lifted tab, the bar of a window without the keyboard, a done step's key, a tab's close glyph,
+  the quality bar when off) is `--dim`, 0.5.
 - **Primary:** amber fill with `gold-ink` text; hover mixes in 14% white. One per dialog, on its
   main action.
 - **Danger:** the primary of a question whose yes ends or deletes something (close a running
@@ -860,10 +864,11 @@ buttons, and never under reduced motion.
   host key, Cancel on a delete or restore, Keep editing on discard), so Enter never does the
   irreversible thing; an ordinary yes (Close tab, which Reopen can undo) keeps the focus.
 - **Do** make tool buttons icon-only with a tooltip.
-- **Do** keep motion to state and continuity: 0.1–0.2s for arrivals, exits and moves, arrivals on
-  `--ease-out`, a new floating layer through `float-in`, exits faster than entrances. The longer
-  ones are named: the Co-op ring's 0.3s line and seat glide and its 0.5s packets, the 2.6s fade of
-  a found setting, the start-screen logo's 0.2s `float-in`. When one view replaces another (the
+- **Do** keep motion to state and continuity, in three durations: `--quick` (0.1s) for an exit,
+  `--move` (0.16s) for an arrival or a change of state, `--glide` (0.2s) for a thing moving to
+  another place; arrivals on `--ease-out`, a new floating layer through `float-in`, exits faster
+  than entrances. The longer ones are named: the welcome leaving in 0.12s, the Co-op ring's 0.3s
+  line and seat glide and its 0.5s packets, the 2.6s fade of a found setting. When one view replaces another (the
   start screen giving way to the shell typed into it), the old one leaves first and the new one
   arrives after it. CSS motion stops under `prefers-reduced-motion` through `ui/app.css`; a
   Svelte transition must check it itself.
@@ -912,31 +917,26 @@ is the one `button.link.quiet`; the rules above now say what the test enforces, 
 are, where the nested curve stops, which motion runs longer, and name `--solid`, `--tint-lo`,
 `--tint-hi`, the Ember/`error` collision and the RDP bars.
 
+**Also fixed, later the same day.** `--icon` (18px) and `--icon-s` (16px) for the icon offsets,
+which were `calc()`s over literals (the palette's search icon was drawn at 18 while its offset
+assumed 16: it is 16 now); every `gap: 5px` reads `--gap`; `--quick`, `--move` and `--glide`
+replaced nineteen duration literals (0.15s joined 0.16s); `--dim` replaced the 0.5, 0.55 and 0.6
+step-backs; the collapsed rail is derived. The file panel's transfer progress now sends the
+transfers alone (`files-progress`), not the whole listing ten times a second.
+
 **Open, in the order worth doing.**
-1. Icon sizes have no token: 16 and 18px are written out in six `calc()` offsets (`App.svelte`,
-   `Palette.svelte`, `Sidebar.svelte`, `Settings.svelte`, `Guide.svelte`) and `Icon.svelte`'s
-   default is 18. `--icon: 18px; --icon-s: 14px` would make those offsets derived.
-2. `--gap` (5px) names the gap between panels and panes; the same 5px is written out as a literal
-   in about four gaps of five inside components. Either is fine; a sweep to the token would make
-   the panel gap changeable alone, which is the point of a token.
-3. Durations are literals (0.1, 0.12, 0.15, 0.16, 0.2, 0.3, 0.5, 2.6s; 80ms); `--quick: 0.1s`,
-   `--move: 0.16s`, `--glide: 0.2s` would collapse the four within 60ms of each other.
-4. Stepping something back is opacity at 0.3, 0.45, 0.5, 0.55, 0.6 and 0.85 (disabled, the
-   lifted tab, the away bar, a done key, the quality bar, the close glyph, the logo's hover); a
-   `--dim: 0.5` beside the 45% disabled would do for most.
-5. Widths off the scale: the file panel 340px, the Settings pages 183px, menus 190px, the tasks
+1. Widths off the scale: the file panel 340px, the Settings pages 183px, menus 190px, the tasks
    menu 260px, the rename field 160px, tab titles 180px, the chord field 150px, the catalogue
-   220px, the account menu 280px, the tunnels status 320px, previews 144px; the collapsed rail is
-   38px written as a number (it is `calc(var(--control) + 2 * var(--gap) + 2px)`).
-6. The palette's keyboard row is `.item.on` (picked) where the rack and Settings use `.current`;
+   220px, the account menu 280px, the tunnels status 320px, previews 144px.
+2. The palette's keyboard row is `.item.on` (picked) where the rack and Settings use `.current`;
    its recipe should follow theirs.
-7. A selected swatch is a `fg` border in `app.css` and a 2px `gold-soft` ring in
+3. A selected swatch is a `fg` border in `app.css` and a 2px `gold-soft` ring in
    `Appearance.svelte`; the custom-colour swatch's gradient hard-codes the dark theme's kind hues.
-8. The colour input is `--control` × `--row` in `app.css` and 30px wide in a highlight rule.
-9. Two recipes for a hairline under the pointer (`color-mix(var(--fg) 25%, var(--line))` on fields,
+4. The colour input is `--control` × `--row` in `app.css` and 30px wide in a highlight rule.
+5. Two recipes for a hairline under the pointer (`color-mix(var(--fg) 25%, var(--line))` on fields,
    `var(--weak)` on scheme cards); the file list's zebra stripe is a literal
    `rgba(127, 127, 127, 0.06)`; `CoopRing` sets `line-height: 1.3` where dense text is 1.4; the
    guide re-declares `h2`.
-10. `scale.test.ts` accepts any `var(--t…)` as a font size (`--titlebar` would pass), only matches
+6. `scale.test.ts` accepts any `var(--t…)` as a font size (`--titlebar` would pass), only matches
     `font-size` at a line's start, and skips a whole declaration when `calc(` appears anywhere in
     it; the select chevrons bake `weak`'s hex into their data URIs for each theme.

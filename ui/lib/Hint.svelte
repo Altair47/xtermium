@@ -20,7 +20,7 @@
 <style>
   .hint {
     display: flex;
-    gap: 5px;
+    gap: var(--gap);
     align-items: baseline;
   }
 </style>

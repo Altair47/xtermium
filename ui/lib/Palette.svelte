@@ -130,7 +130,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="palette" role="dialog" aria-label={_("Command palette")} tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <label class="query">
-      <Icon name="search" />
+      <Icon name="search" size={16} />
       <!-- Focused outright: Svelte's autofocus leaves focus alone while the terminal has it. -->
       <input bind:value={query} oninput={() => (sel = 0)} onkeydown={keydown} {@attach (el) => el.focus()} placeholder={_("Type a command, a session, or user@host to connect")} />
     </label>
@@ -175,7 +175,7 @@
     align-items: flex-start;
     padding-top: 12vh;
     background: var(--scrim-soft);
-    animation: fade-in 0.16s var(--ease-out);
+    animation: fade-in var(--move) var(--ease-out);
   }
   .palette {
     width: min(610px, calc(100vw - 2 * 21px));
@@ -189,7 +189,7 @@
     overflow: hidden;
     /* it hangs from the top, so it drops into place */
     --from: -5px;
-    animation: float-in 0.16s var(--ease-out);
+    animation: float-in var(--move) var(--ease-out);
   }
   .query {
     position: relative;
@@ -205,11 +205,11 @@
   }
   .query input {
     flex: 1;
-    padding-inline-start: calc(8px + 16px + 5px);
+    padding-inline-start: calc(8px + var(--icon-s) + var(--gap));
   }
   .filters {
     display: flex;
-    gap: 5px;
+    gap: var(--gap);
     padding: 0 5px 5px;
   }
   .filter {

@@ -91,6 +91,11 @@
       if (!editingPath) path = snap.cwd;
       if (snap.connected && !was) follow();
     }),
+    // A transfer's progress alone: the listing on screen stays as it is.
+    listen<{ tab: number; transfers: Transfer[] }>("files-progress", (e) => {
+      if (e.payload.tab !== tab || !snap) return;
+      snap = { ...snap, transfers: e.payload.transfers };
+    }),
     getCurrentWebview().onDragDropEvent((e) => {
       const p = e.payload;
       // With several panels open, the drop goes to the one under the pointer.
@@ -252,7 +257,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
     padding: 8px 8px 0;
     min-height: 0;
     overflow: hidden;
@@ -263,7 +268,7 @@
   }
   .who {
     flex: none;
-    gap: 5px;
+    gap: var(--gap);
     height: var(--row);
     margin: auto -8px 0;
     padding: 0 8px;
@@ -316,7 +321,7 @@
   .col {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
   }
   p {
     margin: 0;

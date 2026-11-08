@@ -18,14 +18,14 @@
   .bar {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
     max-width: 420px;
   }
   .bar input {
     width: 100%;
   }
   .bar.disabled {
-    opacity: 0.55;
+    opacity: var(--dim);
   }
   .names {
     display: flex;

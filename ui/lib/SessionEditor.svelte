@@ -420,7 +420,7 @@
   .kinds {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 5px;
+    gap: var(--gap);
   }
   .kinds button {
     min-width: 0;
@@ -465,7 +465,7 @@
   .toggles {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
     min-width: 0;
   }
   /* columns of names, scrolling past six rows: some people have dozens */

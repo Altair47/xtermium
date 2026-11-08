@@ -212,7 +212,7 @@
     gap: 8px;
   }
   .swatches {
-    gap: 5px;
+    gap: var(--gap);
   }
   .swatch {
     width: var(--row);

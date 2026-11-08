@@ -39,7 +39,7 @@
 
 <style>
   .path {
-    gap: 5px;
+    gap: var(--gap);
   }
   .path input {
     min-width: 0;

@@ -1869,7 +1869,7 @@ xtermium close 3`}</pre>
   .scheme {
     flex-direction: column;
     align-items: stretch;
-    gap: 5px;
+    gap: var(--gap);
     padding: 5px 8px;
     border: 1px solid var(--line);
     border-radius: var(--r-control);
@@ -2000,13 +2000,13 @@ xtermium close 3`}</pre>
   /* the room Rename and Delete take in the other rows, so the buttons line up */
   .slot {
     flex: none;
-    width: calc(18px + 2 * 5px + 2px); /* an icon button: icon, padding, border */
+    width: calc(var(--icon) + 2 * var(--gap) + 2px); /* an icon button: icon, padding, border */
   }
 
   .rules {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
   }
   .rule input[type="color"] {
     flex: none;

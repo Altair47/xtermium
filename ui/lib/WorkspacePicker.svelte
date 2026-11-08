@@ -127,7 +127,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 5px;
+    gap: var(--gap);
     padding: 0 5px;
   }
 </style>

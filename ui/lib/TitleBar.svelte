@@ -172,9 +172,9 @@
   .centre,
   .extra,
   svg {
-    transition: opacity 0.15s;
+    transition: opacity var(--move);
   }
   .away :is(.start, .centre, .extra, .end > button:not(:hover) svg) {
-    opacity: 0.5;
+    opacity: var(--dim);
   }
 </style>

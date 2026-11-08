@@ -59,6 +59,13 @@ struct Snapshot<'a> {
     listing: bool,
 }
 
+/// A transfer's progress alone (`files-progress`): the panel keeps its listing and takes these.
+#[derive(Serialize, Clone)]
+struct Progress {
+    tab: u32,
+    transfers: Vec<TransferView>,
+}
+
 #[derive(Serialize, Clone)]
 struct TransferView {
     upload: bool,
@@ -386,8 +393,28 @@ impl Browser {
     /// Send the current state to the UI.
     pub fn publish(&self) {
         let st = self.state.lock().unwrap();
-        let transfers = st
-            .transfers
+        let snap = Snapshot {
+            tab: self.tab,
+            connected: st.fs.is_some(),
+            cwd: &st.cwd,
+            entries: &st.entries,
+            error: &st.error,
+            transfers: Self::transfers(&st),
+            listing: st.listing > 0,
+        };
+        let _ = self.app.emit("files", snap);
+    }
+
+    /// Send the transfers alone, as one moves along: up to ten times a second, so the listing
+    /// (thousands of entries on a big folder) isn't serialized and redrawn each time.
+    pub fn publish_progress(&self) {
+        let st = self.state.lock().unwrap();
+        let _ = self.app.emit("files-progress", Progress { tab: self.tab, transfers: Self::transfers(&st) });
+    }
+
+    /// Every transfer as the UI shows it.
+    fn transfers(st: &State) -> Vec<TransferView> {
+        st.transfers
             .iter()
             .map(|t| {
                 let t = t.lock().unwrap();
@@ -405,17 +432,7 @@ impl Browser {
                     message,
                 }
             })
-            .collect();
-        let snap = Snapshot {
-            tab: self.tab,
-            connected: st.fs.is_some(),
-            cwd: &st.cwd,
-            entries: &st.entries,
-            error: &st.error,
-            transfers,
-            listing: st.listing > 0,
-        };
-        let _ = self.app.emit("files", snap);
+            .collect()
     }
 
     pub fn cmd(&self, c: Cmd) {
@@ -494,7 +511,7 @@ impl Browser {
         let (t, done) = self.transfer(false, name, size);
         let b = self.clone();
         tauri::async_runtime::spawn(async move {
-            let r = fs.download(&remote, &local, &done, || b.publish()).await;
+            let r = fs.download(&remote, &local, &done, || b.publish_progress()).await;
             t.lock().unwrap().result = Some(r.map(|()| format!("saved to {}", local.display())));
             b.publish();
         });
@@ -508,7 +525,7 @@ impl Browser {
         self.run(
             move |fs, cwd| async move {
                 let remote = join(&cwd, &name);
-                let r = fs.upload(&local, &remote, &done, || b.publish()).await;
+                let r = fs.upload(&local, &remote, &done, || b.publish_progress()).await;
                 t.lock().unwrap().result = Some(r.map(|()| format!("uploaded to {remote}")));
                 Ok(())
             },

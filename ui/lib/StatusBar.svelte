@@ -115,7 +115,7 @@
   .item {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--gap);
   }
   .dot {
     width: 7px;

@@ -174,7 +174,7 @@
     font-size: var(--t-s);
   }
   .done kbd {
-    opacity: 0.6;
+    opacity: var(--dim);
   }
   /* the import link under its step, lined up with the step's text */
   .also {
