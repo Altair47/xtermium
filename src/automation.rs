@@ -1539,10 +1539,13 @@ mod tests {
     fn workspace_prompt_is_added() {
         let (argv, _) = agent_launch("codex", vec!["codex".into(), "--no-daemon".into()], &["xtermium".into()], &[], "", "", "Answer in Greek.\nBe \"brief\".");
         assert_eq!(argv[..3], ["codex", "-c", r#"developer_instructions="Answer in Greek.\nBe \"brief\".""#]);
+        // Claude's settings file (xtermium's server off) comes first; the prompt file follows it.
         let (argv, _) = agent_launch("claude", vec!["claude".into()], &["xtermium".into()], &[], "", "", "Answer in Greek.");
-        assert_eq!(argv[1], "--append-system-prompt-file");
-        assert_eq!(std::fs::read_to_string(&argv[2]).unwrap(), "Answer in Greek.");
-        let _ = std::fs::remove_file(&argv[2]);
+        let at = argv.iter().position(|a| a == "--append-system-prompt-file").expect("a prompt file");
+        assert_eq!(std::fs::read_to_string(&argv[at + 1]).unwrap(), "Answer in Greek.");
+        for f in [&argv[at + 1], &argv[2]] {
+            let _ = std::fs::remove_file(f);
+        }
         let (argv, _) = agent_launch("omp", vec!["omp".into()], &["xtermium".into()], &[], "", "", "x");
         assert_eq!(argv[1], "--append-system-prompt");
         let _ = std::fs::remove_file(&argv[2]);
