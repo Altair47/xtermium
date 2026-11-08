@@ -84,6 +84,11 @@ Lock gates automation, secure the instance port, keep website tabs out of the in
 - When an alert has no fix, or doesn't apply, say so and why in the commit or pull request. Accepted `cargo audit` advisories carry their reason in `.cargo/audit.toml` and `rdp/.cargo/audit.toml`; the current list is in `xtermium-developing`'s security reference.
 - After dependency changes, `npm run notices` rewrites `THIRD-PARTY-NOTICES.txt` (needs `cargo install --locked cargo-about --features cli`); release builds regenerate it anyway.
 
+## What never goes into a commit
+
+- Nothing personal, nothing secret (CONTRIBUTING.md, "What never goes into a commit"): no path with a user name or machine in it (tool state such as `.codex/`, `.claude/settings.local.json` and `.impeccable/critique/` is ignored; examples use the demo user `sotiris` or `~`), no API tokens, passwords, keys, certificates or confidential files.
+- `scripts/private.test.mjs` (in `npm test`) fails on a tracked file with a home folder's path, a private key, a certificate or a known token format; the site and the sync server run the same check. A secret that got in is rotated, not only removed.
+
 ## Security problems
 
 - Don't open a public issue. Report privately: **Security › Report a vulnerability** on the repository (private vulnerability reporting is on).
