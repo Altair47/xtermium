@@ -1549,7 +1549,9 @@ mod tests {
         let (argv, _) = agent_launch("omp", vec!["omp".into()], &["xtermium".into()], &[], "", "", "x");
         assert_eq!(argv[1], "--append-system-prompt");
         let _ = std::fs::remove_file(&argv[2]);
-        assert_eq!(agent_launch("claude", vec!["claude".into()], &["xtermium".into()], &[], "", "", "  \n").0, ["claude"]);
+        let (argv, _) = agent_launch("claude", vec!["claude".into()], &["xtermium".into()], &[], "", "", "  \n");
+        assert!(!argv.iter().any(|a| a.starts_with("--append-system-prompt")), "a blank prompt adds nothing: {argv:?}");
+        let _ = std::fs::remove_file(&argv[2]);
         assert_eq!(agent_launch("custom", vec!["aider".into()], &[], &[], "", "", "x").0, ["aider"], "no known way for a custom command");
     }
 
