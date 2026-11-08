@@ -9,9 +9,9 @@
 
   Proportions follow the golden ratio, φ ≈ 1.618:
   - spacing is on the Fibonacci scale, 1 2 3 5 8 13 21 34 px, each step about φ times the
-    last (ui/lib/scale.test.ts holds every stylesheet to it); padding pairs go 1 : φ, vertical
-    to horizontal (5px 8px, 8px 13px);
-  - type steps by a quarter of φ from 13px: 11.5, 13, 14.5, 16.5, 18.5 and 21 (13 × φ);
+    last (ui/lib/scale.test.ts holds every stylesheet to it); padding pairs keep both
+    values on the scale, the horizontal at least the vertical (3px 8px, 5px 8px, 8px 13px);
+  - type steps by a quarter of φ from 13px, rounded to the half pixel: 11.5, 13, 14.5, 16.5, 18.5;
   - a list row and a line of prose are 21px tall (13 × φ), a bar 34px (21 × φ);
   - corners are 3, 5 and 8px, and a rounded thing inside another keeps the same curve: its
     radius is the outer one less the room between them;
@@ -55,6 +55,9 @@
   --tint-hi: 1;
   /* Arrivals decelerate hard: fast to where they land, then settle. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* the scrim behind a dialog and, softer, behind the palette: always the dark ground, in both themes */
+  --scrim: rgba(5, 5, 6, 0.4);
+  --scrim-soft: rgba(5, 5, 6, 0.32);
 
   color-scheme: dark;
   /* the site's ground and surfaces, a hair apart, near-black and neutral */
@@ -104,17 +107,18 @@
   --hover: #cfcfd3;
   --line: #c9c9ce;
   --fg: #141414;
-  --weak: #5c5c63;
-  /* amber, error and ok are 13px text (links, tags, states), so each holds 4.5:1 on every surface, a button under the pointer included */
+  /* weak is secondary text and amber, error, ok and warn are 13px text (links, tags, states): each holds
+     4.5:1 on panel, raised and hover (a button under the pointer), checked on 2026-11-08 */
+  --weak: #55555c;
   --gold: #754b00;
   --gold-ink: #ffffff;
   --gold-soft: rgba(117, 75, 0, 0.14);
-  --error: #b42a33;
+  --error: #a4242d;
   --error-ink: #ffffff;
   --tint-lo: 0;
   --tint-hi: 0.48;
-  --ok: #1b6a44;
-  --warn: #8a5d00;
+  --ok: #155c3d;
+  --warn: #745000;
   --k-ssh: #2f62d0;
   --k-shell: #138a7b;
   --k-serial: #6f7d0c;
@@ -175,7 +179,7 @@ kbd {
   padding: 0 5px;
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: 3px;
+  border-radius: var(--r-control);
   background: rgba(var(--deep-rgb), 1);
   font-size: var(--t-s);
   line-height: var(--phi);
@@ -193,7 +197,7 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 5px;
-  border-radius: 3px;
+  border-radius: var(--r-control);
   font-family: var(--short);
   font-size: var(--t-s);
   line-height: 16px;
@@ -245,7 +249,7 @@ select {
 }
 /* the chevron in the theme's --weak */
 :root[data-theme="light"] select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c5c63' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2355555c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 select option {
   background: rgb(var(--panel-rgb));
@@ -500,7 +504,7 @@ h3 {
   background: var(--raised);
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 5px;
+  border-radius: var(--r-menu);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -637,8 +641,8 @@ kbd {
 }
 
 input[type="color"] {
-  width: 26px;
-  height: 21px;
+  width: var(--control);
+  height: var(--row);
   padding: 0;
   border: 0;
   background: none;

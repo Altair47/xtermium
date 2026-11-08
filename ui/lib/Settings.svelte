@@ -2026,7 +2026,7 @@ xtermium close 3`}</pre>
     height: 64px;
     padding: 8px 13px;
     font: var(--t) var(--mono);
-    border-radius: 3px;
+    border-radius: var(--r-control);
     background: rgba(var(--deep-rgb), 1);
   }
   /* `still` is set by offscreenStill, out of Svelte's sight */

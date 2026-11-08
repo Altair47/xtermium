@@ -105,7 +105,7 @@
   }
   /* An even size in an even bar: its edges land on whole pixels. */
   .mark {
-    width: 26px;
+    width: var(--control);
     margin-inline-end: 8px;
   }
   .centre {
