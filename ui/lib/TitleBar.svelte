@@ -7,10 +7,12 @@
   // Everything else starts under the bar (`--titlebar` in app.css), dialogs and the lock included,
   // so the window can always be moved, minimized and closed.
   import type { Snippet } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { OS } from "./actions";
   import { _ } from "./i18n.svelte";
   import Logo from "./Logo.svelte";
+  import { menu } from "./menu";
 
   /** `title`: the window's name, shown in the centre unless `children` draw the centre themselves.
    *  `tools`: buttons beside the mark; `end`: buttons before the window's own (the main window's
@@ -19,46 +21,62 @@
 
   const w = getCurrentWindow();
   let max = $state(false);
-  let full = $state(false);
   /** Another window has the keyboard: the bar steps back, as a system's own does. */
   let away = $state(false);
-  const look = async () => ([max, full] = await Promise.all([w.isMaximized(), w.isFullscreen()]));
+  const look = async () => (max = await w.isMaximized());
   look();
   w.onResized(look);
   // A window can open without the keyboard (started from another program), so it is asked first.
   w.isFocused().then((f) => (away = !f));
   w.onFocusChanged((e) => (away = !e.payload));
-  // Full screen has no bar: the page gets its room back.
-  $effect(() => void document.documentElement.classList.toggle("fullscreen", full));
 
   /** A window button keeps the keyboard where it was (in the terminal). */
   const keep = (e: MouseEvent) => e.preventDefault();
+
+  /** The window's menu a right click on the bar's free space, or the mark, opens: on Windows the
+   *  system's own (main.rs `window_menu`: Restore, Move, Size, Minimize, Maximize, Close), on
+   *  Linux one drawn here at this point; macOS has none. A click on a tool or the field is theirs. */
+  let winMenu = $state<{ x: number; y: number } | null>(null);
+  function context(e: MouseEvent) {
+    if (OS === "macos" || (e.target as Element).closest("button, input, .field")) return;
+    e.preventDefault();
+    if (OS === "windows") invoke("window_menu").catch(() => {});
+    else winMenu = { x: e.clientX, y: e.clientY };
+  }
 </script>
 
-{#if !full}
-  <header class="titlebar" class:mac={OS === "macos"} class:away data-tauri-drag-region="deep">
-    <div class="start">
-      {#if OS !== "macos"}<div class="mark"><Logo mark /></div>{/if}
-      {@render tools?.()}
-    </div>
-    <div class="centre">
-      {#if children}{@render children()}{:else if title}<span class="name">{title}</span>{/if}
-    </div>
-    <div class="end">
-      {#if end}<div class="extra">{@render end()}</div>{/if}
-      {#if OS !== "macos"}
-        <button tabindex="-1" title={_("Minimize")} aria-label={_("Minimize")} onmousedown={keep} onclick={() => w.minimize()}>
-          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" /></svg>
-        </button>
-        <button tabindex="-1" title={max ? _("Restore down") : _("Maximize")} aria-label={max ? _("Restore down") : _("Maximize")} onmousedown={keep} onclick={() => w.toggleMaximize()}>
-          <svg viewBox="0 0 10 10" aria-hidden="true"><path d={max ? "M2.5 2.5v-2h7v7h-2M.5 2.5h7v7h-7z" : "M.5 .5h9v9h-9z"} /></svg>
-        </button>
-        <button class="close" tabindex="-1" title={_("Close")} aria-label={_("Close")} onmousedown={keep} onclick={() => w.close()}>
-          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" /></svg>
-        </button>
-      {/if}
-    </div>
-  </header>
+<svelte:window onclick={() => (winMenu = null)} />
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header class="titlebar" class:mac={OS === "macos"} class:away data-tauri-drag-region="deep" oncontextmenu={context}>
+  <div class="start">
+    {#if OS !== "macos"}<div class="mark"><Logo mark /></div>{/if}
+    {@render tools?.()}
+  </div>
+  <div class="centre">
+    {#if children}{@render children()}{:else if title}<span class="name">{title}</span>{/if}
+  </div>
+  <div class="end">
+    {#if end}<div class="extra">{@render end()}</div>{/if}
+    {#if OS !== "macos"}
+      <button tabindex="-1" title={_("Minimize")} aria-label={_("Minimize")} onmousedown={keep} onclick={() => w.minimize()}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" /></svg>
+      </button>
+      <button tabindex="-1" title={max ? _("Restore down") : _("Maximize")} aria-label={max ? _("Restore down") : _("Maximize")} onmousedown={keep} onclick={() => w.toggleMaximize()}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d={max ? "M2.5 2.5v-2h7v7h-2M.5 2.5h7v7h-7z" : "M.5 .5h9v9h-9z"} /></svg>
+      </button>
+      <button class="close" tabindex="-1" title={_("Close")} aria-label={_("Close")} onmousedown={keep} onclick={() => w.close()}>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" /></svg>
+      </button>
+    {/if}
+  </div>
+</header>
+{#if winMenu}
+  <div class="menu" aria-label={_("Window")} {@attach menu(() => (winMenu = null), winMenu.x, winMenu.y)}>
+    <button onclick={() => w.minimize()}>{_("Minimize")}</button>
+    <button onclick={() => w.toggleMaximize()}>{max ? _("Restore down") : _("Maximize")}</button>
+    <button class="sep" onclick={() => w.close()}>{_("Close")}</button>
+  </div>
 {/if}
 
 <style>

@@ -210,7 +210,6 @@
   "From": "Fra",
   "From MobaXterm, ~/.ssh/config or an xtermium export": "Fra MobaXterm, ~/.ssh/config eller en xtermium-eksport",
   "From a file": "Fra en fil",
-  "Full screen": "Fullskjerm",
   "Gateway host / port": "Gatewayvert / port",
   "Gateway password": "Gatewaypassord",
   "Gateway private key": "Gatewayens private nøkkel",

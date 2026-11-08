@@ -65,7 +65,6 @@ export const ACTIONS: Action[] = [
   { id: "wheel-zoom-tab", label: "Zoom the tab's text with the mouse wheel", keys: "Ctrl+Wheel", mac: "Meta+Wheel" },
   { id: "wheel-zoom-all", label: "Zoom every terminal's text with the mouse wheel", keys: "" },
   { id: "theme", label: "Switch between light and dark", keys: "" },
-  { id: "fullscreen", label: "Full screen", keys: "F11", mac: "Ctrl+Meta+F" },
   { id: "lock", label: "Lock xtermium", keys: "Ctrl+Shift+K", mac: "Shift+Meta+K" },
 ];
 

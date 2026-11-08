@@ -1375,6 +1375,44 @@ fn open_url(app: AppHandle, url: String) -> Res<()> {
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// The window's own menu (Restore, Move, Size, Minimize, Maximize, Close), as a right click on a
+/// system title bar shows it: the bar is xtermium's (`own_bar`), so TitleBar.svelte asks for it.
+/// Windows only, and on the main thread (a sync command), as the menu's loop must be: it opens at
+/// the pointer with the items the window's state allows, and the pick goes to the window as the
+/// system would send it.
+#[tauri::command]
+fn window_menu(window: tauri::Window) -> Res<()> {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnableMenuItem, GetCursorPos, GetSystemMenu, IsIconic, IsZoomed, PostMessageW, SetMenuDefaultItem, TrackPopupMenu, MF_ENABLED,
+            MF_GRAYED, SC_MAXIMIZE, SC_MINIMIZE, SC_MOVE, SC_RESTORE, SC_SIZE, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_SYSCOMMAND,
+        };
+        let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0 as _);
+        let menu = GetSystemMenu(hwnd, false);
+        let (max, min) = (IsZoomed(hwnd).as_bool(), IsIconic(hwnd).as_bool());
+        let on = |id: u32, yes: bool| {
+            let _ = EnableMenuItem(menu, id, if yes { MF_ENABLED } else { MF_GRAYED });
+        };
+        on(SC_RESTORE, max || min);
+        on(SC_MOVE, !max && !min);
+        on(SC_SIZE, !max && !min);
+        on(SC_MINIMIZE, !min);
+        on(SC_MAXIMIZE, !max);
+        let _ = SetMenuDefaultItem(menu, if max { SC_RESTORE } else { SC_MAXIMIZE }, 0);
+        let mut at = POINT::default();
+        let _ = GetCursorPos(&mut at);
+        let cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, Some(0), hwnd, None);
+        if cmd.0 != 0 {
+            let _ = PostMessageW(Some(hwnd), WM_SYSCOMMAND, WPARAM(cmd.0 as usize), LPARAM(0));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = window;
+    Ok(())
+}
+
 /// Opens THIRD-PARTY-NOTICES.txt, which every build carries next to the app (tauri.conf.json
 /// `bundle.resources`), in the system's viewer for text (Settings > About).
 #[tauri::command]
@@ -1996,6 +2034,7 @@ fn main() {
             web::web_close,
             web::web_type,
             open_url,
+            window_menu,
             open_notices,
             open_in_code,
             open_term,

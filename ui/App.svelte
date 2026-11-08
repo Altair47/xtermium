@@ -5,7 +5,6 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Filter, type Sizes } from "./lib/actions";
   import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
@@ -34,6 +33,7 @@
   import { app, boot, dismiss, guideDone, lock, lookOf, notify, saveStore, shortcut, tell, tip, toast, toasts, sessionKey, siteIcon, syncNow, takeRestore, workspaceOp, type SyncSide } from "./lib/state.svelte";
   import Terminal, { IGNORED } from "./lib/Terminal.svelte";
   import TitleBar from "./lib/TitleBar.svelte";
+  import WorkspacePicker from "./lib/WorkspacePicker.svelte";
   import Tunnels from "./lib/Tunnels.svelte";
   import Web from "./lib/Web.svelte";
 
@@ -296,69 +296,54 @@
     toast(text, { label: _("Get it"), run: () => openUrl(u.download ?? u.page) });
     notify(_("xtermium update"), text);
   });
-  /** Commands to type into a shell once it's up (Settings › MCP "Run"), by tab key. */
+  /** Commands to type into a shell once it's up (Settings › MCP "Run", the start screen's prompt), by tab key. */
   const typeWhenUp = new Map<number, string>();
-  function runInShell(command: string) {
-    const key = localShell();
-    if (key !== undefined) typeWhenUp.set(key, command);
+  /** Opens a shell (`program`, or "" for Local shell's) and types `command` into it once it's up. */
+  function runInShell(command: string, program = "") {
+    const key = program ? open({ ...newSession("shell", "", "local"), kind: { type: "shell", program } }) : localShell();
+    if (key !== undefined && command) typeWhenUp.set(key, command);
+    return key;
   }
 
-  // ---- quick shell (Settings › General): with no tabs open, typing on the start screen opens a
-  // local shell, and what was typed goes to it ----
-  /** A key as the terminal sends it (Terminal.svelte `keydown`): text, or a special key or chord. */
-  type Typed = string | { key: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean };
-  /** The shell typing opened, and what was typed for it that it hasn't had yet. Until it has
-   *  it all, every key comes here before the terminal sees it, so nothing typed while the shell
-   *  starts is lost or lands out of order. */
-  let quick: { key: number; typed: Typed[] } | null = null;
-  /** Its view, unseen until the shell can take keys (`up`) and the welcome has gone (`clear`):
-   *  only then does it fade in, so the two never blur into each other. */
+  // ---- the start screen's prompt (Settings › General): with no tabs open, what you type shows
+  // after `~/xtermium $`; Enter opens a shell (the one Settings › General names, else Local shell's)
+  // and runs it there ----
+  /** What has been typed at the prompt; null until a first character, and after Escape. */
+  let draft = $state<string | null>(null);
+  /** The shell Enter opened: its view stays unseen until the shell can take keys (`up`) and the
+   *  welcome has gone (`clear`); only then does it fade in, so the two never blur into each other. */
   let arriving = $state<{ key: number; up: boolean; clear: boolean } | null>(null);
   /** The welcome's exit, in ms: faster than the terminal's 200 ms entrance (app.css motion rules),
    *  and accelerating away, so it never lingers half-faded like the window's stepped-back look. */
   const LEAVE = 120;
+  // A tab opened some other way takes the prompt's text with it.
+  $effect(() => void (strip.length && draft !== null && (draft = null)));
 
-  /** A key no shortcut took. On the start screen, a character typed outside any field opens the
-   *  shell; while that shell starts, every key is held for it. */
+  /** A key no shortcut took. On the start screen, a character typed outside any field goes to the
+   *  prompt; Backspace takes one back, Escape clears it, Enter runs it. */
   function quickKey(e: KeyboardEvent) {
-    if (quick && !tabs.some((t) => t.key === quick!.key)) quick = null;
     if (e.isComposing || IGNORED.has(e.key)) return;
+    if (strip.length || app.settings?.quick_shell === false || document.querySelector(".backdrop, .menu")) return;
+    const el = e.target as HTMLElement;
+    // A field takes its own typing.
+    if (el.closest?.("input, textarea, select, [contenteditable]")) return;
     const altGr = e.getModifierState("AltGraph") || (e.ctrlKey && e.altKey && e.key.length === 1);
     const chord = (e.ctrlKey || e.altKey || e.metaKey) && !altGr;
-    const typed: Typed = e.key.length === 1 && !chord ? e.key : { key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
-    if (!quick) {
-      const el = e.target as HTMLElement;
-      if (strip.length || app.settings?.quick_shell === false || typeof typed !== "string" || document.querySelector(".backdrop, .menu")) return;
-      // A field takes its own typing, and Space presses the button or row that has the keyboard.
-      if (el.closest?.("input, textarea, select, [contenteditable]") || (typed === " " && el !== document.body)) return;
-      const key = localShell()!;
-      quick = { key, typed: [] };
-      arriving = { key, up: false, clear: false };
-    }
+    if (e.key.length === 1 && !chord) {
+      // Space presses the button or row that has the keyboard.
+      if (e.key === " " && draft === null && el !== document.body) return;
+      draft = (draft ?? "") + e.key;
+    } else if (draft === null || chord) return;
+    else if (e.key === "Backspace") draft = draft.slice(0, -1);
+    else if (e.key === "Escape") draft = null;
+    else if (e.key === "Enter") {
+      const command = draft.trim();
+      draft = null;
+      const key = runInShell(command, app.settings?.start_shell ?? "");
+      if (key !== undefined) arriving = { key, up: false, clear: false };
+    } else return;
     e.preventDefault();
     e.stopPropagation();
-    quick.typed.push(typed);
-  }
-
-  /** The shell is up: it gets what was typed, in order (runs of text as one), then the keyboard. */
-  async function handOver(id: number) {
-    const q = quick!;
-    if (arriving?.key === q.key) arriving.up = true;
-    try {
-      // Keys typed while this sends join the end of the queue.
-      while (q.typed.length) {
-        const t = q.typed.shift()!;
-        if (typeof t !== "string") await invoke("term_key", { id, key: t });
-        else {
-          let text = t;
-          while (typeof q.typed[0] === "string") text += q.typed.shift();
-          await invoke("term_text", { id, text });
-        }
-      }
-    } finally {
-      quick = null;
-      refocus();
-    }
   }
 
   /** A terminal's meta: the tab's state. A connection that dropped becomes a desktop notification
@@ -406,7 +391,7 @@
   /** A tab's backend is up: remember its id, and answer automation if it asked for this tab. */
   function started(key: number, id: number) {
     update(key, { id });
-    if (quick?.key === key) handOver(id);
+    if (arriving?.key === key) arriving.up = true;
     const command = typeWhenUp.get(key);
     if (command) {
       typeWhenUp.delete(key);
@@ -640,11 +625,14 @@
   }
 
   // ---- workspaces: each with its own sessions, logins and tunnels (Settings > Workspaces) ----
-  /** The title bar's workspace menu, open at this point. */
-  let workspaceMenu = $state<{ x: number; y: number } | null>(null);
-  function pickWorkspace(name: string) {
-    workspaceMenu = null;
-    if (name !== app.workspace) workspaceOp({ op: "switch", name }).catch((e) => (app.status = String(e)));
+  /** The title bar's workspace picker (WorkspacePicker.svelte), hung under the field, as wide as it. */
+  let workspaceMenu = $state<{ x: number; y: number; w: number } | null>(null);
+  /** Opens the picker under the field the chevron `e` came from; a second click closes it. */
+  function toggleWorkspaces(e: MouseEvent) {
+    e.stopPropagation();
+    if (workspaceMenu) return void (workspaceMenu = null);
+    const r = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect();
+    workspaceMenu = { x: document.documentElement.dir === "rtl" ? r.right : r.left, y: r.bottom + 3, w: r.width };
   }
   /** Opens a menu under the button `e` came from, at its start; a second click closes it. */
   const below = (e: MouseEvent, was: { x: number; y: number } | null) => {
@@ -1014,11 +1002,6 @@
   // A detached tab's window turns the wheel for everyone's size too; the settings live here.
   listen<number>("font-step", (e) => fontStep(e.payload));
 
-  async function fullscreen() {
-    const w = getCurrentWindow();
-    await w.setFullscreen(!(await w.isFullscreen())).catch((e) => (app.status = String(e)));
-  }
-
   /** The panes' sizes with an edge of the focused pane moved [x, y] by the step in Settings ›
    *  Terminal (actions.ts `resize`); null if it has no neighbour that way. */
   function paneResized([dx, dy]: [number, number]): Sizes | null {
@@ -1156,9 +1139,6 @@
       case "theme":
         app.settings!.theme = dark ? "Light" : "Dark";
         break;
-      case "fullscreen":
-        fullscreen();
-        break;
     }
   }
 
@@ -1205,23 +1185,36 @@
     app.settings!.sidebar_collapsed = false;
   }
 
-  /** Double-click on the handle: the sidebar opens out, as wide as its longest session or folder
-   *  name needs (each folder level indents a step). Rows' sizes as in Sidebar.svelte. */
-  function fitSidebar() {
-    const c = document.createElement("canvas").getContext("2d")!;
-    c.font = getComputedStyle(document.querySelector(".rack .item") ?? document.body).font;
-    const text = (t: string) => c.measureText(t).width;
-    const levels = (p: string) => p.split("/").filter(Boolean).length;
-    const STEP = 13; // .indent: 12px margin and its guide line
-    let w = 0;
-    // A session: padding, icon, gap, name, padding.
-    for (const s of app.store.session) w = Math.max(w, levels(s.folder) * STEP + 6 + 18 + 6 + text(s.name) + 6);
-    // A folder: padding, caret, gap, icon, gap, name, gap, the count, padding.
-    const paths = new Set([...app.store.folder.map((f) => f.path), ...app.store.session.map((s) => s.folder)].flatMap((p) => p.split("/").filter(Boolean).map((_, i, a) => a.slice(0, i + 1).join("/"))));
-    for (const p of paths) w = Math.max(w, (levels(p) - 1) * STEP + 6 + 14 + 6 + 18 + 6 + text(p.split("/").pop()!) + 6 + 26 + 6);
-    // The list's own padding and a scroll bar.
-    app.settings!.sidebar_width = Math.round(Math.max(180, Math.min(600, w + 8 + 14)));
+  /** Double-click on the handle: the sidebar opens out just wide enough for the rows on show (a
+   *  closed folder's sessions don't count), measured as they are drawn: the list's edge to the
+   *  name, the name's whole text, what follows it (a folder's tags and count), and a little air. */
+  async function fitSidebar() {
     app.settings!.sidebar_collapsed = false;
+    await tick();
+    const rack = document.querySelector<HTMLElement>(".rack");
+    const list = rack?.querySelector<HTMLElement>(".list");
+    if (!rack || !list) return;
+    const rtl = document.documentElement.dir === "rtl";
+    const edge = list.getBoundingClientRect();
+    const c = document.createElement("canvas").getContext("2d")!;
+    const rows = [...list.querySelectorAll<HTMLElement>(".item")];
+    // Rows out of view aren't laid out (Sidebar.svelte `content-visibility`): for the measure they are.
+    for (const row of rows) row.style.contentVisibility = "visible";
+    let w = 0;
+    for (const row of rows) {
+      const name = row.querySelector<HTMLElement>(".name");
+      if (!name) continue;
+      c.font = getComputedStyle(name).font;
+      const r = name.getBoundingClientRect();
+      const before = rtl ? edge.right - r.right : r.left - edge.left;
+      let after = 5; // the row's end padding
+      for (let el = name.nextElementSibling; el; el = el.nextElementSibling) after += (el as HTMLElement).offsetWidth + 5;
+      w = Math.max(w, before + c.measureText(name.textContent ?? "").width + after);
+    }
+    for (const row of rows) row.style.contentVisibility = "";
+    // What the sidebar puts around the list (its padding, a scroll bar if there is one), and air.
+    w += rack.getBoundingClientRect().width - list.clientWidth + 13;
+    app.settings!.sidebar_width = Math.round(Math.max(180, Math.min(600, w)));
   }
 
   /** A getting-started step, done for real: panes and broadcast open two local shells to show on. */
@@ -1329,7 +1322,7 @@
     {:else if showSidebar}
       <aside class="rack" style:width="{app.settings?.sidebar_width ?? 280}px">
         <Backdrop place="sidebar" tint={(a) => `rgba(var(--panel-rgb), ${a})`} />
-        <Sidebar {live} onopen={open} onedit={(session, index) => (editor = { session, index })} />
+        <Sidebar {live} current={activeTab && !coopTab(activeTab) ? sessionKey(activeTab.session) : ""} onopen={open} onedit={(session, index) => (editor = { session, index })} />
         {#if app.status}
           <div class="status row" role="status">
             {#if app.statusLink?.text === app.status}
@@ -1465,10 +1458,15 @@
 
       <div class="panes" class:split={strip.length && panes.length > 1} class:broadcasting class:sizing class:steady={app.settings?.focus_animated === false}>
         {#if !strip.length}
+          {@const link = /^https?:\/\//.test(app.settings?.logo_link ?? "") ? app.settings!.logo_link : ""}
           <div class="dashboard" out:fade={{ duration: arriving && !still ? LEAVE : 0, easing: cubicIn }} onoutroend={() => arriving && (arriving.clear = true)}>
             <div class="intro">
-              <p class="prompt" aria-hidden="true">~/xtermium <b>$</b> <i class="cursor"></i></p>
-              <div class="logo"><Logo /></div>
+              <p class="prompt" aria-hidden={draft === null}>~/xtermium <b>$</b> {#if draft}<span class="typed">{draft}</span>{/if}<i class="cursor"></i></p>
+              {#if link}
+                <button class="flat logo" title={link} aria-label={_("Open {url}", { url: link })} onclick={() => openUrl(link).catch((e) => (app.status = String(e)))}><Logo /></button>
+              {:else}
+                <div class="logo"><Logo /></div>
+              {/if}
               <p class="lead">{_("Terminals, SSH, SFTP, RDP and tunnels in one window.")}</p>
               <!-- with nothing saved yet, the getting-started list says it, as its second step -->
               {#if app.store.session.length || !app.settings?.guide}
@@ -1506,7 +1504,7 @@
                 </div>
               {/if}
               <p class="weak">
-                {#if app.settings?.quick_shell !== false}{_("Start typing to open a local shell.")}{/if}
+                {#if app.settings?.quick_shell !== false}{_("Type a command and press Enter to run it in a shell.")}{/if}
                 {_("Keyboard shortcuts are listed, and can be changed, in")}
                 <button class="link" onclick={() => openSettings("shortcuts")}>{_("Settings › Shortcuts")}</button>
               </p>
@@ -1723,12 +1721,7 @@
     </div>
   {/if}
   {#if workspaceMenu}
-    <div class="menu" aria-label={_("Workspace")} {@attach menu(() => (workspaceMenu = null), workspaceMenu.x, workspaceMenu.y)}>
-      {#each ["", ...app.workspaces] as w (w)}
-        <button class:selected={w === app.workspace} onclick={() => pickWorkspace(w)}><Icon name={w === app.workspace ? "check" : "cluster"} />{w || _("Default")}</button>
-      {/each}
-      <button class="sep" onclick={() => ((workspaceMenu = null), openSettings("workspaces"))}>{_("Manage workspaces…")}</button>
-    </div>
+    <WorkspacePicker x={workspaceMenu.x} y={workspaceMenu.y} width={workspaceMenu.w} onclose={() => ((workspaceMenu = null), refocus())} />
   {/if}
   {#if layoutsMenu}
     <div class="menu tasks-list" {@attach menu(() => (layoutsMenu = null), layoutsMenu.x, layoutsMenu.y)}>
@@ -1934,11 +1927,10 @@
       <button class="icon-only bar-tool new" tabindex="-1" onclick={createSession} title={tip(_("New session"), "new-session")} aria-label={_("New session")}><Icon name="plus" size={21} /></button>
     {/if}
   {/snippet}
-  <!-- The centre: search (the palette on Sessions), what has the keyboard (the palette), and the workspace. Locked, nothing. -->
+  <!-- The centre: what has the keyboard (a way into the palette), and the workspace's picker. Locked, nothing. -->
   {#if ready && app.locked === null && !lock.locked}
     {@const ws = _("Workspace: {name}", { name: app.workspace || _("Default") })}
     <div class="finder">
-      <button class="flat icon-only bar-tool" tabindex="-1" onclick={() => run("find")} title={tip(_("Find a session"), "find")} aria-label={_("Find a session")}><Icon name="search" size={21} /></button>
       <div class="field">
         <button class="flat where" tabindex="-1" title={tip(_("Command palette"), "palette")} onclick={() => run("palette")}>
           {#if activeTab}
@@ -1951,7 +1943,7 @@
             <span>{_("Type a command, a session, or user@host to connect")}</span>
           {/if}
         </button>
-        <button class="flat icon-only workspace" class:on={!!workspaceMenu} tabindex="-1" aria-haspopup="menu" aria-expanded={!!workspaceMenu} title={ws} aria-label={ws} onclick={(e) => (workspaceMenu = below(e, workspaceMenu))}>
+        <button class="flat icon-only workspace" class:on={!!workspaceMenu} tabindex="-1" aria-haspopup="dialog" aria-expanded={!!workspaceMenu} title={ws} aria-label={ws} onclick={toggleWorkspaces}>
           <Icon name="chevron-down" size={18} />
         </button>
       </div>
@@ -2072,7 +2064,7 @@
   .new:hover {
     background: var(--hover);
   }
-  /* search, then the field: never so wide that no bar is left to drag the window by */
+  /* the field: never so wide that no bar is left to drag the window by */
   .finder {
     display: flex;
     align-items: center;
@@ -2503,6 +2495,12 @@
     font-weight: 500;
     color: var(--gold);
   }
+  /* what you have typed, as the shell will get it (spaces and all) */
+  .intro .prompt .typed {
+    color: var(--fg);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
   .cursor {
     display: inline-block;
     width: 0.6em;
@@ -2520,6 +2518,18 @@
     width: min(377px, 100%);
     margin-block-end: 8px;
     animation: float-in 0.2s var(--ease-out) both;
+  }
+  /* with a link under it (Settings › Appearance) the logo is a button, looking the same */
+  button.logo {
+    display: block;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  button.logo:hover {
+    opacity: 0.85;
   }
   .lead {
     font-family: var(--short);

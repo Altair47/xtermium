@@ -183,6 +183,8 @@ export type Settings = {
   single_click_open: boolean;
   /** With no tabs open, typing on the start screen opens a local shell with what was typed. */
   quick_shell: boolean;
+  /** The program the start screen's prompt runs commands in; "" = `shell`. */
+  start_shell: string;
   /** The sidebar's open folders come back next time (`open_folders`). */
   remember_folders: boolean;
   open_folders: string[];
@@ -221,6 +223,8 @@ export type Settings = {
   guide_done: string[];
   /** The app's own icon, a 256px square `data:image/png` URL (images.ts `appIcon`); "" = the mark. */
   app_icon: string;
+  /** An http(s) address the start screen's logo opens; "" = none. */
+  logo_link: string;
   /** Imported terminal colour schemes (Settings > Appearance). */
   custom_schemes: Scheme[];
   /** Images used as icons, kept to pick again (Appearance.svelte); `data` is a `data:image/…` URL. */
@@ -475,6 +479,8 @@ export const ICONS = [
 /** Swatches for marking a session, folder or tab (its name and tab line; the icon keeps its kind's
  *  colour), and for the broadcast outline. No amber: amber text means picked, or a link. */
 export const COLORS = ["#5c8df0", "#33b8a6", "#b5c14a", "#9c70e6", "#dd6b9c", "#4fb86a", "#ec6a6a", "#e08a3c", "#8a96a3"];
+/** A Co-op ring's owner wears amber on every computer, whatever accent each has picked (coop.ts `memberColor`). */
+export const OWNER_COLOR = "#ffb000";
 
 /** Accents offered besides the default amber: metals, apart from the kinds' colours, each with
  *  its dark-theme value (the one stored) and a darker one that reads on the light theme. */

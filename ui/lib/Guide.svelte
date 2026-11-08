@@ -22,7 +22,7 @@
     const did = (id: Step) => s.guide_done.includes(id);
     const l = lock.info;
     return [
-      { id: "shell", title: _("Open a local shell"), hint: _("A terminal on this computer. Typing on this screen opens one too."), done: did("shell"), keys: keys("local-shell") },
+      { id: "shell", title: _("Open a local shell"), hint: _("A terminal on this computer. A command typed on this screen runs in one."), done: did("shell"), keys: keys("local-shell") },
       { id: "session", title: _("Save your first server"), hint: _("SSH, RDP, VNC, serial, telnet or a website, kept in the sidebar."), done: app.store.session.length > 0, keys: keys("new-session") },
       { id: "palette", title: _("Find anything from the keyboard"), hint: _("The command palette opens sessions, runs actions and connects to user@host."), done: did("palette"), keys: keys("palette") },
       { id: "split", title: _("Work side by side"), hint: _("Put tabs in panes with the layout buttons at the title bar's end."), done: did("split"), keys: "" },

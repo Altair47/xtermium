@@ -86,7 +86,25 @@ export function selectionRows(s: RingSelection, top: number, cols: number, rows:
   return out;
 }
 
-/** Which of `n` colours a ring member keeps: the same on every computer, from their user id. Their
- *  pointer (CoopCursors.svelte) and their selection in a shared terminal (CoopSelections.svelte,
- *  Terminal.svelte) wear it. */
-export const memberColor = (id: string, n: number) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % n;
+const hash = (id: string) => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+
+/** Which of `n` colours a ring member keeps, the same on every computer, so everyone knows who is
+ *  who: their pointer (CoopCursors.svelte), their selection in a shared terminal
+ *  (CoopSelections.svelte) and the ring round their picture (CoopPic.svelte) wear it. The owner
+ *  is -1, the ring's amber. Guests take, in the order the server lists them (the same list
+ *  everywhere), the first colour still free from the one their id hashes to, so no two share one
+ *  while colours are left. Someone the list hasn't got yet keeps their hashed colour. */
+export function memberColor(id: string, members: { id: string; owner?: boolean }[], n: number): number {
+  const taken = new Set<number>();
+  for (const m of members) {
+    if (m.owner) {
+      if (m.id === id) return -1;
+      continue;
+    }
+    let at = hash(m.id) % n;
+    for (let tries = 0; tries < n && taken.has(at); tries++) at = (at + 1) % n;
+    taken.add(at);
+    if (m.id === id) return at;
+  }
+  return hash(id) % n;
+}

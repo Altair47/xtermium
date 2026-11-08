@@ -458,12 +458,15 @@ App icon, which also takes the mark's place on the start screen, the windows, th
 tray), then the main window's tools, icon-only, 21px glyphs in 26px squares 3px apart, `weak`
 until pointed at: the burger that collapses and expands the sidebar, a local shell,
 Tunnels and the saved layouts' menu, then, 13px apart, New session as a filled key (`raised`).
-In the centre: a magnifier that opens the palette on its Sessions filter, then a field (an inset
+In the centre: a field (an inset
 well, 26px tall, `clamp(233px, 38vw, 610px)` wide) naming where the keyboard goes: the focused
 tab's icon in its kind hue, its name (`short-strong`: mono 500, `fg`) and, in `weak`, what the shell or page says
 of itself; with no tab open, the palette's own placeholder. The field opens the command palette.
-At its end, behind a hairline, a chevron opens the workspace menu (the workspace in use ticked,
-then Manage workspaces…). Locked, the centre is empty. A detached tab's window shows its name
+At its end, behind a hairline, a chevron opens the workspace picker (`ui/lib/WorkspacePicker.svelte`),
+hung under the field at its width in a menu's dress: a search field, a row that creates the name
+typed when no workspace has it, the workspace in use ticked, the others by name ten to a page
+(Previous, Next), then Manage workspaces…. A right click on the bar's free space or the mark
+opens the window's menu: Windows' own system menu, on Linux a `.menu` of Minimize, Maximize, Close. Locked, the centre is empty. A detached tab's window shows its name
 there. At the end, the five layout buttons (21px glyphs in 26px squares, 3px apart, the one in
 use amber), then the three
 window buttons, 46px wide, square, their glyphs 10px hairlines in `weak`; under the pointer they
@@ -471,7 +474,7 @@ take `hover`, and Close takes `error`. The room between is what the window is dr
 double click maximizes). While another window has the keyboard the bar's contents drop to half
 strength. macOS keeps its own three buttons at the left instead of the mark, and the bar leaves
 them room. Dialogs, the palette and the lock screen start under the bar, so the window can always
-be moved, minimized and closed; full screen has no bar.
+be moved, minimized and closed. There is no full-screen mode.
 
 Every control in the bar is as tall as the field (`--control`), so the row shares one top and
 bottom edge, centred in the bar. The sidebar has no header: its first row's middle sits on the tab
@@ -494,11 +497,13 @@ the window's edge.
 
 The start screen sits on the golden section: the room above the welcome and below it go 1 : φ,
 in a column at most 610px wide, 13px between its parts. The welcome starts at the website's
-prompt (`~/xtermium $` and a blinking amber block cursor), then the brand kit's horizontal logo
+prompt (`~/xtermium $` and a blinking amber block cursor; what you type shows after the sigil in
+`fg`, as the shell will get it), then the brand kit's horizontal logo
 (the mark beside the "XTermium" wordmark, `assets/logo-horizontal.svg` through
-`ui/lib/Logo.svelte`) at `min(377px, 100%)` wide, arriving with `float-in`, then the lead
-sentence and the ways to start, and a `weak` line that says "Start typing to open a local
-shell." Settings › About shows the same logo at 233px.
+`ui/lib/Logo.svelte`) at `min(377px, 100%)` wide, arriving with `float-in` (a button, looking the
+same, when Settings › Appearance gives it a link), then the lead
+sentence and the ways to start, and a `weak` line that says "Type a command and press Enter to
+run it in a shell." Settings › About shows the same logo at 233px.
 
 For someone new, the ways to start give way to **Getting started** (`ui/lib/Guide.svelte`): one
 panel (hairline, `--r-menu`) headed by its title in the short face (`--t-l`, 600), "n of 8 done"

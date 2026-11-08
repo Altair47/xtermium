@@ -17,20 +17,24 @@ Needs two (or three) Pro accounts on separate machines, joined in one ring throu
   2026-11-07).
 - A removed member rejoining.
 - Remote desktop tabs shared in a ring: guests can't copy, paste or drop files.
+- Ring colours: the owner amber and each guest their own colour, the same on every member's
+  computer, round the pictures in the Co-op dialog and on pointers and selections (checked
+  here only with a faked ring event in one window).
 
 ## macOS
 
 The macOS build ships unsigned, and nobody has run these on a Mac yet.
 
 - The fix for the SSH key picker hanging ([issue #40](https://github.com/xtermium/xtermium/issues/40)): native dialogs now open with the calling window as their parent (PR #39). Not confirmed on a Mac.
-- The app's own title bar: the overlay style with its three buttons, dragging, full screen.
+- The app's own title bar: the overlay style with its three buttons, dragging.
 - The per-system shortcuts (⌘ in place of Ctrl), as the wiki's shortcut table lists them.
 - Opening the unsigned `.dmg` past Gatekeeper, as the Installation page describes it.
 
 ## Linux
 
 - The app's own title bar (no system decorations): dragging, resizing from the edges,
-  maximising, and the polish pass's sizes.
+  maximising, and the polish pass's sizes; the window menu (Minimize, Maximize, Close) a
+  right-click on the bar's free space opens.
 - The clipboard on X11 and Wayland, in terminals and in Co-op.
 
 ## Right to left

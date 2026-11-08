@@ -74,10 +74,17 @@ test("throttle sends the first call, then the last one of the wait", () => {
 });
 
 test("a ring member keeps one colour, the same everywhere, and members differ", () => {
-  const n = 12;
-  assert.equal(memberColor("user_abc123", n), memberColor("user_abc123", n));
-  for (const id of ["", "a", "user_abc123", "x".repeat(200)]) assert.ok(memberColor(id, n) >= 0 && memberColor(id, n) < n);
-  assert.notEqual(memberColor("user_abc123", n), memberColor("user_abc124", n));
+  const n = 3;
+  const ring = [{ id: "owner", owner: true }, { id: "a" }, { id: "b" }, { id: "c" }];
+  assert.equal(memberColor("owner", ring, n), -1);
+  const got = ["a", "b", "c"].map((id) => memberColor(id, ring, n));
+  // same again, and three guests on three colours wear them all
+  assert.deepEqual(got, ["a", "b", "c"].map((id) => memberColor(id, [...ring], n)));
+  assert.deepEqual([...got].sort(), [0, 1, 2]);
+  // someone not listed yet still gets a colour; so does a ring with no owner row
+  for (const id of ["", "x".repeat(200)]) assert.ok(memberColor(id, [], n) >= 0 && memberColor(id, [], n) < n);
+  // a guest's colour doesn't change when a guest listed after them leaves
+  assert.equal(memberColor("a", ring, n), memberColor("a", ring.slice(0, 2), n));
 });
 
 test("a ring member's selection is drawn row by row, only what is on screen", () => {

@@ -12,8 +12,8 @@
   import { onDestroy, onMount, tick as nextTick, untrack } from "svelte";
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { OS, wheelAction } from "./actions";
-  import { bytes, COLORS, css, fontStack, openUrl, type Meta, type Session } from "./api";
-  import { memberColor, selectionRows, throttle } from "./coop";
+  import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
+  import { selectionRows, throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
   import CoopSelections from "./CoopSelections.svelte";
   import { close, decode, frameAt, type Pic } from "./images";
@@ -22,7 +22,7 @@
   import Icon from "./Icon.svelte";
   import { dialogTakesKeys } from "./Modal.svelte";
   import Backdrop from "./Backdrop.svelte";
-  import { app } from "./state.svelte";
+  import { app, coopColor } from "./state.svelte";
   /** `blink`: the cursor blinks while focused; `line`: line height as a multiple of the font's. */
   type Look = { font: string; size: number; cursor: "Block" | "Bar" | "Underline"; blink: boolean; line: number; fg: number; bg: number; cc: number };
   type Frame = { rows: number; scroll?: number; lines: [number, Run[]][]; meta?: Meta; style?: Look };
@@ -75,7 +75,7 @@
   /** A guest's own selection wears their ring colour, the one their pointer has for everyone. */
   const mineColor = $derived.by(() => {
     const me = app.coop.ring?.members.find((m) => m.you);
-    return me ? COLORS[memberColor(me.id, COLORS.length)] : null;
+    return me ? coopColor(me.id) : null;
   });
   /** A remote tab's canvas in CSS pixels, and `k` (at most 1) shrinking what the font size can't fit. */
   let view = $state({ w: 0, h: 0, k: 1 });

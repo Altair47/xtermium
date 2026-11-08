@@ -333,6 +333,8 @@ impl Settings {
             }
         }
         self.shell = text(&self.shell);
+        self.start_shell = text(&self.start_shell);
+        self.logo_link = text(&self.logo_link);
         self.ssh_user = text(&self.ssh_user);
         self.ssh_key = text(&self.ssh_key);
         ciphers(&mut self.ssh_ciphers);
