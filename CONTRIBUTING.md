@@ -51,6 +51,22 @@ pre-release), is used there for a while, and a release follows once it has held 
 everyone. `DESIGN.md` covers the UI. `npm test` enforces some of them, such as the spacing scale
 and the locale files.
 
+## What never goes into a commit
+
+Nothing personal and nothing secret, in any xtermium repository, public or private:
+
+- a path with your user name or machine in it (`C:\Users\<you>\…`, `/home/<you>/…`, a hostname): a
+  tool that writes hooks or snapshots for one machine (`.codex/`, `.claude/settings.local.json`,
+  `.impeccable/critique/`) is ignored, and an example path uses the demo user `sotiris` or `~`;
+- API tokens, passwords, the recovery key, session or sync tokens, cookies;
+- SSH keys, certificates with their private keys, keystores;
+- confidential files: customer data, logs with other people's data, anything under NDA.
+
+`npm test` fails on a tracked file that carries a home folder with a user name, a private key, a
+certificate or a known token format (`scripts/private.test.mjs`). If something got through, take
+it out and **rotate the secret**: history keeps every commit, and a force push can't be relied on
+to reach every clone.
+
 ## Security problems
 
 Don't open a public issue. Report them privately: **Security › Report a vulnerability** on the

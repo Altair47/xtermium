@@ -33,3 +33,8 @@ node_modules
 
 # Impeccable design notes are kept; its hook cache is per machine
 .impeccable/hook.cache.json
+
+# Tool state written per machine (absolute paths, snapshots): never tracked
+.codex/
+.impeccable/critique/
+.claude/settings.local.json
