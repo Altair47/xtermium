@@ -216,7 +216,7 @@
           "oklch(83% 0.128 161.1)",
           "oklch(95% 0.128 161.1)"
         ],
-        "light": "#1b6a44"
+        "light": "#155c3d"
       },
       "warn": {
         "role": "tertiary",
@@ -232,7 +232,7 @@
           "oklch(83% 0.130 83.4)",
           "oklch(95% 0.130 83.4)"
         ],
-        "light": "#8a5d00"
+        "light": "#745000"
       },
       "error": {
         "role": "tertiary",
@@ -248,7 +248,7 @@
           "oklch(83% 0.162 22.3)",
           "oklch(95% 0.162 22.3)"
         ],
-        "light": "#b42a33"
+        "light": "#a4242d"
       },
       "error-ink": {
         "role": "tertiary",
@@ -408,7 +408,7 @@
           "oklch(83% 0.013 286.1)",
           "oklch(95% 0.013 286.1)"
         ],
-        "light": "#5c5c63"
+        "light": "#55555c"
       },
       "mark": {
         "role": "neutral",

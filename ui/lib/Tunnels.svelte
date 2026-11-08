@@ -166,7 +166,7 @@
   }
   .tag {
     padding: 0 5px;
-    border-radius: 3px;
+    border-radius: var(--r-control);
     background: var(--gold-soft);
     font-size: var(--t-s);
   }

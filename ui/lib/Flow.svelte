@@ -280,7 +280,7 @@
   .spark {
     position: relative;
     height: 44px;
-    border-radius: 5px;
+    border-radius: var(--r-menu);
     background: rgba(var(--deep-rgb), 1);
   }
   .spark svg {

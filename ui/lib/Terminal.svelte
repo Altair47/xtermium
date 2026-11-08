@@ -1030,7 +1030,7 @@
     left: 1px;
     right: 1px;
     min-height: 24px;
-    border-radius: 5px;
+    border-radius: var(--r-menu);
     background: color-mix(in srgb, var(--fg) 22%, transparent);
     transition: background 0.15s, left 0.15s, right 0.15s;
   }

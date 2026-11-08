@@ -266,9 +266,12 @@ window. They are flat at rest and are told apart by tone and hairline, not by sh
 that float above the work cast a shadow: menus, dialogs, the command palette, toasts.
 
 Every proportion comes from the golden ratio (φ ≈ 1.618). Spacing steps along the Fibonacci
-scale, padding pairs go 1 : φ from vertical to horizontal, type steps by a quarter of φ, and
-dialogs are 377, 610 or 987px wide. Settings is a golden rectangle, 987 × 610. `ui/lib/scale.test.ts`
-enforces the spacing and type scales in `npm test`, so they are rules, not guidelines.
+scale, padding pairs keep both values on it with the horizontal at least the vertical, type steps
+by a quarter of φ (rounded to the half pixel), and dialogs are 377, 610 or 987px wide. Settings is
+a golden rectangle, 987 × 610. `ui/lib/scale.test.ts` enforces, in `npm test`, that padding,
+margin, gap, inset, offsets and border-radius are on the scale and that every `font-size` is a
+token; widths, heights and line-heights follow the scale by convention (the token audit at the
+end names the exceptions).
 
 **Key Characteristics:**
 - Near-black neutrals in six tonal steps (the website's ground, surfaces and hairlines), a dark
@@ -299,12 +302,15 @@ colours.
   app's accent before the brand's), then Platinum `#c3ccd8`, Bronze `#a99a78` and Rose gold
   `#e2a395`, metals apart from every kind hue and the error red, each with a darker light-theme
   value (`ACCENTS` in `api.ts`); any other colour is darkened toward the text on the light theme,
-  as the amber is. The app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink` and
-  `gold-soft` from it at runtime, so never hard-code its hex in a component; use `var(--gold)`.
+  as the amber is. With the default amber the three tokens are `ui/app.css`'s own static values;
+  with a custom accent the app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink`
+  (`#111` or white, by luminance) and `gold-soft` (a 14% `color-mix`) from it at runtime
+  (`App.svelte`). So never hard-code its hex in a component; use `var(--gold)`.
   The one exception is the Amber (default) swatch in Settings › Appearance, which hard-codes it
   so it shows the default whatever accent is picked.
 - **Amber Ink** (`gold-ink`): text on a solid amber fill (the primary button): the ground,
-  `#050506`, on dark; white on light.
+  `#050506`, on dark and white on light with the default amber; `#111` or white, whichever reads,
+  on a custom accent.
 - **Amber Wash** (`gold-soft`): the translucent tint (14%) behind picked rows, search hits, a
   setting a search points at, tags and drop zones. The sidebar's drop-into-folder highlight is a
   stronger mix, 18% amber, to tell "into" from "before" (the amber line).
@@ -323,7 +329,9 @@ The connection hues, one per kind of session (`--k-*`), keyed like cable colours
 - **Cyan** (`k-winrm`): WinRM.
 - **Orchid** (`k-vnc`): VNC.
 - **Bare Titanium** (`k-kvm`): BMC consoles, deliberately the least coloured.
-- **Ember** (`k-agent`): AI-agent tabs. It shares its value with `error`.
+- **Ember** (`k-agent`): AI-agent tabs. It shares its value with `error`, an accepted collision:
+  an agent tab is told by its icon and connector, a failed one by the `error` dot and title, never
+  by the hue alone.
 - **Champagne** (`k-coop`): tabs shared with you in a Terminal Co-op ring.
 
 They colour a session's icon (always), the 2px connector on top of its tab (unless the tab
@@ -332,8 +340,9 @@ a local `--kind`.
 
 **Marks.** A person can mark a session, a folder or a tab with a colour (`COLORS` in `api.ts`:
 nine swatches, no amber, plus any colour). A mark never takes a kind hue's place: it tints the
-session's or folder's name (`.tinted`, its OKLCH lightness held to at least 0.72 on dark and at
-most 0.48 on light, so every swatch reads at 4.8:1 or better while keeping its hue) and the tab's
+session's or folder's name (`.tinted`, its OKLCH lightness held to at least `--tint-lo`, 0.72, on
+dark and at most `--tint-hi`, 0.48, on light, so every swatch reads at 4.8:1 or better while
+keeping its hue) and the tab's
 connector line. A folder has no kind, so its icon wears its mark too. A folder's mark carries
 down to every name inside it, under each session's own.
 
@@ -364,11 +373,20 @@ From the back of the window to the hand, the website's near-black, with no blue 
 - **Mark** (`mark`): the logo's three large tiles and its wordmark, `#f2f2f2` on dark and the
   brand's charcoal `#141414` on light, as the brand kit draws them. Nothing else.
 
+**Picked, current, lit.** Three surfaces say three things, and components keep them apart:
+*picked* (an option that is on, a chosen row of a multi-selection, a search hit) is the amber
+wash, `gold-soft`, with amber text on a toggle (`button.on`) and `fg` on a row (`.chosen`);
+*current* (the keyboard's row in the session rack, the current Settings page) is `raised` with a
+2px amber inset edge (`.current`); *lit* is under the pointer: a flat thing (a menu item, a list
+row, `button.flat`) takes `raised`, a filled button takes `hover`. The palette's keyboard row
+(`.item.on`) is the one place still written as picked; it means current.
+
 The light theme (`:root[data-theme="light"]` in `ui/app.css`) redefines every token above with
 the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`.
-The amber deepens to `#754b00` (white ink, a 14% wash), dark enough to hold 4.5:1 on every light
-surface, a button under the pointer included, and the kind hues darken to hold contrast on the
-light greys. The light values are also kept in `.impeccable/design.json`
+The amber deepens to `#754b00` (white ink, a 14% wash), and `weak`, `ok`, `warn` and `error` are
+dark enough that each holds 4.5:1 on `panel`, `raised` and `hover` (a button under the pointer;
+checked 2026-11-08: `weak` 4.76 on `hover`, `error` 4.71, `warn` 4.68, `ok` 5.14), and the kind
+hues darken to hold contrast on the light greys. The light values are also kept in `.impeccable/design.json`
 (`colorMeta.*.light`).
 
 ### Named Rules
@@ -394,7 +412,12 @@ hex. `--chrome-alpha` drops below 1 while the Transparent effect is on, and the 
 Any place is two layers, the window's ground and a panel or terminal on it, and `--chrome-alpha` is
 worked out so the two together make the Opacity setting, in every window: don't paint a third layer
 between them. A floating layer is one layer at `--float-alpha`, over what's already there, as a window
-is over another. The lock screen stays solid: it hides what's behind it.
+is over another. The lock screen stays solid: it hides what's behind it. `--solid` (1, or 0 with
+the Transparent effect) switches off the active tab's and a detached window's own fill so the pane
+shows through. Two exceptions, named: the scrim behind a dialog (`--scrim`) and the palette
+(`--scrim-soft`) is the dark ground at 0.4 and 0.32 in both themes, and the RDP view's bars over
+the picture use fixed dark greys (`#0c0c0c`, `rgb(12 12 12 / 0.75)`), because they sit on the
+remote desktop's black, not on chrome.
 
 ## Typography
 
@@ -421,11 +444,11 @@ own font is the user's setting and is not part of this system.
 - **Body** (400, 13px `--t`, 1.4, system face): everything else by default: fields, field
   labels, rows, menus.
 - **Prose** (400, 13px, line-height φ = 21px): paragraphs and text areas, so a line of text is
-  as tall as a list row. Measure is capped at 62–70ch.
+  as tall as a list row. Measure is 55–75ch (62ch on the start screen, 70ch in Settings).
 - **Label** (400, 11.5px `--t-s`): counts, hints and secondary lines in the system face; the
   status bar, tags and `kbd` at the same size in the mono. Counts use `tabular-nums`.
-- **Mono** (0.92em, JetBrains Mono): `code`, `pre`; `kbd` in the mono at label size (`--t-s`). It always runs left to right, even in
-  Arabic.
+- **Mono** (0.92em, JetBrains Mono): `code` (`pre` keeps body size); `kbd` in the mono at label
+  size (`--t-s`). It always runs left to right, even in Arabic.
 
 `--t-xxl` (18.5px) is used three times: the status centred over an RDP desktop while it connects
 or after it closes, the sign-in code a person approves in the browser (in the mono, letters
@@ -489,8 +512,11 @@ Split panes are each their own panel (5px corners, 1px hairline) with the window
 between them. Pane sizers are 6px hit areas centred on that gap, amber-tinted on hover.
 
 Spacing is the Fibonacci scale only: 1 2 3 5 8 13 21 34px (55 and 89 are allowed but unused).
-Padding pairs go 1 : φ, vertical to horizontal: `3px 8px` for controls, `5px 8px` for compact
-blocks, `8px 13px` for cards and asides, `13px` for a dialog body. Heights come from three
+Padding pairs keep both values on the scale, the horizontal at least the vertical, usually
+adjacent steps: `3px 8px` for controls, `5px 8px` for compact blocks, `8px 13px` for cards and
+asides, `13px` for a dialog body. Panel and column widths are Fibonacci (144, 233, 377, 610, 987)
+or derived with `calc()`; a content-driven maximum (a tab title, a tooltip) may be any value; the
+ones that are neither yet are in the token audit. Heights come from three
 tokens: `--row` 21px (list rows, status bar, small buttons), `--control` 26px (buttons, fields,
 menu items), `--bar` 34px (the tab strip). Dialogs are 377, 610 or 987px wide and keep 21px from
 the window's edge.
@@ -538,8 +564,10 @@ Layout uses logical properties (`inset-inline`, `margin-inline-start`, `padding-
 right-to-left languages mirror for free.
 
 ### Named Rules
-**The Fibonacci Rule.** Padding, margin, gap, inset and border-radius values are Fibonacci pixels.
-A stray 4px or 12px fails `npm test`.
+**The Fibonacci Rule.** Padding, margin, gap, inset, offsets and border-radius values are Fibonacci
+pixels; a stray 4px or 12px there fails `npm test`. Widths, heights and line-heights are not
+tested: keep them on the scale or derived, or name the exception (pane sizers 6px, scrollbars
+10px, the title bar's 46px Windows buttons, `progress` 4px).
 
 **The Derived Value Rule.** A value worked out from others is written as `calc(…)` so it reads as
 derived: `calc(8px + 16px + 5px)` is a field's text start past its icon, and
@@ -563,7 +591,8 @@ Three tokens on `:root` in `ui/app.css`, from lowest to highest:
   and toasts.
 - **Dialog** (`--shadow-dialog`: `0 8px 28px rgba(0, 0, 0, 0.4)`): modal dialogs and the command
   palette.
-- **Scrim**: `rgba(5, 5, 6, 0.4)` (the ground) behind a dialog, `0.32` behind the palette.
+- **Scrim** (`--scrim`: `rgba(5, 5, 6, 0.4)`, the dark ground in both themes) behind a dialog;
+  `--scrim-soft` (`0.32`) behind the palette.
 
 ### Named Rules
 **The Float-Only Shadow Rule.** A surface casts a shadow only if it floats over the work and goes
@@ -582,7 +611,8 @@ card).
 ### Named Rules
 **The Nested Curve Rule.** A rounded thing inside another keeps the same curve: its radius is
 the outer one less the room between them, written as `calc()` (a menu item is
-`calc(var(--r-menu) - 3px)`, a segmented button `calc(var(--r-control) - 1px)`).
+`calc(var(--r-menu) - 3px)`, the kind glyph in the session editor `calc(var(--r-control) - 2px)`),
+and never below `--r-control`: a row inside an 8px-radius, 8px-padded panel keeps 3px.
 
 ## Components
 
@@ -645,7 +675,8 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
 - **Session rack:** 21px rows, folders with a rotating caret (0.12s) and a hairline guide under
   each level. Leaves indent past the caret so icons in one level line up. A session with an open
   tab gets a 7px green dot on its icon's corner, hollow once the connection is gone. Chosen rows
-  take the amber wash. A marked session's or folder's name is in its mark.
+  take the amber wash; the keyboard's row (`.current`) is `raised` with a 2px amber inset edge on
+  its leading side. A marked session's or folder's name is in its mark.
 - **Sidebar foot:** the status pill (an inset well, label size in `weak`, fading in over 0.16s
   when a message arrives) on a row of its own, then, at the trailing end of the foot's row,
   Settings, Lock (when a lock is set), Terminal Co-op (in a ring, or signed in with Pro or its
@@ -741,8 +772,9 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
   there is no room) and takes no pointer.
 - **Quota bar (`Quota.svelte`):** sync storage used, in the account menu and Settings › Account and sync. A
   3px track in `line` with 2px corners, filled in amber; the fill turns `warn` when nearly full
-  and `error` when full, and a label-size line under it says how much. Not a native `progress`:
-  the webview paints that flat grey whatever the accent.
+  and `error` when full, and a label-size line under it says how much. Not a native `progress`,
+  so its 3px track and 2px corners are the system's; a native `progress` (file transfers) takes
+  the accent through `accent-color` but keeps the engine's shape.
 - **Quality bar (`QualityBar.svelte`):** the RDP picture against speed, in the session editor and
   Settings. A native range with the step names under it, Quality at the start to Speed at the
   end, the picked name in amber at 600, and a `weak` line saying what it means. At most 420px
@@ -812,8 +844,8 @@ buttons, and never under reduced motion.
 ## Do's and Don'ts
 
 ### Do:
-- **Do** use only Fibonacci pixels for spacing and radii (1 2 3 5 8 13 21 34), with padding in
-  1 : φ pairs (`3px 8px`, `5px 8px`, `8px 13px`).
+- **Do** use only Fibonacci pixels for spacing and radii (1 2 3 5 8 13 21 34), with padding pairs
+  on the scale, horizontal at least vertical (`3px 8px`, `5px 8px`, `8px 13px`).
 - **Do** set every text size from the type tokens (`--t-s --t --t-l --t-xl --t-xxl`).
 - **Do** size things with `--row` (21px), `--control` (26px) and `--bar` (34px), and write any
   derived value as `calc(…)`.
@@ -828,8 +860,10 @@ buttons, and never under reduced motion.
   host key, Cancel on a delete or restore, Keep editing on discard), so Enter never does the
   irreversible thing; an ordinary yes (Close tab, which Reopen can undo) keeps the focus.
 - **Do** make tool buttons icon-only with a tooltip.
-- **Do** keep motion to state and continuity: 0.1–0.2s, arrivals on `--ease-out`, a new floating
-  layer through `float-in`, exits faster than entrances. When one view replaces another (the
+- **Do** keep motion to state and continuity: 0.1–0.2s for arrivals, exits and moves, arrivals on
+  `--ease-out`, a new floating layer through `float-in`, exits faster than entrances. The longer
+  ones are named: the Co-op ring's 0.3s line and seat glide and its 0.5s packets, the 2.6s fade of
+  a found setting, the start-screen logo's 0.2s `float-in`. When one view replaces another (the
   start screen giving way to the shell typed into it), the old one leaves first and the new one
   arrives after it. CSS motion stops under `prefers-reduced-motion` through `ui/app.css`; a
   Svelte transition must check it itself.
@@ -840,8 +874,9 @@ buttons, and never under reduced motion.
   `--mark`.
 
 ### Don't:
-- **Don't** use off-scale spacing (4px, 6px, 10px, 12px, 16px) or a raw `font-size` in px; the
-  scale test fails on them.
+- **Don't** use off-scale spacing (4px, 6px, 10px, 12px, 16px) in padding, margin, gap, inset,
+  offsets or radii, or a raw `font-size` in px; the scale test fails on those. Sizes (width,
+  height, line-height) aren't tested: keep them on the scale or name the exception.
 - **Don't** put a shadow on a resting panel, tab, row or button, or write a new shadow value for
   a floating layer: use `--shadow-float`, `--shadow-menu` or `--shadow-dialog`.
 - **Don't** use amber for headings, icons, illustration or large fills other than the primary
@@ -858,3 +893,50 @@ buttons, and never under reduced motion.
   no longer reads down.
 - **Don't** use the logo's amber `#FFC20E` or `--mark` outside the logo, or recolour, stretch,
   rotate or add effects to the logo.
+
+## Token audit (2026-11-08)
+
+Two reviews read this file against `ui/app.css`, every component's style block and
+`scale.test.ts`. What they found is either fixed or listed here, so the next change knows the
+state of the system rather than rediscovering it.
+
+**Fixed on 2026-11-08.** The light theme's `weak` (`#55555c`), `ok` (`#155c3d`), `error`
+(`#a4242d`) and `warn` (`#745000`) were darkened so each holds 4.5:1 on `hover` too (they held it
+on `panel` only); `--scrim` and `--scrim-soft` replaced two literal ground colours; `fade-in` runs
+on `--ease-out` everywhere; raw radii became `--r-control` / `--r-menu` (`kbd`, `.tag`, the
+scrollbar thumb, the terminal's thumb, Flow's spark, a tunnel's tag, the appearance preview);
+`input[type="color"]`, the title bar's mark and the guide's rings read `--control` / `--row`; the
+toasts sit `--bar` up; the tab menu's tint swatches are the 18px every swatch is; list rows under
+the pointer take `raised` everywhere (Credentials, Snippets); the hint's "Don't remind me again"
+is the one `button.link.quiet`; the rules above now say what the test enforces, what padding pairs
+are, where the nested curve stops, which motion runs longer, and name `--solid`, `--tint-lo`,
+`--tint-hi`, the Ember/`error` collision and the RDP bars.
+
+**Open, in the order worth doing.**
+1. Icon sizes have no token: 16 and 18px are written out in six `calc()` offsets (`App.svelte`,
+   `Palette.svelte`, `Sidebar.svelte`, `Settings.svelte`, `Guide.svelte`) and `Icon.svelte`'s
+   default is 18. `--icon: 18px; --icon-s: 14px` would make those offsets derived.
+2. `--gap` (5px) names the gap between panels and panes; the same 5px is written out as a literal
+   in about four gaps of five inside components. Either is fine; a sweep to the token would make
+   the panel gap changeable alone, which is the point of a token.
+3. Durations are literals (0.1, 0.12, 0.15, 0.16, 0.2, 0.3, 0.5, 2.6s; 80ms); `--quick: 0.1s`,
+   `--move: 0.16s`, `--glide: 0.2s` would collapse the four within 60ms of each other.
+4. Stepping something back is opacity at 0.3, 0.45, 0.5, 0.55, 0.6 and 0.85 (disabled, the
+   lifted tab, the away bar, a done key, the quality bar, the close glyph, the logo's hover); a
+   `--dim: 0.5` beside the 45% disabled would do for most.
+5. Widths off the scale: the file panel 340px, the Settings pages 183px, menus 190px, the tasks
+   menu 260px, the rename field 160px, tab titles 180px, the chord field 150px, the catalogue
+   220px, the account menu 280px, the tunnels status 320px, previews 144px; the collapsed rail is
+   38px written as a number (it is `calc(var(--control) + 2 * var(--gap) + 2px)`).
+6. The palette's keyboard row is `.item.on` (picked) where the rack and Settings use `.current`;
+   its recipe should follow theirs.
+7. A selected swatch is a `fg` border in `app.css` and a 2px `gold-soft` ring in
+   `Appearance.svelte`; the custom-colour swatch's gradient hard-codes the dark theme's kind hues.
+8. The colour input is `--control` × `--row` in `app.css` and 30px wide in a highlight rule.
+9. Two recipes for a hairline under the pointer (`color-mix(var(--fg) 25%, var(--line))` on fields,
+   `var(--weak)` on scheme cards); the file list's zebra stripe is a literal
+   `rgba(127, 127, 127, 0.06)`; `CoopRing` sets `line-height: 1.3` where dense text is 1.4; the
+   guide re-declares `h2`.
+10. `scale.test.ts` accepts any `var(--t…)` as a font size (`--titlebar` would pass), only matches
+    `font-size` at a line's start, and skips a whole declaration when `calc(` appears anywhere in
+    it; the select chevrons bake `weak`'s hex into their data URIs for each theme.

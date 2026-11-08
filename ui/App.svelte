@@ -2267,8 +2267,6 @@
     padding: 5px 8px;
   }
   .menu .tint .swatch {
-    width: 16px;
-    height: 16px;
     min-height: 0;
     padding: 0;
     border-radius: 50%;
@@ -2443,7 +2441,7 @@
   .toasts {
     position: fixed;
     inset-inline: 0;
-    bottom: 34px;
+    bottom: var(--bar);
     z-index: 60;
     display: flex;
     flex-direction: column;

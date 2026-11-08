@@ -174,8 +174,8 @@
     justify-content: center;
     align-items: flex-start;
     padding-top: 12vh;
-    background: rgba(5, 5, 6, 0.32);
-    animation: fade-in 0.16s ease-out;
+    background: var(--scrim-soft);
+    animation: fade-in 0.16s var(--ease-out);
   }
   .palette {
     width: min(610px, calc(100vw - 2 * 21px));

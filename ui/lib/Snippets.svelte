@@ -138,7 +138,7 @@
   }
   .item:hover,
   .item.first {
-    background: var(--hover);
+    background: var(--raised);
   }
   .what {
     flex: 1;

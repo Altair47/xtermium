@@ -180,7 +180,7 @@
     border-radius: var(--r-control);
   }
   .item:hover {
-    background: var(--hover);
+    background: var(--raised);
   }
   .what {
     flex: 1;

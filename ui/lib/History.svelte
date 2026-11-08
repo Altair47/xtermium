@@ -114,7 +114,7 @@
               {@attach (el) => (el as HTMLInputElement).select()}
             />
           {:else}
-            <button class="flat title" title={c.title || c.id} onclick={() => resume(c)}>{c.title || c.id}</button>
+            <button class="flat item title" title={c.title || c.id} onclick={() => resume(c)}>{c.title || c.id}</button>
           {/if}
           <span class="meta" title={_("Started {created}, last used {used}", { created: when(c.created), used: when(c.used) })}>
             {when(c.created)} · {ago(c.used)} · {human(c.bytes)}
@@ -173,10 +173,8 @@
   li:hover {
     background: var(--raised);
   }
-  /* read down like the session rack's rows: the system face (DESIGN.md, Type) */
   li .title {
     grid-area: title;
-    font-family: var(--ui);
     justify-self: start;
     max-width: 100%;
     overflow: hidden;

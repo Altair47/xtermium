@@ -116,7 +116,7 @@
      (a button keeps them on one line), so a narrow window never puts them under the keys */
   .step {
     display: grid;
-    grid-template-columns: 21px minmax(0, 1fr) auto;
+    grid-template-columns: var(--row) minmax(0, 1fr) auto;
     white-space: normal;
     align-items: center;
     gap: 8px 13px;
@@ -127,8 +127,8 @@
     color: var(--fg);
   }
   .mark {
-    width: 21px;
-    height: 21px;
+    width: var(--row);
+    height: var(--row);
     display: grid;
     place-items: center;
     border: 1px solid var(--line);
@@ -180,7 +180,7 @@
   .also {
     align-self: flex-start;
     margin-block: 0 3px;
-    margin-inline-start: calc(8px + 21px + 13px);
+    margin-inline-start: calc(8px + var(--row) + 13px);
     font-size: var(--t-s);
   }
   .sr {

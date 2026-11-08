@@ -13,7 +13,7 @@
   <span></span>
   <p class="weak hint">
     <Icon name="info-circle" size={14} />
-    <span>{@render children()} <button class="flat quiet" onclick={() => app.settings!.quiet_hints.push(id)}>{_("Don't remind me again")}</button></span>
+    <span>{@render children()} <button class="link quiet" onclick={() => app.settings!.quiet_hints.push(id)}>{_("Don't remind me again")}</button></span>
   </p>
 {/if}
 
@@ -22,13 +22,5 @@
     display: flex;
     gap: 5px;
     align-items: baseline;
-  }
-  .quiet {
-    display: inline;
-    min-height: 0;
-    padding: 0 5px;
-    font-size: inherit;
-    text-decoration: underline;
-    color: inherit;
   }
 </style>

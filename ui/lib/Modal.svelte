@@ -109,8 +109,8 @@
     z-index: 20;
     display: grid;
     place-items: center;
-    background: rgba(5, 5, 6, 0.4);
-    animation: fade-in 0.16s ease-out;
+    background: var(--scrim);
+    animation: fade-in 0.16s var(--ease-out);
   }
   .window {
     max-width: calc(100vw - 2 * 21px);
