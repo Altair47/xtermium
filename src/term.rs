@@ -516,7 +516,7 @@ fn target(k: &Kind) -> String {
         Kind::Winrm { host, port, .. } => format!("winrm {host}:{port}"),
         Kind::Vnc { host, port, .. } => format!("vnc {host}:{port}"),
         Kind::Kvm { host, port, .. } => format!("kvm {host}:{port}"),
-        Kind::Agent { tool, args, mode, effort, model, .. } => Kind::agent_command(tool, args, mode, effort, model),
+        Kind::Agent { tool, args, mode, effort, model, resume, .. } => Kind::agent_command(tool, args, mode, effort, model, resume),
     }
 }
 
@@ -842,8 +842,8 @@ impl Tab {
             Kind::Shell { program, dir } => {
                 std::thread::spawn(move || done(run_pty(&program, &dir, &style_term, rx, feed)));
             }
-            Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off } => {
-                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model), &mcp_off, &skills_off);
+            Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off, env, resume, prompt } => {
+                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model, &resume), &mcp_off, &skills_off, &dir, &env, &prompt);
                 std::thread::spawn(move || done(run_argv(argv, env, &dir, &style_term, rx, feed)));
             }
             Kind::Serial { port, baud } => {
@@ -2093,6 +2093,7 @@ fn run_argv(
     if !dir.is_empty() && !std::path::Path::new(dir).is_dir() {
         anyhow::bail!("the working folder {dir} doesn't exist");
     }
+    let argv = through_cmd(argv, &std::env::var("PATH").unwrap_or_default());
     let mut parts = argv.iter();
     let name = parts.next();
     let mut cmd = match name {
@@ -2100,6 +2101,11 @@ fn run_argv(
         None => portable_pty::CommandBuilder::new_default_prog(),
     };
     cmd.args(parts);
+    // The shell's environment first (the PATH the program is looked up on included), then the
+    // session's own, so it wins.
+    for (k, v) in crate::support::shell_env() {
+        cmd.env(k, v);
+    }
     for (k, v) in env {
         cmd.env(k, v);
     }
@@ -2118,6 +2124,27 @@ fn run_argv(
         Some(p) if missing(&e) => anyhow::anyhow!("{p} wasn't found: install it, or check that it's on your PATH"),
         _ => e,
     })
+}
+
+/// On Windows a program npm installs is a `.cmd` file (`claude.cmd`, `codex.cmd`), which only
+/// cmd.exe runs: Windows itself looks for an `.exe` of that name and finds none. A command whose
+/// program is such a file on `path`, and no `.exe` or `.com` earlier on it, goes through
+/// `cmd /c`. Anything else, and every other system, runs as it is.
+fn through_cmd(argv: Vec<String>, path: &str) -> Vec<String> {
+    if !cfg!(windows) {
+        return argv;
+    }
+    let Some(name) = argv.first().filter(|n| !n.contains(['\\', '/', '.'])) else { return argv };
+    for dir in path.split(';').filter(|d| !d.is_empty()) {
+        let found = |ext: &str| std::path::Path::new(dir).join(format!("{name}{ext}")).is_file();
+        if found(".exe") || found(".com") {
+            return argv;
+        }
+        if found(".cmd") || found(".bat") {
+            return ["cmd".to_string(), "/c".into()].into_iter().chain(argv).collect();
+        }
+    }
+    argv
 }
 
 /// Console programs started from the GUI must not flash a console window.
@@ -2342,6 +2369,31 @@ mod tests {
             assert!(start.elapsed().as_secs() < 8, "the program outlived its tab");
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
+    }
+
+    /// A program that is only a `.cmd` on the PATH goes through cmd on Windows; an `.exe`, a path,
+    /// or another system runs as given.
+    #[test]
+    fn npm_shims_go_through_cmd() {
+        let dir = crate::config::dir().join("shim-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("claude.cmd"), "@echo off
+").unwrap();
+        std::fs::write(dir.join("codex.cmd"), "@echo off
+").unwrap();
+        std::fs::write(dir.join("codex.exe"), "").unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let argv = |p: &str| vec![p.to_string(), "--model".into(), "x".into()];
+        let shim = through_cmd(argv("claude"), &path);
+        if cfg!(windows) {
+            assert_eq!(shim, ["cmd", "/c", "claude", "--model", "x"]);
+        } else {
+            assert_eq!(shim, argv("claude"));
+        }
+        assert_eq!(through_cmd(argv("codex"), &path), argv("codex"), "an exe of that name: Windows finds it itself");
+        assert_eq!(through_cmd(argv("aider"), &path), argv("aider"), "not there at all: left for the error message");
+        assert_eq!(through_cmd(argv("C:/tools/claude.cmd"), &path), argv("C:/tools/claude.cmd"), "a path is run as it is");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A program's error code reaches the caller: WinRM forgets a refused password by it.

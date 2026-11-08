@@ -1095,74 +1095,70 @@ pub static ENDPOINT: std::sync::Mutex<Option<(u16, String)>> = std::sync::Mutex:
 /// the servers and skills the session turned off (`off`, `skills_off`: `agent_mcp::turn_off`) and, while automation runs
 /// and unless it's among them, xtermium's MCP server, so the agent can drive xtermium whether or
 /// not it was set up with it.
-pub fn agent_launch(tool: &str, argv: Vec<String>, off: &[String], skills_off: &[String]) -> (Vec<String>, Vec<(String, String)>) {
+pub fn agent_launch(tool: &str, argv: Vec<String>, off: &[String], skills_off: &[String], dir: &str, env_text: &str, prompt: &str) -> (Vec<String>, Vec<(String, String)>) {
     let (mut argv, mut env) = if off.iter().any(|n| n == crate::agent_mcp::OWN) { (argv, vec![]) } else { with_own_server(tool, argv) };
-    crate::agent_mcp::turn_off(tool, off, skills_off, &mut argv, &mut env);
+    crate::agent_mcp::turn_off(tool, off, skills_off, dir, &mut argv, &mut env);
+    with_prompt(tool, prompt, &mut argv);
+    // The session's own variables come last, so they win over anything set above.
+    env.extend(crate::Kind::agent_env(env_text));
     (argv, env)
 }
 
+/// The workspace's system prompt (Settings › General), added to the tool's own prompt for this
+/// run, never in its place: Claude Code reads a file (`--append-system-prompt-file`), omp a file
+/// or text (`--append-system-prompt`), both from one written in the data folder; Codex takes
+/// `developer_instructions` as a per-run override, a TOML string on its command line. A custom
+/// command has no known way, so it gets nothing.
+/// ponytail: through an npm `.cmd` shim on Windows, cmd.exe re-reads Codex's quoted string; a
+/// prompt with quotes or newlines may then not survive. The file forms don't have that problem.
+fn with_prompt(tool: &str, prompt: &str, argv: &mut Vec<String>) {
+    let prompt = prompt.trim();
+    if prompt.is_empty() || argv.is_empty() {
+        return;
+    }
+    match tool {
+        "codex" => argv.splice(1..1, ["-c".to_string(), format!("developer_instructions={}", json!(prompt))]).for_each(drop),
+        "claude" | "omp" => {
+            static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if let Some(path) = crate::config::temp().map(|t| t.join(format!("prompt-{n}.md")))
+                && std::fs::write(&path, prompt).is_ok()
+            {
+                let option = if tool == "claude" { "--append-system-prompt-file" } else { "--append-system-prompt" };
+                argv.extend([option.into(), path.display().to_string()]);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// The command line and environment with xtermium's server added, while automation runs. The token
-/// goes in the environment only, never on the command line or on disk. Cursor's CLI takes servers
-/// only from its mcp.json files, so it gets none here.
+/// goes in the environment only, never on the command line or on disk. omp takes servers only from
+/// its own `mcp.json` files, so it gets none here (the wiki says how to add one by hand).
 fn with_own_server(tool: &str, mut argv: Vec<String>) -> (Vec<String>, Vec<(String, String)>) {
     let Some((port, token)) = ENDPOINT.lock().unwrap().clone() else { return (argv, vec![]) };
     let url = format!("http://127.0.0.1:{port}/mcp");
-    let mut env = vec![("XTERMIUM_TOKEN".to_string(), token)];
+    let env = vec![("XTERMIUM_TOKEN".to_string(), token)];
     match tool {
-        // Both read `${VAR}` in a configuration file.
-        "claude" | "copilot" => {
-            let mut server = json!({ "type": "http", "url": url, "headers": { "Authorization": "Bearer ${XTERMIUM_TOKEN}" } });
-            if tool == "copilot" {
-                server["tools"] = json!(["*"]);
-            }
+        // Claude reads `${VAR}` in a configuration file.
+        "claude" => {
+            let server = json!({ "type": "http", "url": url, "headers": { "Authorization": "Bearer ${XTERMIUM_TOKEN}" } });
             let config = json!({ "mcpServers": { "xtermium": server } });
             if let Some(path) = crate::config::temp().map(|t| t.join(format!("mcp-{port}.json")))
                 && std::fs::write(&path, config.to_string()).is_ok()
             {
-                let option = if tool == "claude" { "--mcp-config" } else { "--additional-mcp-config" };
-                let at = if tool == "claude" { "" } else { "@" };
-                argv.extend([option.into(), format!("{at}{}", path.display())]);
+                argv.extend(["--mcp-config".into(), path.display().to_string()]);
             }
         }
+        // Per-run overrides, which hold because the session runs without Codex's shared daemon
+        // (`Kind::agent_argv` adds --no-daemon): the person's other Codex sessions never see them.
         "codex" => {
             let server = ["-c".to_string(), format!("mcp_servers.xtermium.url={}", json!(url)), "-c".into(), r#"mcp_servers.xtermium.bearer_token_env_var="XTERMIUM_TOKEN""#.into()];
-            codex_daemon(&server, &env);
             argv.splice(1..1, server).for_each(drop);
         }
-        "opencode" => env.push((
-            "OPENCODE_CONFIG_CONTENT".into(),
-            json!({ "mcp": { "xtermium": { "type": "remote", "url": url, "headers": { "Authorization": "Bearer {env:XTERMIUM_TOKEN}" } } } }).to_string(),
-        )),
         _ => {}
     }
     (argv, env)
-}
-
-/// Codex sessions share one background server, its app-server daemon, which Codex starts by itself
-/// when it's missing. The first Codex session of a run starts it from here instead, with xtermium's
-/// server in its configuration and the token in its environment, so every thread on it, from any
-/// terminal, has xtermium's tools; `codex app-server daemon start` does nothing when it's already up.
-/// ponytail: a daemon started before a new token keeps the old one; `codex app-server daemon restart` takes the new.
-fn codex_daemon(server: &[String], env: &[(String, String)]) {
-    static STARTED: std::sync::Once = std::sync::Once::new();
-    if cfg!(test) {
-        return; // tests build command lines; they don't start anyone's daemon
-    }
-    STARTED.call_once(|| {
-        // Through cmd on Windows: an npm-installed codex is a .cmd shim, which only cmd resolves.
-        let mut cmd = if cfg!(windows) { std::process::Command::new("cmd") } else { std::process::Command::new("codex") };
-        if cfg!(windows) {
-            cmd.args(["/c", "codex"]);
-        }
-        cmd.args(["app-server", "daemon", "start"]).args(server).envs(env.iter().cloned());
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-        #[cfg(windows)]
-        crate::term::no_window(&mut cmd);
-        // The command returns once the daemon is up; waiting for it off this thread keeps the tab's start quick.
-        std::thread::spawn(move || {
-            let _ = cmd.spawn().and_then(|mut c| c.wait());
-        });
-    });
 }
 
 /// Where a tool's result carries a PNG (base64) for the MCP answer's image content.
@@ -1512,30 +1508,46 @@ mod tests {
         assert_eq!(icon_shown("server"), "server");
     }
 
-    /// Agents get xtermium's server their own way; the token stays in the environment.
+    /// Agents get xtermium's server their own way; the token stays in the environment, and the
+    /// session's own variables come after it.
     #[test]
     fn agents_get_the_server() {
         *ENDPOINT.lock().unwrap() = Some((7071, "tok".into()));
-        let (argv, env) = agent_launch("claude", crate::Kind::agent_argv("claude", "--model x", "", "", ""), &[], &[]);
+        let (argv, env) = agent_launch("claude", crate::Kind::agent_argv("claude", "--model x", "", "", "", ""), &[], &[], "", "ANTHROPIC_BASE_URL=http://127.0.0.1:4000\n# a note\nbad name=1\n", "");
         assert_eq!(argv[..4], ["claude", "--model", "x", "--mcp-config"]);
         assert!(std::path::Path::new(&argv[4]).starts_with(crate::config::dir()), "in the data folder: {}", argv[4]);
         let config = std::fs::read_to_string(&argv[4]).unwrap();
         assert!(config.contains("127.0.0.1:7071/mcp") && config.contains("${XTERMIUM_TOKEN}") && !config.contains("tok\""), "{config}");
         let _ = std::fs::remove_file(&argv[4]);
-        assert_eq!(env, [("XTERMIUM_TOKEN".to_string(), "tok".to_string())]);
-        let (argv, _) = agent_launch("codex", vec!["codex".into()], &[], &[]);
+        assert_eq!(env, [("XTERMIUM_TOKEN".to_string(), "tok".to_string()), ("ANTHROPIC_BASE_URL".to_string(), "http://127.0.0.1:4000".to_string())]);
+        let (argv, _) = agent_launch("codex", vec!["codex".into()], &[], &[], "", "", "");
         assert_eq!(argv.first().map(String::as_str), Some("codex"));
         assert!(argv.contains(&r#"mcp_servers.xtermium.url="http://127.0.0.1:7071/mcp""#.to_string()));
-        let (argv, env) = agent_launch("opencode", vec!["opencode".into()], &[], &[]);
-        assert_eq!(argv, ["opencode"]);
-        assert!(env[1].1.contains("{env:XTERMIUM_TOKEN}"));
+        let (argv, env) = agent_launch("omp", vec!["omp".into()], &[], &[], "", "", "");
+        assert_eq!((argv, env.len()), (vec!["omp".to_string()], 1), "omp: no way in without editing its files; the token is there for a server added by hand");
         // xtermium's server turned off for the session: not added, and off in case the tool has its own.
-        let (argv, env) = agent_launch("codex", vec!["codex".into()], &["xtermium".into()], &[]);
+        let (argv, env) = agent_launch("codex", vec!["codex".into()], &["xtermium".into()], &[], "", "", "");
         assert_eq!(argv, ["codex", "-c", "mcp_servers.xtermium.enabled=false"]);
         assert!(env.is_empty(), "no token for a session without xtermium's server");
         *ENDPOINT.lock().unwrap() = None;
         // Automation off: the agent's own command line, nothing added.
-        assert_eq!(agent_launch("claude", vec!["claude".into()], &[], &[]).0, ["claude"]);
+        assert_eq!(agent_launch("claude", vec!["claude".into()], &[], &[], "", "", "").0, ["claude"]);
+    }
+
+    /// The workspace's prompt is added to the tool's own, each tool its way; a blank one adds nothing.
+    #[test]
+    fn workspace_prompt_is_added() {
+        let (argv, _) = agent_launch("codex", vec!["codex".into(), "--no-daemon".into()], &["xtermium".into()], &[], "", "", "Answer in Greek.\nBe \"brief\".");
+        assert_eq!(argv[..3], ["codex", "-c", r#"developer_instructions="Answer in Greek.\nBe \"brief\".""#]);
+        let (argv, _) = agent_launch("claude", vec!["claude".into()], &["xtermium".into()], &[], "", "", "Answer in Greek.");
+        assert_eq!(argv[1], "--append-system-prompt-file");
+        assert_eq!(std::fs::read_to_string(&argv[2]).unwrap(), "Answer in Greek.");
+        let _ = std::fs::remove_file(&argv[2]);
+        let (argv, _) = agent_launch("omp", vec!["omp".into()], &["xtermium".into()], &[], "", "", "x");
+        assert_eq!(argv[1], "--append-system-prompt");
+        let _ = std::fs::remove_file(&argv[2]);
+        assert_eq!(agent_launch("claude", vec!["claude".into()], &["xtermium".into()], &[], "", "", "  \n").0, ["claude"]);
+        assert_eq!(agent_launch("custom", vec!["aider".into()], &[], &[], "", "", "x").0, ["aider"], "no known way for a custom command");
     }
 
     /// Each tool spells its mode, effort and model its own way; the user's arguments come last.
@@ -1543,13 +1555,19 @@ mod tests {
     fn agent_flags_follow_the_tool() {
         use crate::Kind;
         assert_eq!(
-            Kind::agent_argv("claude", "--continue", "edit", "high", "opus"),
+            Kind::agent_argv("claude", "--continue", "edit", "high", "opus", ""),
             ["claude", "--permission-mode", "acceptEdits", "--effort", "high", "--model", "opus", "--continue"]
         );
-        assert_eq!(Kind::agent_argv("codex", "", "auto", "low", ""), ["codex", "--ask-for-approval", "never", "--sandbox", "workspace-write", "-c", "model_reasoning_effort=\"low\""]);
-        assert_eq!(Kind::agent_argv("cursor", "", "auto", "max", "x"), ["agent", "--force", "--model", "x"], "no effort flag for a tool without one");
-        assert_eq!(Kind::agent_argv("copilot", "", "", "", ""), ["copilot"], "defaults add nothing");
-        assert_eq!(Kind::agent_argv("custom", "aider --model sonnet", "auto", "", ""), ["aider", "--model", "sonnet"]);
+        assert_eq!(Kind::agent_argv("claude", "", "ask", "", "", "")[..], ["claude", "--permission-mode", "manual"], "Claude Code 2.1 calls asking before everything manual");
+        assert_eq!(Kind::agent_argv("codex", "", "auto", "low", "", ""), ["codex", "--no-daemon", "--ask-for-approval", "never", "--sandbox", "workspace-write", "-c", "model_reasoning_effort=\"low\""]);
+        assert_eq!(Kind::agent_argv("omp", "-c", "edit", "max", "opus", ""), ["omp", "--approval-mode", "write", "--thinking", "max", "--model", "opus", "-c"]);
+        assert_eq!(Kind::agent_argv("omp", "", "", "", "", ""), ["omp"], "defaults add nothing");
+        assert_eq!(Kind::agent_argv("custom", "aider --model sonnet", "auto", "", "", ""), ["aider", "--model", "sonnet"]);
+        // Going on with a past conversation: Claude and omp by a flag, Codex by its subcommand first.
+        assert_eq!(Kind::agent_argv("claude", "", "", "", "", "abc")[..], ["claude", "--resume", "abc"]);
+        assert_eq!(Kind::agent_argv("codex", "", "", "", "", "abc")[..], ["codex", "resume", "abc", "--no-daemon"]);
+        assert_eq!(Kind::agent_argv("omp", "", "", "", "", "abc")[..], ["omp", "--resume", "abc"]);
+        assert_eq!(Kind::agent_env(" A=1 \n\n#B=2\nC = x=y \nD\n1E=2"), [("A".to_string(), "1".to_string()), ("C".to_string(), "x=y".to_string()), ("1E".to_string(), "2".to_string())]);
     }
 
     /// While xtermium is locked every tool call is refused, saying why, and an unlock lets them

@@ -86,9 +86,10 @@ pub fn priority() -> Res<()> {
     }
 }
 
-/// At start: start-at-login as set, and a quiet look for a newer release (not in local builds),
-/// told to the UI as an `update` event.
+/// At start: the shell's environment (below), start-at-login as set, and a quiet look for a newer
+/// release (not in local builds), told to the UI as an `update` event.
 pub fn setup(handle: &AppHandle) {
+    std::thread::spawn(shell_env);
     let s = handle.state::<App>().settings.lock().unwrap().clone();
     if s.start_at_login {
         let _ = autostart(handle, true);
@@ -105,6 +106,72 @@ pub fn setup(handle: &AppHandle) {
             }
         });
     }
+}
+
+/// The environment the person's shell sets up, for programs xtermium starts (agent tools, `code`,
+/// Codex's listing). On macOS and Linux an app started from the desktop has the system's PATH,
+/// not the one .zshrc or .bashrc builds (Homebrew, nvm, ~/.local/bin, where those tools live),
+/// nor the keys exported there; a terminal has both. So the login shell is asked once, with `-i`
+/// as well as `-l` because nvm and friends live in the interactive files, and its PATH and the
+/// variables the app lacks are handed to every program started from here (`with_shell_env`).
+/// Empty on Windows (GUI programs get the user's environment there), when the shell says nothing,
+/// or when it takes longer than a few seconds: a hanging rc file mustn't hold the app.
+pub fn shell_env() -> &'static [(String, String)] {
+    static ENV: std::sync::LazyLock<Vec<(String, String)>> = std::sync::LazyLock::new(read_shell_env);
+    &ENV
+}
+
+fn read_shell_env() -> Vec<(String, String)> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    if cfg!(windows) {
+        return vec![];
+    }
+    let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/sh".into());
+    let Ok(mut child) = Command::new(&shell).args(["-ilc", "command env"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else { return vec![] };
+    // Read on a thread of its own: a shell printing more than the pipe holds would wait for us.
+    let Some(mut stdout) = child.stdout.take() else { return vec![] };
+    let reader = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = stdout.read_to_string(&mut s);
+        s
+    });
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if started.elapsed() < std::time::Duration::from_secs(8) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return vec![];
+            }
+        }
+    }
+    let out = reader.join().unwrap_or_default();
+    shell_env_lines(&out)
+}
+
+/// `env`'s lines as variables worth passing on: PATH always, the rest only when the app doesn't
+/// have them; a shell's own bookkeeping (PWD, SHLVL, `_`) and lines that aren't `NAME=value` are
+/// left out. Public for the test; the real work is `read_shell_env`.
+pub fn shell_env_lines(out: &str) -> Vec<(String, String)> {
+    out.lines()
+        .filter_map(|l| l.split_once('='))
+        .filter(|(k, _)| !k.is_empty() && !k.starts_with(|c: char| c.is_ascii_digit()) && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|(k, _)| !matches!(*k, "PWD" | "OLDPWD" | "SHLVL" | "_" | "TERM" | "COLUMNS" | "LINES"))
+        .filter(|(k, _)| *k == "PATH" || std::env::var_os(k).is_none())
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+/// `cmd` with the shell's environment (`shell_env`) on top of the app's: a program the shell finds,
+/// this command finds too, since Rust looks the program up on the PATH the command carries.
+pub fn with_shell_env(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    for (k, v) in shell_env() {
+        cmd.env(k, v);
+    }
+    cmd
 }
 
 /// The latest release on GitHub (for a nightly build, the latest nightly), with the download for
@@ -443,7 +510,24 @@ pub async fn pick_background(window: tauri::Window) -> Res<Option<(String, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{Personal, latest, semver, zip};
+    use super::{Personal, latest, semver, shell_env_lines, zip};
+
+    /// PATH comes over as it is, new variables come along, the shell's bookkeeping and what the
+    /// app already has stay out.
+    #[test]
+    fn shell_lines_become_variables() {
+        let got = shell_env_lines("PATH=/opt/homebrew/bin:/usr/bin
+PWD=/home/me
+SHLVL=2
+XT_TEST_UNSET_VAR=yes
+not a line
+1BAD=x
+A B=c
+");
+        assert_eq!(got, [("PATH".to_string(), "/opt/homebrew/bin:/usr/bin".to_string()), ("XT_TEST_UNSET_VAR".to_string(), "yes".to_string())]);
+        let key = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+        assert!(shell_env_lines(&format!("{key}=/elsewhere")).is_empty(), "a variable the app has keeps the app's value");
+    }
 
     /// Versions compare as semver orders them, numbers as numbers.
     #[test]

@@ -123,14 +123,17 @@ $ xtermium close 2
 
 ## Agents in xtermium tabs
 
-- An AI agent session runs an agent's command-line tool in a local terminal tab: Ctrl+Shift+N › AI agent. Tools: Claude Code, Codex, OpenCode, GitHub Copilot, Cursor CLI (command `agent`), or a custom command. Its command must be on the PATH.
-- Fields: Mode (Ask before edits and commands · Edit freely, ask before commands · Run everything without asking · The tool's default), Effort (Claude Code and Codex: low, medium, high, xhigh or max), Model, Arguments (they come last, so they win), Working folder.
-- While Settings › MCP is on, an agent started from an AI agent session gets xtermium's MCP server without setup, with the token in its environment rather than on its command line.
+- An AI agent session runs an agent's command-line tool in a local terminal tab: Ctrl+Shift+N › AI agent. Tools: Claude Code, Codex, omp (Oh My Pi), or a custom command for any other agent. Its command must be on the PATH (on macOS and Linux the login shell's PATH and exports are read once at start, `support::shell_env`; on Windows npm's `.cmd` shims run through `cmd`, `term::through_cmd`).
+- Fields: Mode (Ask before edits and commands · Edit freely, ask before commands · Run everything without asking · The tool's default), Effort (low, medium, high, xhigh or max; omp's thinking level), Model, Arguments (they come last, so they win), Working folder, Environment (`NAME=value` lines, over xtermium's own), MCP servers (Claude Code, Codex: untick to leave off) and Skills (Claude Code, Codex, omp). Nothing changes the tool's own configuration: flags, a one-run settings file in the data folder, or environment variables only (`src/agent_mcp.rs`, `config::Kind::agent_argv`).
+- While Settings › MCP is on, Claude Code and Codex started from an AI agent session get xtermium's MCP server without setup, with the token in their environment rather than on their command line; Codex runs with `--no-daemon` so the per-run overrides hold. omp takes servers only from its own mcp.json: it gets none by itself.
+- Sessions saved with OpenCode, Copilot or Cursor's CLI (built in before 2026-11-08) become custom commands with the same flags (`clean.rs` `gone_command`).
+- Settings › General › AI agents in this workspace: a per-workspace system prompt (`Store::agent_prompt`), filled into the tab's session by `Store::resolve` and added to the tool's own prompt by `automation::with_prompt` (Claude `--append-system-prompt-file`, omp `--append-system-prompt`, Codex `-c developer_instructions=`).
+- Session history: with an agent tab focused, the panel button or Ctrl+Shift+E opens the tool's past conversations in that folder (`src/agent_history.rs`, `ui/lib/History.svelte`): title, started, last used, size; a click resumes in a new tab (`Kind::Agent.resume`), rename is kept by xtermium (`agent-titles`), delete removes the tool's transcript.
 - Right-click an agent tab › Open the folder in VS Code opens its working folder.
 
-## Known bug: `run --until` and `--wait`
+## `run --until` and `--wait`
 
-`xtermium run <tab> <cmd> --until <regex>` and `--wait <ms>` (the `run` tool's `until` / `wait_ms`) return `"output": ""` (and `"settled": false` after 30 s) although the command ran. Until it is fixed: `run` without them, then `wait <tab> <regex>` (`wait_for`) or `read` to get the text. Never show `--until` or `--wait` in docs or screenshots (`xtermium-designing`, "Show what is there").
+`xtermium run <tab> <cmd> --until <regex>` and `--wait <ms>` (the `run` tool's `until` / `wait_ms`) returned `"output": ""` until 2026-11-07 (fixed in pull request #65, in the nightly and v0.9.0). What is still unchecked is listed in `docs/QA.md`; when in doubt, `run` without them, then `wait <tab> <regex>` (`wait_for`) or `read`.
 
 ## Common mistakes
 

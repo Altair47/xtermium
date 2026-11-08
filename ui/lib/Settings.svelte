@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { app } from "./state.svelte";
+  import { app, saveStore } from "./state.svelte";
   // The page you were on, kept while the app runs.
   let last = "general";
   /** Turns the open Settings window to a page. */
@@ -314,7 +314,24 @@
       ],
       // cmd and PowerShell 7 take \" inside double quotes; other shells take single quotes.
       ["VS Code", windows ? `code --add-mcp "${vscode.replaceAll('"', '\\"')}"` : `code --add-mcp '${vscode}'`],
+      // omp has no command that adds a server: its mcp.json is written when it's missing, else the
+      // entry is printed to merge into it by hand.
+      ["omp", ompCommand(token)],
     ];
+  };
+  /**
+   * omp (omp.sh) reads `~/.omp/agent/mcp.json`: written with xtermium's entry when there's none,
+   * else left alone (Out-File -NoClobber, `[ -s ]`) and the entry is added by hand. The Windows
+   * form is PowerShell with no `$` or double quote inside, so it reads the same from cmd and pwsh.
+   */
+  const ompCommand = (token: string) => {
+    const entry = mcpConfig(token).replaceAll("\n", " ").replaceAll(/\s+/g, " ");
+    if (app.os === "windows" && !s.automation_network) {
+      const home = "[Environment]::GetFolderPath('UserProfile')";
+      const json = `@{mcpServers=@{xtermium=@{type='http';url='${mcpUrl}';headers=@{Authorization='Bearer ${token}'}}}} | ConvertTo-Json -Depth 5`;
+      return `powershell -NoProfile -Command "New-Item -ItemType Directory -Force (${home} + '\.omp\agent') | Out-Null; ${json} | Out-File -NoClobber -Encoding ascii (${home} + '\.omp\agent\mcp.json')"`;
+    }
+    return `f=~/.omp/agent/mcp.json; if [ -s "$f" ]; then echo "Add to $f: ${entry.replaceAll('"', '\\"')}"; else mkdir -p ~/.omp/agent && printf '%s\n' '${entry}' > "$f" && echo "Written $f"; fi`;
   };
   /** The Codex (or, on the network, VS Code) command was copied: say what else to know. */
   let codexHint = $state("");
@@ -823,6 +840,17 @@
       <label class="check"><input type="checkbox" bind:checked={s.restore_tabs} />{_("Reopen the tabs that were open when xtermium closed")}</label>
     </div>
     <p class="weak">{_("Reopened tabs start new connections; what ran in them before is gone.")}</p>
+    <h3>{_("AI agents in this workspace")}</h3>
+    <textarea
+      bind:value={app.store.agent_prompt}
+      rows="4"
+      spellcheck="false"
+      placeholder={_("A system prompt for every AI agent session of this workspace, such as the team's rules or the servers' names")}
+      onchange={() => saveStore()}
+    ></textarea>
+    <p class="weak">
+      {_("Added to the tool's own prompt when a session of this workspace opens (Claude Code and omp as an appended system prompt, Codex as developer instructions); a custom command doesn't get it. Each workspace has its own; the tools' settings don't change.")}
+    </p>
     <h3>{_("This computer")}</h3>
     <div class="col">
       <label class="check"><input type="checkbox" bind:checked={s.start_at_login} />{_("Start xtermium when you sign in")}</label>
@@ -970,6 +998,12 @@
           <span>
             {_("{who} checks certificates and can't be told to skip it, so it may refuse xtermium's self-signed one. If it does, forward the port over SSH from that machine (ssh -L {port}:127.0.0.1:{port} this computer) and use http://127.0.0.1:{port}/mcp there.", { who: codexHint, port: s.automation_port })}
           </span>
+        </p>
+      {/if}
+      {#if codexHint === "omp"}
+        <p class="row warn">
+          <Icon name="info-circle" />
+          <span>{_("omp has no command that adds a server, so this writes ~/.omp/agent/mcp.json when there's none yet; when there is, it stops and the entry is added by hand (Copy gives it). omp also picks up the servers Claude Code and Codex have.")}</span>
         </p>
       {/if}
       {#if codexHint === "Codex"}

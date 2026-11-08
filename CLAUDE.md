@@ -59,7 +59,9 @@ wiki, https://github.com/xtermium/xtermium/wiki. This file is how it's built and
   importers (`src/formats/`), **AI agent sessions' MCP servers and skills** (`src/agent_mcp.rs`:
   read from each tool's own config, turned off per session), **Settings › SSH keys**
   (`src/sshkeys.rs`: the key pairs in `~/.ssh`), path-field suggestions (`src/paths.rs`), and **around the app itself** (`src/support.rs`): desktop
-  notifications and start-at-login (Tauri plugins), the process priority, the build number
+  notifications and start-at-login (Tauri plugins), the process priority, the login shell's
+  environment for programs the app starts on macOS and Linux (`shell_env`: PATH and exports an
+  app started from the desktop lacks; Windows npm `.cmd` shims go through cmd, `term::through_cmd`), the build number
   (`XTERMIUM_BUILD`, stamped by release.yml) with the GitHub release check, the troubleshooting
   bundle, `custom.css` in the data folder (the UI applies it; a changed one is kept only on a yes
   within 30 s), and the native picker for background files.

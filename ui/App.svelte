@@ -24,6 +24,7 @@
   import Settings, { openSettings } from "./lib/Settings.svelte";
   import LockScreen from "./lib/LockScreen.svelte";
   import Files from "./lib/Files.svelte";
+  import History from "./lib/History.svelte";
   import Sidebar from "./lib/Sidebar.svelte";
   import SignIn from "./lib/SignIn.svelte";
   import Snippets from "./lib/Snippets.svelte";
@@ -970,7 +971,9 @@
     const keep = first.concat(withFiles.filter((t) => !first.includes(t))).slice(0, MAX_FILES);
     return withFiles.filter((t) => keep.includes(t));
   });
-  const canFiles = $derived(fileTabs.length > 0);
+  /** The focused tab when it's an AI agent's: the panel shows its tool's past conversations instead of files. */
+  const historyTab = $derived(activeTab?.session.kind.type === "agent" && activeTab.id && activeTab.alive ? activeTab : null);
+  const canFiles = $derived(fileTabs.length > 0 || !!historyTab);
   /** A text tab is open (a terminal, not a desktop or a page): the file panel and snippets are for those. */
   const hasText = $derived(strip.some((t) => broadcasts(t.session.kind)));
 
@@ -1428,8 +1431,15 @@
               class="flat icon-only"
               class:on={showFiles && canFiles}
               disabled={!canFiles}
-              title={tip(canFiles ? _("File Browser: files of the SSH and VNC (SFTP) and RDP (shared folders) sessions on screen") : _("File Browser: show a connected SSH, RDP or VNC tab to browse its files"), "toggle-files")}
-              aria-label={_("File Browser")}
+              title={tip(
+                historyTab
+                  ? _("Session history: the past conversations of this agent in its folder, to go on with, rename or delete")
+                  : canFiles
+                    ? _("File Browser: files of the SSH and VNC (SFTP) and RDP (shared folders) sessions on screen")
+                    : _("File Browser: show a connected SSH, RDP or VNC tab to browse its files, or an AI agent tab for its session history"),
+                "toggle-files",
+              )}
+              aria-label={historyTab ? _("Session history") : _("File Browser")}
               onclick={() => (showFiles = !showFiles)}><Icon name="folder-open" /></button
             >
             <button class="flat icon-only" class:on={showSnippets} title={tip(_("Snippets: saved commands to type into the terminal"), "snippets")} aria-label={_("Snippets")} onclick={() => (showSnippets = !showSnippets)}>
@@ -1658,8 +1668,11 @@
       </div>
     </main>
 
-    {#if showFiles && fileTabs.length}
+    {#if showFiles && (fileTabs.length || historyTab)}
       <aside class="files">
+        {#if historyTab}
+          <History session={historyTab.session} title={titleOf(historyTab)} onresume={(s) => open(s)} />
+        {/if}
         {#each fileTabs as t (t.key)}
           {@const k = t.session.kind}
           <!-- Named and coloured as its tab is (renamed, recoloured), following the shell's folder. -->

@@ -15,6 +15,26 @@ fn lines(s: &str) -> String {
     s.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')).collect::<String>().trim().to_string()
 }
 
+/// The command line a session of a tool that's no longer built in (`AGENTS_GONE`) used to run: the
+/// program, the flags its mode and model became, then its arguments, so it opens as before as a
+/// custom command.
+fn gone_command(tool: &str, args: &str, mode: &str, model: &str) -> String {
+    let mut v: Vec<&str> = vec![if tool == "cursor" { "agent" } else { tool }];
+    match (tool, mode) {
+        ("copilot", "edit") => v.extend(["--allow-tool", "write"]),
+        ("copilot", "auto") => v.push("--allow-all-tools"),
+        ("cursor", "ask") => v.extend(["--mode", "ask"]),
+        ("cursor", "auto") => v.push("--force"),
+        ("opencode", "auto") => v.push("--auto"),
+        _ => {}
+    }
+    if !model.is_empty() {
+        v.extend(["--model", model]);
+    }
+    v.push(args);
+    v.join(" ").trim().to_string()
+}
+
 /// A host name or address: no spaces anywhere.
 fn host(s: &str) -> String {
     s.chars().filter(|c| !c.is_control() && !c.is_whitespace()).collect()
@@ -75,6 +95,7 @@ fn ciphers(list: &mut Vec<String>) {
 
 impl Store {
     pub fn sanitize(&mut self) {
+        self.agent_prompt = lines(&self.agent_prompt).chars().take(32_768).collect();
         for s in &mut self.sessions {
             s.folder = folder(&s.folder);
             s.notes = lines(&s.notes);
@@ -132,9 +153,17 @@ impl Store {
                     }
                     h.clone()
                 }
-                Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off } => {
+                Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off, env, resume, .. } => {
+                    resume.clear(); // a saved session always starts a new conversation
+                    if crate::config::AGENTS_GONE.contains(&tool.as_str()) {
+                        *args = gone_command(tool, args, mode, model);
+                        *tool = "custom".into();
+                    }
                     if !crate::config::AGENTS.contains(&tool.as_str()) {
                         *tool = "custom".into();
+                        mode.clear();
+                        effort.clear();
+                        model.clear();
                     }
                     if !crate::config::AGENT_MODES.contains(&mode.as_str()) {
                         mode.clear();
@@ -143,6 +172,7 @@ impl Store {
                         effort.clear();
                     }
                     (*args, *dir, *model) = (text(args), text(dir), text(model));
+                    *env = lines(env).chars().take(4096).collect();
                     for off in [mcp_off, skills_off] {
                         let mut seen = std::collections::HashSet::new();
                         *off = off.iter().map(|n| text(n).chars().take(128).collect::<String>()).filter(|n| !n.is_empty() && seen.insert(n.clone())).take(100).collect();
