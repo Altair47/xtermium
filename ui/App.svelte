@@ -2011,7 +2011,7 @@
     background: rgba(var(--panel-rgb), var(--chrome-alpha));
   }
   .status {
-    gap: 5px;
+    gap: var(--gap);
     margin: 0 5px 5px;
     padding: 2px;
     padding-inline-start: 8px;
@@ -2020,7 +2020,7 @@
     font-size: var(--t-s);
     color: var(--weak);
     /* a message arriving at the foot of the sidebar: noticed, without a jolt */
-    animation: fade-in 0.16s var(--ease-out);
+    animation: fade-in var(--move) var(--ease-out);
   }
   .status :is(span, .link) {
     display: block;
@@ -2047,7 +2047,7 @@
   }
   /* the collapsed sidebar: its foot in a column */
   .rail {
-    width: 38px;
+    width: calc(var(--control) + 2 * var(--gap) + 2px);
     align-items: center;
     gap: 2px;
     padding: 5px 0 8px;
@@ -2206,7 +2206,7 @@
     font-weight: 500;
   }
   .tab.visible::before {
-    opacity: 0.5;
+    opacity: var(--dim);
   }
   .tab.active::before {
     opacity: 1;
@@ -2239,7 +2239,7 @@
     border-radius: 50%;
   }
   .tab.lifted {
-    opacity: 0.5;
+    opacity: var(--dim);
   }
   /* where a dragged tab would go: a bar at this tab's start (or the last one's end) */
   .tab.before::after,
@@ -2263,7 +2263,7 @@
     margin: 0 2px;
   }
   .menu .tint {
-    gap: 5px;
+    gap: var(--gap);
     padding: 5px 8px;
   }
   .menu .tint .swatch {
@@ -2275,7 +2275,7 @@
   .tab .close {
     min-height: var(--row);
     padding: 2px;
-    opacity: 0.6;
+    opacity: var(--dim);
   }
   .tab .close:hover {
     opacity: 1;
@@ -2323,7 +2323,7 @@
     border-radius: var(--r-control);
     outline: 2px solid var(--gold);
     transition-property: left, top, width, height;
-    transition-duration: 0.2s;
+    transition-duration: var(--glide);
     transition-timing-function: var(--ease-out);
   }
   .split .ring {
@@ -2416,7 +2416,7 @@
     border-radius: var(--r-control);
     background: rgba(var(--bg-rgb), 0.55);
     color: var(--weak);
-    transition: background 0.1s, border-color 0.1s;
+    transition: background var(--quick), border-color var(--quick);
   }
   .drop span {
     pointer-events: none;
@@ -2446,7 +2446,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
+    gap: var(--gap);
     pointer-events: none;
   }
   .toast {
@@ -2455,7 +2455,7 @@
     border-radius: var(--r-menu);
     background: rgba(var(--panel-rgb), var(--float-alpha));
     box-shadow: var(--shadow-menu);
-    animation: float-in 0.16s var(--ease-out);
+    animation: float-in var(--move) var(--ease-out);
   }
   /* one with a button (Undo) takes the pointer */
   .toast:has(button) {
@@ -2528,7 +2528,7 @@
   .logo {
     width: min(377px, 100%);
     margin-block-end: 8px;
-    animation: float-in 0.2s var(--ease-out) both;
+    animation: float-in var(--glide) var(--ease-out) both;
   }
   /* with a link under it (Settings › Appearance) the logo is a button, looking the same */
   button.logo {
@@ -2555,13 +2555,13 @@
   }
   .view.arrive {
     opacity: 1;
-    animation: fade-in 0.2s var(--ease-out);
+    animation: fade-in var(--glide) var(--ease-out);
   }
   /* the ways to start, side by side */
   .starts {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: var(--gap);
   }
   .starts button {
     gap: 8px;
@@ -2570,7 +2570,7 @@
     border-radius: var(--r-menu);
   }
   .tools .tasks {
-    gap: 5px;
+    gap: var(--gap);
     padding: 2px 5px;
     font-variant-numeric: tabular-nums;
   }
@@ -2608,7 +2608,7 @@
   .side {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
     padding: 8px 13px;
     border: 1px solid var(--line);
     border-radius: var(--r-menu);

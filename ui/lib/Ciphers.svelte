@@ -29,6 +29,6 @@
   .ciphers {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
   }
 </style>

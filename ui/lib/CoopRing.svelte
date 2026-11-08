@@ -183,7 +183,7 @@
     background: rgba(var(--panel-rgb), 1);
     /* the third person glides over to the left end when the second leaves, and a new one comes up in its own place */
     transition: left 0.3s var(--ease-out);
-    animation: seat-in 0.2s var(--ease-out) backwards;
+    animation: seat-in var(--glide) var(--ease-out) backwards;
   }
   @keyframes seat-in {
     from {
@@ -192,7 +192,7 @@
     }
   }
   .seat > :global(*) {
-    transition: opacity 0.2s var(--ease-out);
+    transition: opacity var(--glide) var(--ease-out);
   }
   /* someone let in whose app isn't connected now */
   .seat.off > :global(*) {
@@ -215,7 +215,7 @@
     top: var(--edge);
     max-width: calc(50% - 3px);
     line-height: 1.3;
-    animation: fade-in 0.2s var(--ease-out) backwards;
+    animation: fade-in var(--glide) var(--ease-out) backwards;
   }
   .who.above {
     top: auto;

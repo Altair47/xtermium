@@ -110,7 +110,7 @@
     display: grid;
     place-items: center;
     background: var(--scrim);
-    animation: fade-in 0.16s var(--ease-out);
+    animation: fade-in var(--move) var(--ease-out);
   }
   .window {
     max-width: calc(100vw - 2 * 21px);
@@ -121,7 +121,7 @@
     border: 1px solid var(--line);
     border-radius: var(--r-window);
     box-shadow: var(--shadow-dialog);
-    animation: float-in 0.16s var(--ease-out);
+    animation: float-in var(--move) var(--ease-out);
   }
   /* A dialog opened over another (they're on the page in the order they opened) reads solid
      whatever the Opacity, and the ones under it step back behind a blur: the last opened has

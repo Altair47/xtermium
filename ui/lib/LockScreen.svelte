@@ -116,7 +116,7 @@
     display: grid;
     place-items: center;
     background: rgb(var(--window-rgb));
-    animation: fade-in 0.16s var(--ease-out);
+    animation: fade-in var(--move) var(--ease-out);
   }
   .box {
     width: min(377px, calc(100vw - 2 * 21px));

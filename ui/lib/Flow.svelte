@@ -269,7 +269,7 @@
   }
   .stats {
     font-size: var(--t);
-    gap: 5px;
+    gap: var(--gap);
   }
   .dot {
     width: 9px;

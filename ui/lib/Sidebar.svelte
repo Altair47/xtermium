@@ -752,7 +752,7 @@
     min-height: var(--row);
     padding: 0 5px;
     padding-inline-start: var(--lead);
-    gap: 5px;
+    gap: var(--gap);
     text-align: start;
     /* rows out of view aren't laid out or drawn: a folder of thousands opens at once */
     content-visibility: auto;
@@ -807,10 +807,10 @@
     flex-direction: column;
     gap: 3px;
     padding: 3px 8px 5px;
-    padding-inline-start: calc(8px + 18px + 5px);
+    padding-inline-start: calc(8px + var(--icon) + var(--gap));
   }
   .tints .row {
-    gap: 5px;
+    gap: var(--gap);
   }
   /* a menu's buttons are see-through rounded rows; these stay round swatches */
   .menu .tints .swatch {

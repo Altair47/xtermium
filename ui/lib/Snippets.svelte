@@ -132,7 +132,7 @@
   .item {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--gap);
     padding: 5px 5px;
     border-radius: var(--r-control);
   }

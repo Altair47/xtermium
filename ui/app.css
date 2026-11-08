@@ -29,7 +29,11 @@
   --r-window: 8px;
   --r-menu: 5px;
   --r-control: 3px;
+  /* the small gap: between panels and panes, and inside rows and forms */
   --gap: 5px;
+  /* interface icons: in controls and rows, and the smaller one in a search field */
+  --icon: 18px;
+  --icon-s: 16px;
   --row: 21px;
   --control: 26px;
   --bar: 34px;
@@ -55,6 +59,12 @@
   --tint-hi: 1;
   /* Arrivals decelerate hard: fast to where they land, then settle. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* how long things take: an exit, an arrival or a move, a glide between places */
+  --quick: 0.1s;
+  --move: 0.16s;
+  --glide: 0.2s;
+  /* something stepped back (a lifted tab, the bar of a window without the keyboard, a done key) */
+  --dim: 0.5;
   /* the scrim behind a dialog and, softer, behind the palette: always the dark ground, in both themes */
   --scrim: rgba(5, 5, 6, 0.4);
   --scrim-soft: rgba(5, 5, 6, 0.32);
@@ -308,7 +318,7 @@ input[type="file"] {
 button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap);
   min-height: var(--control);
   padding: 3px 8px;
   border: 1px solid transparent;
@@ -577,7 +587,7 @@ kbd {
 
 /* In a menu with icons, an item without one lines its text up with the others (icon + gap). */
 .menu:has(> button > .icon) > button:not(:has(.icon)) {
-  padding-inline-start: calc(8px + 18px + 5px);
+  padding-inline-start: calc(8px + var(--icon) + var(--gap));
 }
 
 /* An item's shortcut, at its end. */

@@ -74,7 +74,7 @@
   .formats {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--gap);
   }
   .format {
     align-items: flex-start;

@@ -1032,7 +1032,7 @@
     min-height: 24px;
     border-radius: var(--r-menu);
     background: color-mix(in srgb, var(--fg) 22%, transparent);
-    transition: background 0.15s, left 0.15s, right 0.15s;
+    transition: background var(--move), left var(--move), right var(--move);
   }
   .scrollbar:hover .thumb,
   .thumb:active {
@@ -1053,7 +1053,7 @@
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);
     --from: -5px;
-    animation: float-in 0.16s var(--ease-out);
+    animation: float-in var(--move) var(--ease-out);
   }
   .retry {
     position: absolute;
@@ -1069,7 +1069,7 @@
     border: 1px solid var(--warn);
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);
-    animation: float-in 0.16s var(--ease-out);
+    animation: float-in var(--move) var(--ease-out);
   }
   .retry > :global(.icon) {
     color: var(--warn);
