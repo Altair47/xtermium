@@ -815,7 +815,7 @@ pub async fn call(handle: &AppHandle, tool: &str, args: &Value) -> Result<Value,
                 if !dir.is_empty() && !std::path::Path::new(&dir).is_dir() {
                     return Err(format!("no folder {dir}"));
                 }
-                (Some(crate::Session::new(name, "", crate::Kind::Shell { program: program.trim().into(), dir })), None)
+                (Some(crate::Session::new(name, "", crate::Kind::Shell { program: program.trim().into(), dir: dir.into() })), None)
             } else if let Ok(url) = text("url") {
                 // A website tab without a saved session: it browses privately, nothing kept.
                 let u: tauri::Url = url.trim().parse().map_err(|_| format!("not a web address: {url}"))?;

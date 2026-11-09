@@ -900,7 +900,7 @@ mod tests {
         let key = vault::random::<32>();
         let mut store = Store::default();
         for s in sessions {
-            store.sessions.push(Session::new(*s, "", Kind::Shell { program: String::new(), dir: String::new() }));
+            store.sessions.push(Session::new(*s, "", Kind::Shell { program: Default::default(), dir: Default::default() }));
         }
         Device { key, store, known: Known::default(), recovery: None, state: State::default(), changed: Some(42), pick: Pick::default(), extras: Extras::default() }
     }
@@ -912,7 +912,7 @@ mod tests {
     }
 
     fn add(d: &mut Device, name: &str) {
-        d.store.sessions.push(Session::new(name, "", Kind::Shell { program: String::new(), dir: String::new() }));
+        d.store.sessions.push(Session::new(name, "", Kind::Shell { program: Default::default(), dir: Default::default() }));
     }
 
     const ALL: Pick = Pick { settings: true, backgrounds: true, logins: true };

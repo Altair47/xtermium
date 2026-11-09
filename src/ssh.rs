@@ -318,7 +318,7 @@ async fn authenticate(h: &mut Handle<Client>, ep: &Endpoint, prompt: &Prompter) 
 
     // The session's own key; one that isn't on this computer is passed over (the terminal said so,
     // `missing_keys`) for the usual ones and the password, rather than ending the session.
-    let own = (!ep.key.is_empty()).then(|| crate::paths::local(&ep.key)).filter(|p| p.exists());
+    let own = (!ep.key.is_empty()).then(|| crate::paths::local(ep.key.here())).filter(|p| p.exists());
     let keys: Vec<std::path::PathBuf> = match &own {
         Some(p) => vec![p.clone()],
         None => {
@@ -393,7 +393,7 @@ async fn authenticate(h: &mut Handle<Client>, ep: &Endpoint, prompt: &Prompter) 
 pub fn missing_keys(ssh: &config::Ssh) -> String {
     let mut out = String::new();
     for ep in std::iter::once(&ssh.target).chain(ssh.jump.as_ref()) {
-        let path = crate::paths::local(&ep.key);
+        let path = crate::paths::local(ep.key.here());
         if !ep.key.is_empty() && !path.exists() {
             out += &format!(
                 "\x1b[33mThe key file {} isn't on this computer: trying your usual keys and the password. Edit the session to point at the key.\x1b[0m\r\n",
@@ -952,7 +952,7 @@ mod tests {
 
     /// Sends `n` bytes through an echo channel with `opts`; returns how long the round trip took.
     async fn echo_through(port: u16, opts: &Options, n: usize) -> Result<Duration> {
-        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
         let conn = connect(&target, None, opts, &yes_prompter(), None).await?;
         let ch = conn.handle.channel_open_session().await?;
         let (mut r, mut w) = tokio::io::split(ch.into_stream());
@@ -1011,7 +1011,7 @@ mod tests {
         for c in CIPHERS {
             for compression in [false, true] {
                 let opts = Options { ciphers: vec![c.into()], keepalive: 0, compression, agent: false, link: None, carrier: true };
-                let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+                let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
                 let conn = connect(&target, None, &opts, &yes_prompter(), None).await.unwrap();
                 let ch = conn.handle.channel_open_session().await.unwrap();
                 ch.request_subsystem(true, "sink").await.unwrap();
@@ -1041,7 +1041,7 @@ mod tests {
     async fn reports_the_link() {
         let _home = test_home();
         let port = echo_server(russh::Preferred::DEFAULT).await;
-        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
         let ssh = config::Ssh { target, ..Default::default() };
         let link: Arc<Mutex<Link>> = Default::default();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1121,7 +1121,7 @@ mod tests {
     async fn agent_forwarding_only_when_asked() {
         let _home = test_home();
         let port = echo_server(russh::Preferred::DEFAULT).await;
-        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
         let open = |agent_forward: bool| {
             let ssh = config::Ssh { target: target.clone(), agent_forward, ..Default::default() };
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1373,7 +1373,7 @@ mod tests {
                 let _ = req.reply.send(a);
             }
         });
-        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
         let ssh = config::Ssh { target, ..Default::default() };
         let run = |key: &'static [u8]| {
             let (ssh, prompter) = (ssh.clone(), prompter.clone());
@@ -1415,7 +1415,7 @@ mod tests {
             }
         });
 
-        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: String::new(), ..Default::default() };
+        let target = Endpoint { host: "127.0.0.1".into(), port, user: "tester".into(), key: Default::default(), ..Default::default() };
         let ssh = config::Ssh { target: target.clone(), command: "hello".into(), ..Default::default() };
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let out = Arc::new(std::sync::Mutex::new(Vec::new()));

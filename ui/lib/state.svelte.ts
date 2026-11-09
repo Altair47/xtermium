@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
 import { memberColor } from "./coop";
-import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, type Background, type CoopControl, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, system, type Background, type CoopControl, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -370,6 +370,7 @@ export async function boot() {
   await setLanguage(b.settings.language);
   restore = b.tabs.map((s, i) => [s, b.labels[i] ?? ""]);
   useWorkspaces(b);
+  system.os = b.os;
   Object.assign(app, {
     settings: b.settings,
     schemes: b.schemes,

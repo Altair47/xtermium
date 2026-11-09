@@ -51,12 +51,12 @@ fn session(name: &str, folder: &str, val: &str) -> Option<Session> {
     let port = |i: usize, def: u16| f.get(i).and_then(|p| p.parse().ok()).unwrap_or(def);
     let kind = match f[0] {
         "0" => Kind::Ssh(Ssh {
-            target: Endpoint { host: get(1), port: port(2, 22), user: get(3), key: path(&get(14)), ..Default::default() },
+            target: Endpoint { host: get(1), port: port(2, 22), user: get(3), key: path(&get(14)).into(), ..Default::default() },
             jump: (!get(8).is_empty()).then(|| Endpoint {
                 host: get(8),
                 port: port(9, 22),
                 user: get(10),
-                key: path(&get(15)),
+                key: path(&get(15)).into(),
                 ..Default::default()
             }),
             command: get(7),
@@ -115,7 +115,7 @@ fn tunnel(key: &str, val: &str) -> Option<Tunnel> {
             host: host.into(),
             port: sport.parse().ok()?,
             user: user.into(),
-            key: path(f.get(5).unwrap_or(&"")),
+            key: path(f.get(5).unwrap_or(&"")).into(),
             ..Default::default()
         },
         bind: f.get(6).filter(|s| !s.is_empty()).unwrap_or(&"127.0.0.1").to_string(),
@@ -208,7 +208,7 @@ pub fn export(store: &Store) -> Export {
                 t.ssh.host,
                 t.ssh.port,
                 t.listen_port,
-                moba_path(&t.ssh.key),
+                moba_path(t.ssh.key.here()),
                 t.bind
             );
         }
@@ -228,7 +228,7 @@ fn line(s: &Session) -> Option<String> {
                 .map(|v| clean(v))
                 .collect::<Vec<_>>()
                 .join("%");
-            (109, format!("0%{f}%0%0%0%{}%{}%-1%0%0%0%%1080%%0%0%1", clean(&moba_path(&t.key)), clean(&moba_path(&j.key))))
+            (109, format!("0%{f}%0%0%0%{}%{}%-1%0%0%0%%1080%%0%0%1", clean(&moba_path(t.key.here())), clean(&moba_path(j.key.here()))))
         }
         Kind::Rdp { host, port, user, .. } => (91, format!("4%{}%{port}%{}", clean(host), clean(user))),
         Kind::Browser { url, .. } => (103, format!("11%{}", clean(url))),
@@ -291,8 +291,8 @@ weird=#1#7%x#y#0\r\n\
         assert_eq!(db.folder, "Lab/DB");
         let Kind::Ssh(ssh) = &db.kind else { panic!() };
         assert_eq!((ssh.target.host.as_str(), ssh.target.port, ssh.target.user.as_str()), ("192.0.2.15", 2222, "root"));
-        assert_eq!(ssh.target.key, "~/.ssh/id_ed25519", "the same on every system");
-        assert_eq!(moba_path(&ssh.target.key), "_ProfileDir_\\.ssh\\id_ed25519", "and back for MobaXterm");
+        assert_eq!(ssh.target.key.here(), "~/.ssh/id_ed25519", "the same on every system");
+        assert_eq!(moba_path(ssh.target.key.here()), "_ProfileDir_\\.ssh\\id_ed25519", "and back for MobaXterm");
         assert_eq!(ssh.command, "htop");
         let j = ssh.jump.as_ref().unwrap();
         assert_eq!((j.host.as_str(), j.user.as_str()), ("gw.example", "jumper"));

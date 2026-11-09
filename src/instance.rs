@@ -62,7 +62,7 @@ fn wake(port_file: &Path, here: Option<&str>) -> std::io::Result<()> {
 pub fn shell_in(dir: &str) -> crate::Session {
     let path = Path::new(dir);
     let name = path.file_name().map_or_else(|| dir.to_string(), |n| n.to_string_lossy().to_string());
-    crate::Session::new(&name, "", crate::Kind::Shell { program: String::new(), dir: dir.to_string() })
+    crate::Session::new(&name, "", crate::Kind::Shell { program: Default::default(), dir: dir.into() })
 }
 
 /// Shows the window when another start asks (on its own thread, for the life of the app), and

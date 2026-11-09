@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _, N_ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { AGENT_EFFORTS, AGENT_MODES, AGENTS, broadcasts, EFFORT_TOOLS, KIND_COLOR, MCP_TOOLS, KIND_ICON, KVM_VENDORS, newEndpoint, newKind, SKILL_TOOLS, type Kind, type KindName, type Session } from "./api";
+  import { AGENT_EFFORTS, AGENT_MODES, AGENTS, broadcasts, EFFORT_TOOLS, here, KIND_COLOR, MCP_TOOLS, KIND_ICON, KVM_VENDORS, newEndpoint, newKind, SKILL_TOOLS, type Kind, type KindName, type Session } from "./api";
   import Appearance from "./Appearance.svelte";
   import Ciphers from "./Ciphers.svelte";
   import Endpoint from "./Endpoint.svelte";
@@ -36,7 +36,7 @@
   $effect(() => {
     const k = s.kind;
     if (k.type !== "agent") return;
-    const [tool, dir] = [k.tool, k.dir];
+    const [tool, dir] = [k.tool, here(k.dir)];
     servers = skills = null;
     // the folder is typed a letter at a time: look once it rests
     const t = setTimeout(() => {
@@ -176,7 +176,7 @@
   <div class="form">
     {#if s.kind.type === "ssh"}
       {@const ssh = s.kind}
-      <Endpoint e={ssh} />
+      <Endpoint e={ssh} hint />
       <span>{_("Command")}</span><input bind:value={ssh.command} placeholder={_("run after login")} />
       <span>{_("Jump host")}</span>
       <label class="check">
