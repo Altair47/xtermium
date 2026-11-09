@@ -527,7 +527,8 @@
   async function reset() {
     // Saving only the defaults resets everything else (missing fields take their defaults).
     // Only appearance and terminal settings go back: defaults, automation, sync and the rest stay.
-    const { theme, ui_scale, effect, opacity, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, ...keep } =
+    // Everything with its own reset button (`back`) on those pages is in this list too.
+    const { theme, ui_scale, effect, opacity, accent, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, pane_step, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, broadcast_outline, broadcast_outline_color, ...keep } =
       $state.snapshot(s);
     app.settings = await invoke<Settings>("save_settings", { settings: keep });
   }
