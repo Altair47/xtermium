@@ -1,7 +1,7 @@
 <script lang="ts">
   // The title bar's workspace switcher (App.svelte), dropped under its field as VS Code's quick
-  // pick is: a search field, a row to make the workspace typed when none has that name, the one
-  // in use, then the others by name, ten to a page. The field keeps the keyboard: arrows move,
+  // pick is: a search field, a row to make the workspace typed when none has that name, then every
+  // workspace by name (the default one included, the one in use ticked), ten to a page. The field keeps the keyboard: arrows move,
   // Enter picks, Escape or a click outside closes it.
   import Icon from "./Icon.svelte";
   import { _ } from "./i18n.svelte";
@@ -20,21 +20,18 @@
 
   const nameOf = (w: string) => w || _("Default");
   const q = $derived(query.trim().toLocaleLowerCase());
-  /** The other workspaces, by name, that match the search. */
-  const others = $derived(
-    app.workspaces
-      .filter((w) => w !== app.workspace && nameOf(w).toLocaleLowerCase().includes(q))
-      .sort((a, b) => nameOf(a).localeCompare(nameOf(b))),
-  );
-  const pages = $derived(Math.max(1, Math.ceil(others.length / PAGE)));
+  /** Every workspace: the backend lists the others only (api.ts `Workspaces`), the default one is "". */
+  const every = $derived(["", ...app.workspaces.filter(Boolean)]);
+  /** Those that match the search, by name, the one in use among them (the default sorts by its name too). */
+  const matches = $derived(every.filter((w) => nameOf(w).toLocaleLowerCase().includes(q)).sort((a, b) => nameOf(a).localeCompare(nameOf(b))));
+  const pages = $derived(Math.max(1, Math.ceil(matches.length / PAGE)));
   /** A name typed that no workspace has yet (24 characters at most, as Settings › Workspaces takes). */
-  const fresh = $derived(q && !app.workspaces.some((w) => nameOf(w).toLocaleLowerCase() === q) ? query.trim().slice(0, 24) : "");
+  const fresh = $derived(q && !every.some((w) => nameOf(w).toLocaleLowerCase() === q) ? query.trim().slice(0, 24) : "");
   type Row = { kind: "new" | "current" | "other"; w: string };
   const rows = $derived.by(() => {
     const r: Row[] = [];
     if (fresh) r.push({ kind: "new", w: fresh });
-    if (nameOf(app.workspace).toLocaleLowerCase().includes(q)) r.push({ kind: "current", w: app.workspace });
-    for (const w of others.slice(page * PAGE, (page + 1) * PAGE)) r.push({ kind: "other", w });
+    for (const w of matches.slice(page * PAGE, (page + 1) * PAGE)) r.push({ kind: w === app.workspace ? "current" : "other", w });
     return r;
   });
 
@@ -87,7 +84,7 @@
   {#if pages > 1}
     <div class="pages">
       <button class="flat" disabled={page === 0} onclick={() => turn(-1)}>{_("Previous")}</button>
-      <span class="weak">{_("{from}–{to} of {total}", { from: page * PAGE + 1, to: Math.min(others.length, (page + 1) * PAGE), total: others.length })}</span>
+      <span class="weak">{_("{from}–{to} of {total}", { from: page * PAGE + 1, to: Math.min(matches.length, (page + 1) * PAGE), total: matches.length })}</span>
       <button class="flat" disabled={page >= pages - 1} onclick={() => turn(1)}>{_("Next")}</button>
     </div>
   {/if}
