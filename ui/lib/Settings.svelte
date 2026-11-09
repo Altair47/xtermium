@@ -1239,12 +1239,12 @@ xtermium close 3`}</pre>
       </div>
       <span class:weak={s.broadcast_outline === "rainbow"}>{_("Colour")}</span>
       <div class="row wrap">
-        <button class="swatch" class:selected={!s.broadcast_outline_color} title={_("Accent")} aria-label={_("Accent")} style:--c="var(--broadcast)" onclick={() => (s.broadcast_outline_color = "")}></button>
+        <button class="swatch" class:selected={!s.broadcast_outline_color} title={_("Default")} aria-label={_("Default")} style:--c="var(--broadcast)" onclick={() => (s.broadcast_outline_color = "")}></button>
         {#each ["#9aa3ad", ...COLORS] as c (c)}
           <button class="swatch" class:selected={s.broadcast_outline_color === c} title={c} aria-label={_("Colour {c}", { c })} style:--c={c} onclick={() => (s.broadcast_outline_color = c)}></button>
         {/each}
         <input type="color" title={_("Any colour")} value={s.broadcast_outline_color || s.accent || "#ffb000"} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
-        {@render back(["broadcast_outline_color"], (d) => d.broadcast_outline_color || _("Accent"))}
+        {@render back(["broadcast_outline_color"], (d) => d.broadcast_outline_color || _("Default"))}
       </div>
       <span>{_("Preview")}</span>
       <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color || null} {@attach offscreenStill}>$ uptime</div>
