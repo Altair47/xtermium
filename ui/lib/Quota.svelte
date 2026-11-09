@@ -53,7 +53,7 @@
   .bar i {
     display: block;
     height: 100%;
-    background: var(--gold);
+    background: var(--gold-fill);
   }
   .bar i.nearly {
     background: var(--warn);

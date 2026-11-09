@@ -35,7 +35,7 @@
     display: block;
   }
   .spin {
-    color: var(--gold);
+    color: var(--gold-fill);
     animation: spin 1.25s linear infinite;
   }
   .pulse {

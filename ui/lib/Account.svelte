@@ -102,8 +102,8 @@
     overflow: hidden;
     font-size: var(--t-s);
     font-weight: 700;
-    background: var(--gold);
-    color: var(--gold-ink);
+    background: var(--gold-fill);
+    color: var(--gold-fill-ink);
   }
   .avatar img {
     width: 100%;

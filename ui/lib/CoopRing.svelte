@@ -151,7 +151,7 @@
     stroke-dasharray: 3 5;
   }
   .lit {
-    stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+    stroke: color-mix(in srgb, var(--gold-fill) 70%, transparent);
     opacity: 0;
   }
   .on .track {
@@ -162,7 +162,7 @@
   }
   /* A packet comes and goes where it is; the others never move over for it. */
   .packet {
-    fill: var(--gold);
+    fill: var(--gold-fill);
     opacity: 0;
     transition: opacity 0.5s var(--ease-out);
   }

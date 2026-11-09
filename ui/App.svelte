@@ -6,7 +6,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Filter, type Sizes } from "./lib/actions";
-  import { ACCENTS, addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
+  import { addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
   import Guide, { type Step } from "./lib/Guide.svelte";
   import Logo from "./lib/Logo.svelte";
@@ -143,20 +143,22 @@
   // Apart, so dragging the opacity slider or the accent picker doesn't call the backend each step.
   $effect(() => void (app.settings && getCurrentWebview().setZoom(app.settings.ui_scale).catch(() => {})));
   $effect(() => void (app.settings && invoke("set_dark", { dark }).catch((e) => (app.status = String(e)))));
-  /** A custom accent replaces the gold everywhere. On the light theme a preset uses its own darker
-   *  value, and any other colour is darkened toward the text as the gold is, so it still reads
-   *  (`light-dark()` follows the theme's color-scheme, app.css). Text on it is black or white,
-   *  whichever reads. */
+  /** A custom accent replaces the gold everywhere on dark. On the light theme it does what the
+   *  amber does there: text and lines stay in ink, and the colour itself is the fill, the wash and
+   *  the marks (`light-dark()` follows the theme's color-scheme, app.css). Text on it is black or
+   *  white, whichever reads. */
   function accent(c: string) {
     const root = document.documentElement.style;
-    for (const v of ["--gold", "--gold-ink", "--gold-soft"]) root.removeProperty(v);
+    for (const v of ["--gold", "--gold-ink", "--gold-soft", "--gold-fill", "--gold-fill-ink"]) root.removeProperty(v);
     if (!c) return;
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
     const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
-    const onLight = ACCENTS.find(([, dark]) => dark === c)?.[2] ?? `color-mix(in oklab, ${c} 60%, #141414)`;
-    root.setProperty("--gold", `light-dark(${onLight}, ${c})`);
+    root.setProperty("--gold", `light-dark(#141414, ${c})`);
     root.setProperty("--gold-ink", `light-dark(#fff, ${light ? "#111" : "#fff"})`);
-    root.setProperty("--gold-soft", "color-mix(in srgb, var(--gold) 14%, transparent)");
+    root.setProperty("--gold-soft", `light-dark(color-mix(in srgb, ${c} 22%, transparent), color-mix(in srgb, ${c} 14%, transparent))`);
+    // fills and marks take the colour itself in both themes
+    root.setProperty("--gold-fill", c);
+    root.setProperty("--gold-fill-ink", light ? "#111" : "#fff");
   }
   let saveTimer = 0;
   let loaded = false;
@@ -2077,6 +2079,11 @@
   .new:hover {
     background: var(--hover);
   }
+  /* On light `raised` is barely off the bar's grey, so the key is white like the field beside it,
+     and see-through it is a second layer over the bar, as the field is. */
+  :global(:root[data-theme="light"]) .new:not(:hover) {
+    background: rgba(var(--deep-rgb), var(--chrome-alpha));
+  }
   /* the field: never so wide that no bar is left to drag the window by */
   .finder {
     display: flex;
@@ -2090,13 +2097,18 @@
     width: clamp(233px, 38vw, 610px);
     min-width: 0;
     height: var(--control);
-    border: 1px solid var(--line);
+    border: 1px solid var(--field-line);
     border-radius: var(--r-control);
     background: rgba(var(--deep-rgb), 1);
     overflow: hidden;
   }
+  /* See-through on light, a solid white field stood out as a slab on the bar the desktop greys:
+     it is the second layer over the bar's ground, as a panel is, and its text is ink (`--bar-ink`). */
+  :global(:root[data-theme="light"]) .field {
+    background: rgba(var(--deep-rgb), var(--chrome-alpha));
+  }
   .field:hover {
-    border-color: color-mix(in srgb, var(--fg) 25%, var(--line));
+    border-color: color-mix(in srgb, var(--fg) 25%, var(--field-line));
   }
   /* the focused tab, its type's icon and its name, centred; a way into the palette */
   .where {
@@ -2321,7 +2333,7 @@
     z-index: 2;
     pointer-events: none;
     border-radius: var(--r-control);
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--gold-fill);
     transition-property: left, top, width, height;
     transition-duration: var(--glide);
     transition-timing-function: var(--ease-out);
@@ -2334,12 +2346,15 @@
     transition: none;
   }
   /* Broadcast outlines the terminals too, in a colour that may be the ring's, right inside the
-     tile's edge: next to it the ring read as one thick band. It steps out a little, dashed, in
-     the window's own foreground colour, so the pane with the keyboard stands apart from the
-     outlined ones. */
+     tile's edge: next to it the ring read as one thick band. The ring is dashed instead, in the
+     window's own foreground colour (grey on light, where black dashes looked dated), so the pane
+     with the keyboard stands apart from the outlined ones. It stays where the ring is: stepped
+     out further, the window's edge cut it off at the sides and the bottom. */
   .broadcasting .ring {
     outline: 2px dashed var(--fg);
-    outline-offset: 2px;
+  }
+  :global(:root[data-theme="light"]) .broadcasting .ring {
+    outline-color: var(--weak);
   }
   /* the lines between panes: as wide as the gap, above the panes */
   .sizer {
@@ -2517,7 +2532,7 @@
     width: 0.6em;
     height: 1.2em;
     vertical-align: text-bottom;
-    background: var(--gold);
+    background: var(--gold-fill);
     animation: blink 1.1s steps(1) infinite;
   }
   @keyframes blink {

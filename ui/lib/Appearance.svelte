@@ -220,7 +220,7 @@
     cursor: pointer;
   }
   .swatch.selected {
-    box-shadow: 0 0 0 2px var(--gold-soft);
+    box-shadow: 0 0 0 2px var(--picked-line);
   }
   .swatch.custom {
     display: inline-block;

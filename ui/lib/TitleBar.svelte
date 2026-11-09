@@ -90,7 +90,7 @@
     display: grid;
     grid-template-columns: 1fr minmax(0, auto) 1fr;
     align-items: center;
-    color: var(--weak);
+    color: var(--bar-ink);
   }
   /* The mark, then the tools, a few pixels apart as the tab strip's are. */
   .start {
