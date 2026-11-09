@@ -133,6 +133,11 @@
   <details>
     <summary>{title} <span class="count">{found === null ? _("Looking…") : _("{on} of {all} on", { on: all.length - off.length, all: all.length })}</span></summary>
     <div class="toggles">
+      <!-- Dozens of servers, plugins' among them: one click for the lot, then tick the few wanted. -->
+      <div class="all">
+        <button class="link" disabled={!off.length} onclick={() => off.splice(0, off.length)}>{_("All on")}</button>
+        <button class="link" disabled={all.length === off.length} onclick={() => all.forEach((n) => serverOn(off, n, false))}>{_("All off")}</button>
+      </div>
       <div class="list">
         {#each all as n (n)}
           <label class="check" title={tip(n)}>
@@ -467,6 +472,11 @@
     flex-direction: column;
     gap: var(--gap);
     min-width: 0;
+  }
+  .toggles .all {
+    display: flex;
+    gap: 13px;
+    font-size: var(--t-s);
   }
   /* columns of names, scrolling past six rows: some people have dozens */
   .toggles .list {
