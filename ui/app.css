@@ -48,6 +48,8 @@
   --chrome-alpha: 1;
   --float-alpha: 0.98;
   --solid: 1;
+  /* the title bar's icons (TitleBar.svelte) */
+  --bar-ink: var(--weak);
   /* Only what floats over the work and goes away again casts a shadow: a bar over a view, a
      menu or toast, a dialog or the palette. Panels, tabs, rows and buttons stay flat. */
   --shadow-float: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -65,7 +67,8 @@
   --glide: 0.2s;
   /* something stepped back (a lifted tab, the bar of a window without the keyboard, a done key) */
   --dim: 0.5;
-  /* the scrim behind a dialog and, softer, behind the palette: always the dark ground, in both themes */
+  /* the scrim behind a dialog and, softer, behind the palette: the dark ground here, a light dimming on
+     the light theme */
   --scrim: rgba(5, 5, 6, 0.4);
   --scrim-soft: rgba(5, 5, 6, 0.32);
 
@@ -78,12 +81,24 @@
   --raised: #1d1d22;
   --hover: #26262c;
   --line: #2c2c33;
+  /* a field's edge, where its fill alone doesn't set it apart from the panel (the light theme) */
+  --field-line: var(--line);
   --fg: #e6e6e1;
   --weak: #9d9da6;
   /* phosphor amber, the site's; the logo's own amber (#ffc20e) stays inside the logo */
   --gold: #ffb000;
   --gold-ink: #050506;
   --gold-soft: rgba(255, 176, 0, 0.14);
+  /* The accent where it is a fill or a mark rather than text or a line: the primary button, the
+     focused pane's ring, checkboxes, sliders, selected text, the start screen's block cursor. The
+     gold itself on dark; the light theme keeps the amber here only, where it reads (below). */
+  --gold-fill: var(--gold);
+  --gold-fill-ink: var(--gold-ink);
+  /* a picked or switched-on button: the wash behind it and its edge */
+  --picked: var(--gold-soft);
+  --picked-line: color-mix(in srgb, var(--gold-fill) 55%, transparent);
+  /* a flat tool button that's on (a layout, Broadcast): none on dark, where its icon turns amber */
+  --picked-flat: transparent;
   --error: #ec6a6a;
   --error-ink: #200a0a;
   --ok: #4fc08d;
@@ -109,29 +124,63 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --window-rgb: 216, 216, 219;
+  /* The same elements as dark in light colours: a light grey ground with near-white panels on it,
+     white where the work and the fields are, hairlines, and soft shadows. Each layer nearer the hand
+     is a step lighter up to white. */
+  --window-rgb: 229, 229, 232;
   --deep-rgb: 255, 255, 255;
-  --bg-rgb: 241, 241, 242;
-  --panel-rgb: 232, 232, 234;
-  --raised: #dcdcdf;
-  --hover: #cfcfd3;
-  --line: #c9c9ce;
+  --bg-rgb: 255, 255, 255;
+  --panel-rgb: 247, 247, 248;
+  --raised: #ececef;
+  --hover: #e2e2e6;
+  --line: #dcdce1;
+  /* a white field on a near-white panel needs its edge to show where it is: 3.0:1 on panel (WCAG
+     1.4.11), still a quiet grey line */
+  --field-line: #8e8e94;
   --fg: #141414;
-  /* weak is secondary text and amber, error, ok and warn are 13px text (links, tags, states): each holds
-     4.5:1 on panel, raised and hover (a button under the pointer), checked on 2026-11-08 */
-  --weak: #55555c;
-  --gold: #754b00;
+  /* weak is secondary text and error, ok and warn are 13px text (states): each holds 4.5:1 on panel,
+     raised and hover (a button under the pointer), checked on 2026-11-09 */
+  --weak: #5f5f66;
+  /* Neutral first, as a light desktop app: what the accent says in text or a line (links, focus, a
+     toggle that's on) is said in ink. The dark theme's amber
+     stays only where it reads: as a fill under ink (9.4:1), as a wash behind ink, and as marks. As
+     text on these surfaces it would be 1.7:1, and a darker amber that passes turns brown. */
+  --gold: #141414;
   --gold-ink: #ffffff;
-  --gold-soft: rgba(117, 75, 0, 0.14);
+  --gold-soft: rgba(255, 176, 0, 0.22);
+  --gold-fill: #ffb000;
+  --gold-fill-ink: #141414;
+  /* the light wash alone barely shows on the light greys: a picked button takes a deeper one and a
+     solid edge */
+  --picked: color-mix(in srgb, var(--gold-fill) 42%, transparent);
+  --picked-line: var(--gold-fill);
+  /* its icon stays ink here, so the wash is what says it's on */
+  --picked-flat: var(--picked);
+  /* stepped back less than on dark: half of a grey on a light ground falls under 3:1 */
+  --dim: 0.75;
+  /* See-through, the title bar is the one bare layer and takes the desktop's colour behind it: on a
+     dark one, grey icons sank into the grey it turns. They are ink then (`--solid` is 0). */
+  --bar-ink: color-mix(in srgb, var(--weak) calc(var(--solid) * 100%), var(--fg));
+  --shadow-float: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-menu: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14);
+  --shadow-dialog: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.18);
+  --scrim-soft: rgba(0, 0, 0, 0.12);
   --error: #a4242d;
   --error-ink: #ffffff;
   --tint-lo: 0;
   --tint-hi: 0.48;
   --ok: #155c3d;
-  --warn: #745000;
+  --warn: #a34800;
+  /* a warning paragraph's box (`.warn` below): amber reads on white only as a fill */
+  --warn-fill: #ffb000;
+  --warn-wash: color-mix(in srgb, var(--warn-fill) 22%, transparent);
+  /* broadcast is the accent's one piece of text that must stand out (your keys go to many servers),
+     and amber text doesn't read on light: it takes the warning orange, the nearest colour that does */
+  --broadcast: var(--warn);
   --k-ssh: #2f62d0;
   --k-shell: #138a7b;
-  --k-serial: #6f7d0c;
+  --k-serial: #5a7d14;
   --k-rdp: #7444c8;
   --k-browser: #b83f75;
   --k-telnet: #a65a1c;
@@ -139,7 +188,7 @@
   --k-vnc: #8d3a9c;
   --k-kvm: #4f6378;
   --k-agent: #b8443a;
-  --k-coop: #7b6a45;
+  --k-coop: #7a5f52;
   --mark: #141414;
 }
 
@@ -224,7 +273,7 @@ input:not([type]),
 textarea,
 select {
   background: rgba(var(--deep-rgb), 1);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: var(--r-control);
   padding: 3px 8px;
   min-height: var(--control);
@@ -238,7 +287,6 @@ textarea:focus,
 select:focus {
   border-color: var(--gold);
 }
-
 /* An example in an empty field: dimmer than what's typed, still readable (the engine's own grey
    isn't, on the wells). */
 ::placeholder {
@@ -259,7 +307,7 @@ select {
 }
 /* the chevron in the theme's --weak */
 :root[data-theme="light"] select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2355555c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235f5f66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 select option {
   background: rgb(var(--panel-rgb));
@@ -279,6 +327,11 @@ button.link {
 button.link:hover:not(:disabled) {
   background: none;
   text-decoration: underline;
+}
+/* light: a link is in ink, so its underline says it goes somewhere */
+:root[data-theme="light"] button.link:not(.quiet) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 /* a whole sentence that links: it reads as text, and shows it goes somewhere */
 button.link.quiet {
@@ -340,15 +393,21 @@ button:disabled {
 }
 
 /* toggles and picked options */
+/* The edge is the accent as a mark (gold-fill): amber on both themes, where light's ink would turn
+   a picked button into a black box. */
 button.on,
 button.selected {
-  background: var(--gold-soft);
-  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: var(--picked);
+  border-color: var(--picked-line);
   color: var(--gold);
 }
 
 button.flat {
   background: transparent;
+}
+/* after `.flat`, which would otherwise take a picked tool button's wash away */
+button.flat:is(.on, .selected) {
+  background: var(--picked-flat);
 }
 
 button.flat:hover:not(:disabled) {
@@ -365,12 +424,22 @@ button.icon-only {
 }
 
 button.primary {
-  background: var(--gold);
-  color: var(--gold-ink);
+  background: var(--gold-fill);
+  color: var(--gold-fill-ink);
 }
 
 button.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--gold) 86%, white);
+  background: color-mix(in srgb, var(--gold-fill) 86%, white);
+}
+
+/* Light: the primary darkens under the pointer (a paler amber on white reads as fading away), and
+   one that can't be pressed yet goes grey, as a light desktop's, not a washed-out yellow. */
+:root[data-theme="light"] button.primary:not(.danger):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold-fill) 92%, black);
+}
+:root[data-theme="light"] button.primary:disabled {
+  background: var(--raised);
+  color: var(--fg);
 }
 
 /* The main button of a question whose yes ends or deletes something. */
@@ -384,9 +453,10 @@ button.primary.danger:hover:not(:disabled) {
 }
 
 /* A name marked with a colour (a session's or its folder's, `--tint`), its lightness held where
-   it reads on the theme. The icon beside it keeps its kind's colour. */
+   it reads on the theme. The icon beside it keeps its kind's colour. Oklab, not oklch: Chromium
+   drops a greyish colour's hue in `oklch(from …)` and draws it pink. */
 .tinted {
-  color: oklch(from var(--tint) clamp(var(--tint-lo), l, var(--tint-hi)) c h);
+  color: oklab(from var(--tint) clamp(var(--tint-lo), l, var(--tint-hi)) a b);
 }
 
 /* A kind of connection at a glance: its icon in its hue, on a tile of the same hue. */
@@ -405,23 +475,83 @@ button.primary.danger:hover:not(:disabled) {
   outline: 1px solid var(--gold);
   outline-offset: -1px;
 }
-
 /* Selected text in fields and prose takes the accent too, instead of the webview's blue. */
 ::selection {
-  background: color-mix(in srgb, var(--gold) 30%, transparent);
+  background: color-mix(in srgb, var(--gold-fill) 30%, transparent);
 }
 
 input[type="checkbox"],
 input[type="radio"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--gold);
+  accent-color: var(--gold-fill);
   margin: 0;
+}
+/* The radio is drawn here, the same on both themes: the engine's own draws a light accent with a
+   thick black ring between its edge and its dot. A well with the field's edge, and when picked an
+   accent ring around a dot in the well's colour. */
+input[type="radio"] {
+  appearance: none;
+  flex: none;
+  border-radius: 50%;
+  /* a field's edge alone is too faint on dark for a control this small */
+  border: 1px solid color-mix(in srgb, var(--weak) 70%, var(--field-line));
+  background: rgb(var(--deep-rgb));
+  transition: border-width var(--quick) var(--ease-out);
+}
+input[type="radio"]:hover:not(:disabled, :checked) {
+  border-color: var(--weak);
+}
+input[type="radio"]:checked {
+  border: 5px solid var(--gold-fill);
+}
+input[type="radio"]:disabled {
+  border-color: var(--line);
+}
+input[type="radio"]:checked:disabled {
+  border-color: var(--weak);
 }
 
 input[type="range"] {
-  accent-color: var(--gold);
+  accent-color: var(--gold-fill);
   width: 200px;
+}
+/* The slider is drawn here, the same on both themes: the engine darkens a slider's empty track to
+   black under a light accent on a light page. A groove filled in the accent up to the knob and grey
+   after it, and an accent knob with a rim in the well's colour. */
+input[type="range"] {
+  appearance: none;
+  height: var(--control);
+  background: transparent;
+}
+/* amber up to the knob's centre (`--f`, the filled share, from slider.ts), grey after it */
+input[type="range"]::-webkit-slider-runnable-track {
+  --at: calc(13px / 2 + (100% - 13px) * var(--f, 0));
+  height: 5px;
+  border-radius: var(--r-control);
+  background: linear-gradient(to right, var(--gold-fill) var(--at), var(--hover) var(--at));
+}
+/* off, it keeps its fill in grey, as a native slider does, so its value still shows */
+input[type="range"]:disabled::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, color-mix(in srgb, var(--weak) 55%, var(--hover)) var(--at), var(--hover) var(--at));
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  /* centred on the groove: half the knob less half the groove */
+  margin-top: calc((5px - 13px) / 2);
+  /* a white rim on both themes: in the well's colour it drew a black ring on dark */
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--gold-fill);
+}
+/* on white the rim needs a hairline to show where the knob ends */
+:root[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.13);
+}
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--weak);
 }
 
 label.check {
@@ -455,6 +585,23 @@ label.check {
 }
 
 .warn {
+  color: var(--warn);
+}
+
+/* On the light theme a warning paragraph is a box: ink text on an amber wash with an amber edge,
+   its icon in the warning colour. Text in the warning's own colour reads as rust or mustard on
+   white. Short warnings inside a line (a shortcut's clash, a tab's name) keep the coloured text. */
+:root[data-theme="light"] :is(p.warn, .row.warn, p.row:has(> span.warn)) {
+  color: var(--fg);
+  background: var(--warn-wash);
+  border-inline-start: 3px solid var(--warn-fill);
+  border-radius: var(--r-control);
+  padding: 5px 8px;
+}
+:root[data-theme="light"] :is(p.warn, .row.warn, p.row:has(> span.warn)) .warn {
+  color: inherit;
+}
+:root[data-theme="light"] :is(p.warn, .row.warn) > .icon {
   color: var(--warn);
 }
 
@@ -659,7 +806,7 @@ input[type="color"] {
 }
 
 progress {
-  accent-color: var(--gold);
+  accent-color: var(--gold-fill);
   height: 4px;
 }
 
@@ -689,19 +836,25 @@ progress {
 }
 
 /* Broadcast: the outline on every terminal that gets the keys. `data-outline` is the style
-   (src/settings.rs OUTLINES), `--oc` its colour, the accent unless one was picked. */
+   (src/settings.rs OUTLINES), `--oc` its colour, the status bar marker's (`--broadcast`) unless one was picked. */
 .outline {
-  --oc: var(--gold);
+  --oc: var(--broadcast);
   position: relative;
 }
 .outline::after {
+  /* the picked colour as drawn: on light a pale one is darkened to show on a light terminal,
+     keeping its hue, as `.tinted` holds a marked name; not past 0.7, where the frame reads heavy */
+  --ocx: var(--oc);
   content: "";
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
   border-radius: var(--r-control);
-  box-shadow: inset 0 0 0 2px var(--oc);
+  box-shadow: inset 0 0 0 2px var(--ocx);
+}
+:root[data-theme="light"] .outline::after {
+  --ocx: oklab(from var(--oc) min(l, 0.7) a b);
 }
 .outline[data-outline="breathe"]::after {
   animation: outline-breathe 2.6s ease-in-out infinite;
@@ -718,7 +871,7 @@ progress {
     linear-gradient(#000 0 0);
 }
 .outline[data-outline="ring"]::after {
-  background: conic-gradient(from var(--outline-turn), color-mix(in srgb, var(--oc) 30%, transparent) 0 55%, var(--oc) 85%, #fff 92%, color-mix(in srgb, var(--oc) 30%, transparent) 100%);
+  background: conic-gradient(from var(--outline-turn), color-mix(in srgb, var(--ocx) 30%, transparent) 0 55%, var(--ocx) 85%, #fff 92%, color-mix(in srgb, var(--ocx) 30%, transparent) 100%);
   animation: outline-turn 3s linear infinite;
 }
 .outline[data-outline="rainbow"]::after {
@@ -727,7 +880,7 @@ progress {
   animation: outline-turn 3s linear infinite;
 }
 .outline[data-outline="march"]::after {
-  background: repeating-linear-gradient(45deg, var(--oc) 0 6px, transparent 6px 12px);
+  background: repeating-linear-gradient(45deg, var(--ocx) 0 6px, transparent 6px 12px);
   background-size: 16.97px 16.97px;
   animation: outline-march 0.8s linear infinite;
 }
@@ -744,8 +897,8 @@ progress {
 @keyframes outline-breathe {
   50% {
     box-shadow:
-      inset 0 0 0 2px var(--oc),
-      inset 0 0 16px color-mix(in srgb, var(--oc) 70%, transparent);
+      inset 0 0 0 2px var(--ocx),
+      inset 0 0 16px color-mix(in srgb, var(--ocx) 70%, transparent);
   }
 }
 @keyframes outline-fade {

@@ -250,8 +250,10 @@ impl Highlight {
         ]
     }
 
-    /// The rules that work, ready to match; none while highlighting is off.
-    pub fn compile(on: bool, rules: &[Highlight]) -> Vec<(regex::Regex, u32)> {
+    /// The rules that work, ready to match; none while highlighting is off. Each colour is made
+    /// to read on the terminal's background `bg` (`readable`), so one rule serves dark and light
+    /// schemes.
+    pub fn compile(on: bool, rules: &[Highlight], bg: u32) -> Vec<(regex::Regex, u32)> {
         if !on {
             return vec![];
         }
@@ -259,10 +261,87 @@ impl Highlight {
             .iter()
             .filter_map(|h| {
                 let c = u32::from_str_radix(h.color.strip_prefix('#')?, 16).ok().filter(|_| h.color.len() == 7)?;
-                Some((regex::RegexBuilder::new(&h.pattern).size_limit(1 << 20).build().ok()?, c))
+                Some((regex::RegexBuilder::new(&h.pattern).size_limit(1 << 20).build().ok()?, readable(c, bg)))
             })
             .collect()
     }
+}
+
+/// `c` (0xRRGGBB) made to hold 4.5:1 (WCAG AA for text) on `bg`: darkened on a light background,
+/// lightened on a dark one, in OKLCH so it keeps its hue and strength rather than going grey. A
+/// colour that already reads is kept as it is, so a rule made for dark terminals is unchanged
+/// there and still reads on a white one. A yellow can't be dark and still look yellow (it turns
+/// olive), so on a light background it takes the light theme's warning orange (`--warn`) instead.
+pub fn readable(c: u32, bg: u32) -> u32 {
+    if contrast(c, bg) >= 4.5 {
+        return c;
+    }
+    let lin = |v: f64| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+    let gam = |v: f64| if v <= 0.0031308 { 12.92 * v } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 };
+    let [r, g, b] = [16, 8, 0].map(|s| lin(((c >> s) & 0xff) as f64 / 255.0));
+    let [l, m, s] = [
+        0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b,
+        0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b,
+        0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b,
+    ]
+    .map(f64::cbrt);
+    let lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+    let a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    let bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    let (mut chroma, mut hue) = (a.hypot(bb), bb.atan2(a).to_degrees().rem_euclid(360.0));
+    let light = luminance(bg) > 0.179;
+    // A grey's hue is rounding noise, often in the yellows: only a real yellow turns orange.
+    if light && chroma >= 0.05 && (60.0..115.0).contains(&hue) {
+        // `--warn`'s hue and strength on the light theme (#a34800)
+        (hue, chroma) = (48.5, chroma.max(0.138));
+    }
+    let (ca, sa) = (hue.to_radians().cos(), hue.to_radians().sin());
+    for i in 1..=200 {
+        let lt = lightness + if light { -0.005 } else { 0.005 } * i as f64;
+        if !(0.0..=1.0).contains(&lt) {
+            break;
+        }
+        // Lose strength, not hue, where the colour falls outside what a screen shows.
+        let mut k = chroma;
+        let rgb = loop {
+            let (a, b) = (k * ca, k * sa);
+            let [l, m, s] = [
+                lt + 0.3963377774 * a + 0.2158037573 * b,
+                lt - 0.1055613458 * a - 0.0638541728 * b,
+                lt - 0.0894841775 * a - 1.2914855480 * b,
+            ]
+            .map(|v| v * v * v);
+            let rgb = [
+                4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+                -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+            ];
+            if rgb.iter().all(|v| (-1e-4..=1.0 + 1e-4).contains(v)) || k < 0.001 {
+                break rgb;
+            }
+            k *= 0.97;
+        };
+        let out = rgb.iter().fold(0, |o, v| o << 8 | (gam(v.clamp(0.0, 1.0)) * 255.0).round() as u32);
+        if contrast(out, bg) >= 4.5 {
+            return out;
+        }
+    }
+    if light { 0 } else { 0xffffff }
+}
+
+/// A colour's relative luminance (WCAG).
+fn luminance(c: u32) -> f64 {
+    let ch = |s: u32| {
+        let v = ((c >> s) & 0xff) as f64 / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0)
+}
+
+/// The WCAG contrast ratio of two colours.
+fn contrast(a: u32, b: u32) -> f64 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -498,11 +577,13 @@ pub const SCHEMES: &[Scheme] = &[
         name: Cow::Borrowed("xtermium Light"),
         bg: 0xfafafa,
         fg: 0x141414,
-        cursor: 0x754b00,
+        cursor: 0xffb000,
         selection: 0xf6e3b4,
+        // Every colour but white holds 4.5:1 on the background, darkened in OKLCH so it keeps its hue
+        // (`readable`); the yellows are orange, since a yellow dark enough to read turns mustard.
         ansi: [
-            0x2b2b2e, 0xd1343f, 0x2f8f3e, 0xa66a00, 0x1f62c6, 0x8e3fb0, 0x0f7f8c, 0x9d9da6, //
-            0x6e6e76, 0xe5484d, 0x3aa655, 0xb88600, 0x3b7be0, 0xa35bc4, 0x1495a3, 0x4f4f57,
+            0x2b2b2e, 0xd1343f, 0x218433, 0x9c5100, 0x1f62c6, 0x8e3fb0, 0x0f7f8c, 0x9d9da6, //
+            0x6e6e76, 0xd53840, 0x028536, 0xb5591e, 0x3070d4, 0x9d55bd, 0x027e8b, 0x4f4f57,
         ],
     },
     Scheme {
@@ -598,6 +679,49 @@ pub const SCHEMES: &[Scheme] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Highlight colours read on a white terminal and stay as chosen on a dark one.
+    #[test]
+    fn highlight_colours_read_on_any_terminal() {
+        for h in Highlight::defaults() {
+            let c = u32::from_str_radix(&h.color[1..], 16).unwrap();
+            assert_eq!(readable(c, 0x0b0b0d), c, "{} changed on dark", h.color);
+            let on_white = readable(c, 0xffffff);
+            assert!(contrast(on_white, 0xffffff) >= 4.5, "{} is {on_white:06x} on white", h.color);
+            assert!(contrast(on_white, 0xffffff) < 5.5, "{} darkened further than it needs", h.color);
+        }
+        // The warning yellow turns orange on white, not olive: much more red than green.
+        let w = readable(0xe6c472, 0xffffff);
+        assert!(w >> 16 > (w >> 8 & 0xff) + 0x40, "warning on white is {w:06x}");
+        // Too dark for a dark terminal: lightened instead.
+        assert!(contrast(readable(0x202060, 0x0b0b0d), 0x0b0b0d) >= 4.5);
+    }
+
+    /// Text in any of the light scheme's colours reads on its background (white, slot 7, is for
+    /// backgrounds).
+    #[test]
+    fn light_scheme_colours_read() {
+        let light = SCHEMES.iter().find(|s| s.name == "xtermium Light").unwrap();
+        for (i, c) in light.ansi.iter().enumerate().filter(|(i, _)| *i != 7) {
+            assert!(contrast(*c, light.bg) >= 4.5, "colour {i} ({c:06x}) is {:.2}:1", contrast(*c, light.bg));
+        }
+        assert!(contrast(light.fg, light.bg) >= 4.5);
+    }
+
+    /// A grey highlight rule (dim timestamps, say) darkens on a light terminal but stays grey:
+    /// only a real yellow turns orange.
+    #[test]
+    fn grey_highlights_stay_grey_on_light() {
+        for grey in [0x888888, 0x999999, 0xaaaaaa, 0xb0b0b0, 0x8a8a80] {
+            let c = readable(grey, 0xfafafa);
+            let [r, g, b] = [16, 8, 0].map(|s| ((c >> s) & 0xff) as i32);
+            assert!((r - b).abs() <= 12 && (r - g).abs() <= 12, "{grey:06x} became {c:06x}");
+            assert!(contrast(c, 0xfafafa) >= 4.5, "{grey:06x} became {c:06x}");
+        }
+        let yellow = readable(0xe0c040, 0xfafafa);
+        let (r, g) = ((yellow >> 16) as i64, ((yellow >> 8) & 0xff) as i64);
+        assert!(r - g > 40, "a yellow turns orange: {yellow:06x}");
+    }
 
     /// A new install (no settings file yet) starts with the getting-started list; a file saved
     /// before it existed doesn't.

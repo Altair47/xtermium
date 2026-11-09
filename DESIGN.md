@@ -28,6 +28,7 @@ colors:
   raised: "#1d1d22"
   hover: "#26262c"
   line: "#2c2c33"
+  field-line: "#2c2c33"
   fg: "#e6e6e1"
   weak: "#9d9da6"
 typography:
@@ -292,31 +293,38 @@ Near-black neutral greys, one phosphor amber, and a set of connection hues that 
 colours.
 
 ### Primary
-- **Phosphor Amber** (`gold`): the accent and the only one, the website's phosphor (`#ffb000`;
-  `#754b00` on the light theme). The token keeps its earlier name, `--gold`. It marks focus
+- **Phosphor Amber** (`gold`): the accent and the only one, the website's phosphor (`#ffb000`; on the
+  light theme ink as text or a line, amber only as a fill, a wash or a mark, below). The token keeps its earlier name, `--gold`. It marks focus
   (`:focus-visible` outline, field borders), toggles that are on and options that are picked
   (with `gold-soft` behind amber text), links that go to another place, drop targets, the focused
   pane's outline, the active Settings page's edge, the start screen's prompt sigil and block
   cursor, and fill on the single primary button of a dialog. Users can change it (Settings ›
   Appearance shows the default as "Amber (default)"): the presets are Brushed gold `#d8a84e` (the
   app's accent before the brand's), then Platinum `#c3ccd8`, Bronze `#a99a78` and Rose gold
-  `#e2a395`, metals apart from every kind hue and the error red, each with a darker light-theme
-  value (`ACCENTS` in `api.ts`); any other colour is darkened toward the text on the light theme,
-  as the amber is. With the default amber the three tokens are `ui/app.css`'s own static values;
-  with a custom accent the app sets `--gold` as `light-dark(light, dark)` and derives `gold-ink`
-  (`#111` or white, by luminance) and `gold-soft` (a 14% `color-mix`) from it at runtime
-  (`App.svelte`). So never hard-code its hex in a component; use `var(--gold)`.
+  `#e2a395`, metals apart from every kind hue and the error red (`ACCENTS` in `api.ts`). On the
+  light theme any accent does what the amber does: text and lines stay ink, and the colour itself
+  is the fill, the wash and the marks, so no darkened (mustard or brown) accent shows as text.
+  With the default amber the tokens are `ui/app.css`'s own static values; with a custom accent the
+  app sets `--gold` as `light-dark(#141414, colour)`, `gold-fill` as the colour, and derives
+  `gold-ink` and `gold-fill-ink` (`#111` or white, by luminance) and `gold-soft` (14%, 22% on
+  light) at runtime (`App.svelte`). So never hard-code its hex in a component; use `var(--gold)`.
   The one exception is the Amber (default) swatch in Settings › Appearance, which hard-codes it
   so it shows the default whatever accent is picked.
 - **Amber Ink** (`gold-ink`): text on a solid amber fill (the primary button): the ground,
-  `#050506`, on dark and white on light with the default amber; `#111` or white, whichever reads,
+  `#050506`, on dark, and white on light, where `gold` is ink; `#111` or white, whichever reads,
   on a custom accent.
-- **Amber Wash** (`gold-soft`): the translucent tint (14%) behind picked rows, search hits, a
+- **Amber Fill** (`gold-fill`, `gold-fill-ink`): the accent where it is a fill or a mark rather
+  than text or a line: the primary button, the focused pane's ring, checkboxes, sliders, selected
+  text, the start screen's block cursor. The gold itself on dark; `#ffb000` under `#141414` on
+  light (9.4:1), and the picked colour itself, with `#111` or white, for a custom accent.
+- **Amber Wash** (`gold-soft`): the translucent tint (14%, 22% amber on light) behind picked rows, search hits, a
   setting a search points at, tags and drop zones. The sidebar's drop-into-folder highlight is a
   stronger mix, 18% amber, to tell "into" from "before" (the amber line).
 
 The broadcast marker in a status bar reads the accent through `--broadcast`, an alias of `--gold`
-(as `--fwd` and `--back` alias kind hues for tunnels).
+(as `--fwd` and `--back` alias kind hues for tunnels). On light it is `warn` (`#a34800`): it is the
+one piece of accent text that must stand out, amber text doesn't read there, and ink wouldn't
+stand out.
 
 ### Secondary
 The connection hues, one per kind of session (`--k-*`), keyed like cable colours:
@@ -350,6 +358,11 @@ down to every name inside it, under each session's own.
 Status, kept apart from the kind hues:
 - **Live Green** (`ok`): connected (the status dot, the dot on a session's icon in the rack).
 - **Amber** (`warn`): waiting, slow, or a dead tab's title; the border of the reconnect bar.
+  On light, a warning paragraph (`p.warn`, `.row.warn`, or a row holding a `span.warn`, as the
+  MCP token warning and the missing recovery passphrase) is a box instead: ink text on
+  `warn-wash` (amber `#ffb000` at 22%) with a 3px `warn-fill` edge at the start, `5px 8px`
+  inside, its icon in `warn`. Dark text in the warning's own colour reads as rust on white.
+  Short warnings inside a line (a shortcut's clash, a dead tab's name) keep `warn` text.
 - **Signal Red** (`error`): disconnected, failures, the hover of a menu's
   destructive item (14% wash behind red text), and the fill of a danger button.
 - **Red Ink** (`error-ink`): text on a solid red fill (a danger button).
@@ -379,14 +392,36 @@ wash, `gold-soft`, with amber text on a toggle (`button.on`) and `fg` on a row (
 *current* (the keyboard's row in the session rack, the current Settings page) is `raised` with a
 2px amber inset edge (`.current`); *lit* is under the pointer: a flat thing (a menu item, a list
 row, `button.flat`) takes `raised`, a filled button takes `hover`. The palette's keyboard row
-(`.item.on`) is the one place still written as picked; it means current.
+(`.item.on`) is the one place still written as picked; it means current. A picked button's edge is
+`gold-fill` (`--picked-line`), at 55% on dark and solid on light: amber on both themes, where the
+light theme's ink `gold` would draw a black box.
 
 The light theme (`:root[data-theme="light"]` in `ui/app.css`) redefines every token above with
-the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`.
-The amber deepens to `#754b00` (white ink, a 14% wash), and `weak`, `ok`, `warn` and `error` are
-dark enough that each holds 4.5:1 on `panel`, `raised` and `hover` (a button under the pointer;
-checked 2026-11-08: `weak` 4.76 on `hover`, `error` 4.71, `warn` 4.68, `ok` 5.14), and the kind
-hues darken to hold contrast on the light greys. The light values are also kept in `.impeccable/design.json`
+the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`. It
+draws the same elements as dark, in other colours (one exception: links, under Buttons). It
+reads like a light desktop app: a light grey ground (`window` `#e5e5e8`) with near-white panels
+(`#f7f7f8`), white where the work and the fields are (`bg`, `deep`), `raised` `#ececef`,
+`hover` `#e2e2e6`, hairlines `#dcdce1`, soft two-layer shadows and a light scrim. A field's edge is
+its own token, `field-line` (`line` on dark): `#8e8e94` on light, 3.0:1 on `panel`, since a white
+field on a near-white panel has nothing else to show where it is. It is neutral first: what the
+accent says as text or a line (links, focus, a field's border, a tag's or a picked option's text) is
+said in ink, `gold` `#141414`, with links underlined. The dark theme's amber `#ffb000` stays only
+where it reads: as a fill under ink (`gold-fill`, 9.4:1), as a 22% wash behind ink (tags, picked
+rows and toggles, search hits), and as marks (the focused
+pane's ring, the terminal's and the start screen's cursor, slider knobs, checkboxes). As text it
+would be 1.7:1 on these surfaces, and a darker amber that passes turns brown. The pane ring is a
+mark at about 1.5:1 on the ground, under the 3:1 a graphic asks, kept amber because it says where
+the keyboard is in the same colour on both themes. `weak`, `ok`, `warn` and `error` hold 4.5:1 on `panel`,
+`raised` and `hover` (a button under the pointer; checked 2026-11-09: `weak` 5.04 on `hover`,
+`error` 5.82, `warn` 4.67 (`#a34800`, a burnt orange: the old `#745000` read as mustard), `ok`
+6.35), and the kind hues darken to hold contrast on the light greys (serial `#5a7d14` and Co-op
+`#7a5f52`, away from olive and khaki). Nothing on light is a dark yellow: one dark enough to read
+turns mustard, so yellows become orange. The terminal's highlight rules keep one colour each,
+made for dark terminals; when a terminal's background is light, each is darkened in OKLCH just
+enough to hold 4.5:1 on it, keeping its hue, with yellows taking `warn`'s orange
+(`settings::readable`): on white, errors `#d14352`, warnings `#b95c22`, ok `#2b8743`, addresses
+`#2f79c3`. The xtermium Light scheme's own colours hold 4.5:1 on its background the same way
+(white, slot 7, excepted; a test checks it). The light values are also kept in `.impeccable/design.json`
 (`colorMeta.*.light`).
 
 ### Named Rules
@@ -414,8 +449,13 @@ worked out so the two together make the Opacity setting, in every window: don't 
 between them. A floating layer is one layer at `--float-alpha`, over what's already there, as a window
 is over another. The lock screen stays solid: it hides what's behind it. `--solid` (1, or 0 with
 the Transparent effect) switches off the active tab's and a detached window's own fill so the pane
-shows through. Two exceptions, named: the scrim behind a dialog (`--scrim`) and the palette
-(`--scrim-soft`) is the dark ground at 0.4 and 0.32 in both themes, and the RDP view's bars over
+shows through. The title bar is the one place with only the ground under it, so a dark desktop
+turns it grey on light: there its icons (`--bar-ink`) go from `weak` to ink while `--solid` is 0,
+and the palette field and the New session key are a second layer at `--chrome-alpha`, as a panel
+is, instead of solid slabs on it. On light the New session key is `deep` (white, as the field),
+since `raised` is barely off the bar's grey.
+Two exceptions, named: the scrim behind a dialog (`--scrim`) and the palette
+(`--scrim-soft`) is the dark ground at 0.4 and 0.32 (black at 0.18 and 0.12 on light), and the RDP view's bars over
 the picture use fixed dark greys (`#0c0c0c`, `rgb(12 12 12 / 0.75)`), because they sit on the
 remote desktop's black, not on chrome.
 
@@ -596,8 +636,14 @@ Three tokens on `:root` in `ui/app.css`, from lowest to highest:
   and toasts.
 - **Dialog** (`--shadow-dialog`: `0 8px 28px rgba(0, 0, 0, 0.4)`): modal dialogs and the command
   palette.
-- **Scrim** (`--scrim`: `rgba(5, 5, 6, 0.4)`, the dark ground in both themes) behind a dialog;
-  `--scrim-soft` (`0.32`) behind the palette.
+- **Scrim** (`--scrim`: `rgba(5, 5, 6, 0.4)`, the dark ground) behind a dialog; `--scrim-soft`
+  (`0.32`) behind the palette.
+
+The light theme redefines all four lighter, each with a 1px ring so the edge holds on white:
+`0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.1)` (float),
+`0 0 0 1px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14)` (menu),
+`0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(0, 0, 0, 0.2)` (dialog), and a black scrim at
+0.18 and 0.12.
 
 ### Named Rules
 **The Float-Only Shadow Rule.** A surface casts a shadow only if it floats over the work and goes
@@ -629,30 +675,43 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
 - **Default:** a `raised` face with no visible border (a transparent 1px keeps sizes equal when a
   state adds one). Hover moves to `hover`. Disabled is 45% opacity; something merely stepped back
   (a lifted tab, the bar of a window without the keyboard, a done step's key, a tab's close glyph,
-  the quality bar when off) is `--dim`, 0.5.
-- **Primary:** amber fill with `gold-ink` text; hover mixes in 14% white. One per dialog, on its
-  main action.
+  the quality bar when off) is `--dim`, 0.5; 0.75 on light, where half of a grey falls under 3:1
+  (the inactive window's title bar icons are 3.1:1 there).
+- **Primary:** amber fill (`gold-fill`) with `gold-fill-ink` text; hover mixes in 14% white (on light, 8%
+  black: a paler amber on white reads as fading). Disabled on light is a grey `raised` face at 45%, not
+  a washed-out yellow. One per dialog, on its main action.
 - **Danger:** the primary of a question whose yes ends or deletes something (close a running
   tab, delete a folder, replace everything from a backup, replace the MCP token): red
   fill with `error-ink` (`button.primary.danger`). Something that can be put back is not asked
   about at all: it happens, and a toast offers Undo.
-- **On / selected:** amber wash, amber text, and a 55% amber border, for toggles and picked options.
+- **On / selected:** amber wash, amber text, and a 55% amber border, for toggles and picked options
+  (`--picked`, `--picked-line`). On light the text is ink, so the wash deepens to 42% amber and the
+  border is solid amber; a flat tool button that's on (a layout, Broadcast) keeps that wash there
+  (`--picked-flat`), where on dark its amber icon says it and it stays transparent.
 - **Flat:** transparent at rest, `raised` on hover, text in `fg`. Tool buttons in bars are flat,
   icon-only (`3px 5px`), in `weak` (the title bar and the tab strip set that themselves), turning
   amber when on, and always carry a tooltip.
 - **Link:** text that names another place is a borderless amber `button.link` (underline on
-  hover). A whole sentence that links is `.quiet`: body colour, dotted underline, amber on hover.
-- **Focus:** a 1px amber outline drawn inside the edge (`outline-offset: -1px`).
+  hover; on light, ink and always underlined: the one place the light theme draws an element
+  differently, since an ink link without it would read as text). A whole sentence that links is `.quiet`: body colour, dotted underline, amber on hover.
+- **Focus:** a 1px amber outline drawn inside the edge (`outline-offset: -1px`); ink on light.
 
 ### Inputs / Fields
-- **Style:** an inset well (`deep`) with a 1px hairline, 3px corners, 26px tall, `3px 8px`
-  padding. Selects use the app's own chevron, set in 8px from the edge.
-- **Focus:** the border turns amber; no glow.
+- **Style:** an inset well (`deep`) with a 1px `field-line` edge, 3px corners, 26px tall, `3px 8px`
+  padding. The title bar's field draws the same edge. Selects use the app's own chevron, set in 8px from the edge.
+- **Focus:** the border turns amber (ink on light); no glow.
 - **Placeholder:** an example, in `weak` (never the engine's default grey, which fails contrast
   on the wells). Labels stay outside the field.
 - **With an icon:** search fields put a 16px icon at 8px in and start text at
   `calc(8px + 16px + 5px)`.
-- **Checks, radios, ranges, progress:** native controls tinted with `accent-color: var(--gold)`.
+- **Checks and progress:** native controls tinted with `accent-color: var(--gold-fill)`.
+- **Radios:** drawn by `app.css`, the same on both themes (the engine's own put a thick black ring
+  between a light accent's edge and its dot): a 16px well in `deep` with a 1px edge between `weak`
+  and `field-line`; picked, a 5px `gold-fill` ring around a dot in the well's colour.
+- **Sliders:** drawn by `app.css`, the same on both themes (the engine darkens a native slider's
+  empty track to black under a light accent on a light page): a 5px `hover` groove filled in
+  `gold-fill` up to the knob (`--f`, from `ui/lib/slider.ts`), and a 13px `gold-fill` knob with a
+  2px white rim (with a 13% black hairline on light); disabled, the fill and the knob turn grey (`weak`), as a native slider's do.
 - **Too long:** a value, placeholder or choice that doesn't fit ends in `…`; fields never widen
   their dialog. In a `.form` the labels take what the longest needs, from 120 to 233px, and end
   in `…` past that; the fields take the rest. Boxes of text don't resize.
@@ -798,11 +857,17 @@ one button per kind, glyph and name, the picked one in the amber wash. The type 
 the editor because it decides every field below it; changing it keeps the host typed so far.
 
 ### Broadcast Outline (signature)
-Every terminal that receives broadcast keystrokes gets a 2px inset outline in the accent or a
-chosen colour (`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
+Every terminal that receives broadcast keystrokes gets a 2px inset outline in `--broadcast`
+(the accent on dark, the warning orange on light, as the status bar's marker) or a chosen colour
+(`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
 ring, march, rainbow, off). While broadcast is on, the focus ring around the pane you type in
-turns to a 2px dashed ring in the text colour (`fg`) and steps 2px further out, so it never reads
-as one band with an outline in the same colour. All animated styles stop under reduced motion, and
+turns to a 2px dashed ring in the text colour (`fg` on dark, `weak` on light, where black dashes
+looked dated), so it never reads as one band with an outline in the same colour. It stays where
+the ring is: stepped further out, the window's edge cut it off at the sides and the bottom. On
+light a pale outline colour is darkened to at most 0.7 Oklab lightness, keeping its hue, so it
+shows on a light terminal without becoming a heavy frame. Lightness clamps on a user's colour
+(`.tinted`, the outline) go through `oklab(from …)`, not `oklch(from …)`: Chromium drops a greyish
+colour's hue in the latter and draws it pink. All animated styles stop under reduced motion, and
 the preview in Settings › Appearance holds still while it is scrolled out of view.
 
 ### Co-op Ring and Pointers
@@ -885,8 +950,7 @@ buttons, and never under reduced motion.
 - **Don't** use off-scale spacing (4px, 6px, 10px, 12px, 16px) in padding, margin, gap, inset,
   offsets or radii, or a raw `font-size` in px; the scale test fails on those. Sizes (width,
   height, line-height) aren't tested: keep them on the scale or name the exception.
-- **Don't** put a shadow on a resting panel, tab, row or button, or write a new shadow value for
-  a floating layer: use `--shadow-float`, `--shadow-menu` or `--shadow-dialog`.
+- **Don't** put a shadow on a resting panel, tab, row or button or write a new shadow value for a floating layer: use `--shadow-float`, `--shadow-menu` or `--shadow-dialog`.
 - **Don't** use amber for headings, icons, illustration or large fills other than the primary
   button.
 - **Don't** use a kind hue to show state, or a status colour to mean a kind of connection.

@@ -548,7 +548,7 @@
     {@const icon = folderOf(p)?.icon || (open[p] ? "folder-open" : "folder")}
     {@const tint = folderColor(p)}
     <!-- a folder has no kind: its icon wears its mark, its lightness held like a marked name's (app.css `.tinted`) -->
-    {@const iconTint = tint && `oklch(from ${tint} clamp(var(--tint-lo), l, var(--tint-hi)) c h)`}
+    {@const iconTint = tint && `oklab(from ${tint} clamp(var(--tint-lo), l, var(--tint-hi)) a b)`}
     <button
       class="flat item"
       class:into={(drag?.folder === p && drag.row === undefined) || (fdrag?.to === p && fdrag.where === "into")}
@@ -738,7 +738,7 @@
   }
   /* where a dragged session or folder would land */
   .into {
-    background: color-mix(in srgb, var(--gold) 18%, transparent);
+    background: color-mix(in srgb, var(--gold-fill) 18%, transparent);
   }
   .item.before {
     box-shadow: inset 0 2px 0 var(--gold);

@@ -1014,7 +1014,7 @@
   .mine {
     position: absolute;
     pointer-events: none;
-    background: color-mix(in srgb, var(--mine, var(--gold)) 35%, transparent);
+    background: color-mix(in srgb, var(--mine, var(--gold-fill)) 35%, transparent);
   }
   /* thin, over the terminal's right edge; clearer while the pointer is on it */
   .scrollbar {

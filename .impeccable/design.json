@@ -18,7 +18,7 @@
           "oklch(83% 0.170 76.4)",
           "oklch(95% 0.170 76.4)"
         ],
-        "light": "#754b00"
+        "light": "#141414"
       },
       "gold-ink": {
         "role": "primary",
@@ -40,7 +40,14 @@
         "role": "primary",
         "displayName": "Amber Wash",
         "canonical": "rgba(255, 176, 0, 0.14)",
-        "light": "rgba(117, 75, 0, 0.14)"
+        "light": "rgba(255, 176, 0, 0.22)"
+      },
+      "gold-fill": {
+        "role": "primary",
+        "displayName": "Amber Fill",
+        "canonical": "#ffb000",
+        "light": "#ffb000",
+        "purpose": "The accent as a fill or a mark: the primary button, the focused pane's ring, checkboxes, sliders, selected text, the start screen's cursor. Ink on it is gold-fill-ink (#141414 on light)."
       },
       "k-ssh": {
         "role": "secondary",
@@ -88,7 +95,7 @@
           "oklch(83% 0.143 114.6)",
           "oklch(95% 0.143 114.6)"
         ],
-        "light": "#6f7d0c"
+        "light": "#5a7d14"
       },
       "k-rdp": {
         "role": "secondary",
@@ -232,7 +239,7 @@
           "oklch(83% 0.130 83.4)",
           "oklch(95% 0.130 83.4)"
         ],
-        "light": "#745000"
+        "light": "#a34800"
       },
       "error": {
         "role": "tertiary",
@@ -280,7 +287,7 @@
           "oklch(83% 0.003 285.9)",
           "oklch(95% 0.003 285.9)"
         ],
-        "light": "#d8d8db"
+        "light": "#e5e5e8"
       },
       "deep": {
         "role": "neutral",
@@ -312,7 +319,7 @@
           "oklch(83% 0.004 285.9)",
           "oklch(95% 0.004 285.9)"
         ],
-        "light": "#f1f1f2"
+        "light": "#ffffff"
       },
       "panel": {
         "role": "neutral",
@@ -328,7 +335,7 @@
           "oklch(83% 0.006 285.8)",
           "oklch(95% 0.006 285.8)"
         ],
-        "light": "#e8e8ea"
+        "light": "#f7f7f8"
       },
       "raised": {
         "role": "neutral",
@@ -344,7 +351,7 @@
           "oklch(83% 0.010 285.6)",
           "oklch(95% 0.010 285.6)"
         ],
-        "light": "#dcdcdf"
+        "light": "#ececef"
       },
       "hover": {
         "role": "neutral",
@@ -360,7 +367,7 @@
           "oklch(83% 0.011 285.6)",
           "oklch(95% 0.011 285.6)"
         ],
-        "light": "#cfcfd3"
+        "light": "#e2e2e6"
       },
       "line": {
         "role": "neutral",
@@ -376,7 +383,14 @@
           "oklch(83% 0.013 285.6)",
           "oklch(95% 0.013 285.6)"
         ],
-        "light": "#c9c9ce"
+        "light": "#dcdce1"
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "Field Edge",
+        "canonical": "#2c2c33",
+        "light": "#8e8e94",
+        "purpose": "A text field's border. The hairline on dark; on light a quiet grey at 3.0:1 on panel, since a white field on a near-white panel has nothing else to show where it is."
       },
       "fg": {
         "role": "neutral",
@@ -408,7 +422,7 @@
           "oklch(83% 0.013 286.1)",
           "oklch(95% 0.013 286.1)"
         ],
-        "light": "#55555c"
+        "light": "#5f5f66"
       },
       "mark": {
         "role": "neutral",
@@ -473,27 +487,32 @@
       {
         "name": "--shadow-float",
         "value": "0 4px 14px rgba(0, 0, 0, 0.3)",
-        "purpose": "Bars floating over a view (find, reconnect) and the hint over a detached window."
+        "purpose": "Bars floating over a view (find, reconnect) and the hint over a detached window.",
+        "light": "0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.1)"
       },
       {
         "name": "--shadow-menu",
         "value": "0 6px 20px rgba(0, 0, 0, 0.36)",
-        "purpose": "Context menus, dropdown lists and toasts."
+        "purpose": "Context menus, dropdown lists and toasts.",
+        "light": "0 0 0 1px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14)"
       },
       {
         "name": "--shadow-dialog",
         "value": "0 8px 28px rgba(0, 0, 0, 0.4)",
-        "purpose": "Modal dialogs and the command palette."
+        "purpose": "Modal dialogs and the command palette.",
+        "light": "0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(0, 0, 0, 0.2)"
       },
       {
         "name": "scrim-dialog",
         "value": "rgba(5, 5, 6, 0.4)",
-        "purpose": "Backdrop behind a dialog."
+        "purpose": "Backdrop behind a dialog.",
+        "light": "rgba(0, 0, 0, 0.18)"
       },
       {
         "name": "scrim-palette",
         "value": "rgba(5, 5, 6, 0.32)",
-        "purpose": "Backdrop behind the command palette."
+        "purpose": "Backdrop behind the command palette.",
+        "light": "rgba(0, 0, 0, 0.12)"
       }
     ],
     "motion": [

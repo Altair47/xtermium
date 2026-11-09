@@ -2,12 +2,13 @@
   // The RDP picture bar: from Quality (left, the default) to Speed. Changes apply on the next connect.
   import { _ } from "./i18n.svelte";
   import { RDP_QUALITY } from "./api";
+  import { filled } from "./slider";
 
   let { value = $bindable(), disabled = false }: { value: number; disabled?: boolean } = $props();
 </script>
 
 <div class="bar" class:disabled>
-  <input type="range" min="0" max={RDP_QUALITY.length - 1} step="1" bind:value {disabled} aria-label={_("Picture quality against speed")} />
+  <input type="range" min="0" max={RDP_QUALITY.length - 1} step="1" bind:value {disabled} {@attach filled(value)} aria-label={_("Picture quality against speed")} />
   <div class="names">
     {#each RDP_QUALITY as q, i (q.name)}<span class:on={i === value}>{_(q.name)}</span>{/each}
   </div>

@@ -113,8 +113,8 @@
         <path d="M0,0 L8,4 L0,8 z" fill="context-stroke" />
       </marker>
       <linearGradient id="g{uid}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="var(--gold)" stop-opacity="0.26" />
-        <stop offset="1" stop-color="var(--gold)" stop-opacity="0.08" />
+        <stop offset="0" stop-color="var(--gold-fill)" stop-opacity="0.26" />
+        <stop offset="1" stop-color="var(--gold-fill)" stop-opacity="0.08" />
       </linearGradient>
     </defs>
 
@@ -242,7 +242,7 @@
     stroke-dasharray: 6 6;
   }
   .on .pipe {
-    stroke: color-mix(in srgb, var(--gold) 70%, transparent);
+    stroke: color-mix(in srgb, var(--gold-fill) 70%, transparent);
     stroke-dasharray: none;
   }
   .badge {
@@ -251,7 +251,7 @@
     stroke-width: 1.5;
   }
   .on .badge {
-    stroke: var(--gold);
+    stroke: var(--gold-fill);
   }
   .node {
     fill: rgba(var(--deep-rgb), 1);

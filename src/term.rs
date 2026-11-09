@@ -1922,7 +1922,7 @@ fn fg_color(attrs: &CellAttributes, pal: &ColorPalette) -> (u32, u8) {
     (rgb32(c), flags)
 }
 
-fn rgb32(c: SrgbaTuple) -> u32 {
+pub(crate) fn rgb32(c: SrgbaTuple) -> u32 {
     let (r, g, b, _) = c.to_srgb_u8();
     (r as u32) << 16 | (g as u32) << 8 | b as u32
 }
@@ -2819,14 +2819,14 @@ mod tests {
     #[test]
     fn highlights_plain_text() {
         let mut i = inner(60, 3, None);
-        i.look.highlights = Arc::new(crate::settings::Highlight::compile(true, &crate::settings::Highlight::defaults()));
+        i.look.highlights = Arc::new(crate::settings::Highlight::compile(true, &crate::settings::Highlight::defaults(), 0x0b0b0d));
         i.term.advance_bytes("ERROR at 192.0.2.12:22 then \x1b[35mERROR\x1b[0m [2001:db8::1:2] at 10:22\r\n");
         let f = String::from_utf8(i.frame(true).pop().unwrap()[1..].to_vec()).unwrap();
         assert_eq!(f.matches(&format!("\"ERROR\",{}", 0xef5f6b)).count(), 1, "{f}");
         assert!(f.contains(&format!("\"192.0.2.12:22\",{}", 0x5fa8f5)), "{f}");
         assert!(f.contains(&format!("\"2001:db8::1:2\",{}", 0x5fa8f5)), "shortened IPv6: {f}");
         assert!(!f.contains(&format!("10:22\",{}", 0x5fa8f5)), "a time isn't an address: {f}");
-        assert!(crate::settings::Highlight::compile(false, &crate::settings::Highlight::defaults()).is_empty());
+        assert!(crate::settings::Highlight::compile(false, &crate::settings::Highlight::defaults(), 0x0b0b0d).is_empty());
     }
 
     #[test]
