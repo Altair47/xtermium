@@ -511,10 +511,25 @@
 
   let showPassword = $state(false);
 
+  /** What every setting is until someone changes it, as the backend says: null while asking. */
+  let defaults = $state<Settings | null>(null);
+  invoke<Settings>("default_settings").then((d) => (defaults = d));
+
+  /** Puts settings back to their defaults, with an Undo. The button that was clicked hides now,
+   *  so the keyboard moves to the first control beside it. */
+  function resetTo(e: MouseEvent, keys: (keyof Settings)[]) {
+    const pick = (from: Settings) => Object.fromEntries(keys.map((k) => [k, from[k]]));
+    const before = pick(s);
+    Object.assign(s, pick(defaults!));
+    (e.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>("input, button")?.focus();
+    toast(_("Back to the default."), { label: _("Undo"), run: () => Object.assign(app.settings!, before) });
+  }
+
   async function reset() {
     // Saving only the defaults resets everything else (missing fields take their defaults).
     // Only appearance and terminal settings go back: defaults, automation, sync and the rest stay.
-    const { theme, ui_scale, effect, opacity, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, ...keep } =
+    // Everything with its own reset button (`back`) on those pages is in this list too.
+    const { theme, ui_scale, effect, opacity, accent, scheme, font, font_size, override_sessions, cursor, cursor_blink, line_height, pane_padding, pane_step, scrollback, scroll_on_output, copy_on_select, right_click_paste, strip_paste, broadcast_outline, broadcast_outline_color, ...keep } =
       $state.snapshot(s);
     app.settings = await invoke<Settings>("save_settings", { settings: keep });
   }
@@ -782,6 +797,13 @@
     return `${algo} …${b64.slice(-16)}`;
   };
 </script>
+
+<!-- One setting's way back to its default. It keeps its place while hidden, so rows don't move. -->
+{#snippet back(keys: (keyof Settings)[], shown: (d: Settings) => string)}
+  {@const same = !defaults || keys.every((k) => s[k] === defaults![k])}
+  {@const title = defaults ? _("Reset to {keys}", { keys: shown(defaults) }) : ""}
+  <button class="flat icon-only back" class:same disabled={same} {title} aria-label={title} onclick={(e) => resetTo(e, keys)}><Icon name="refresh" /></button>
+{/snippet}
 
 {#snippet card(sc: Scheme)}
   <button class="scheme" class:selected={s.scheme === sc.name} style:background={css(sc.bg)} style:color={css(sc.fg)} onclick={() => (s.scheme = sc.name)}>
@@ -1115,9 +1137,10 @@ xtermium close 3`}</pre>
         {#each [N_("System"), N_("Dark"), N_("Light")] as const as theme (theme)}
           <button class:selected={s.theme === theme} aria-pressed={s.theme === theme} onclick={() => (s.theme = theme)}>{_(theme)}</button>
         {/each}
+        {@render back(["theme"], (d) => _(d.theme))}
       </div>
       <span>{_("Interface scale")}</span>
-      <div class="row"><input type="range" min="0.8" max="1.6" step="0.05" bind:value={s.ui_scale} {@attach filled(s.ui_scale)} />{s.ui_scale.toFixed(2)}×</div>
+      <div class="row"><input type="range" min="0.8" max="1.6" step="0.05" bind:value={s.ui_scale} {@attach filled(s.ui_scale)} />{s.ui_scale.toFixed(2)}×{@render back(["ui_scale"], (d) => `${d.ui_scale.toFixed(2)}×`)}</div>
       <span>{_("Window effect")}</span>
       <div class="row wrap">
         {#each ["None", "Transparent"] as const as e (e)}
@@ -1125,7 +1148,7 @@ xtermium close 3`}</pre>
         {/each}
       </div>
       <span class:weak={!transparent}>{_("Opacity")}</span>
-      <div class="row"><input type="range" min="0.8" max="1" step="0.01" disabled={!transparent} bind:value={s.opacity} {@attach filled(s.opacity)} />{Math.round(s.opacity * 100)}%</div>
+      <div class="row"><input type="range" min="0.8" max="1" step="0.01" disabled={!transparent} bind:value={s.opacity} {@attach filled(s.opacity)} />{Math.round(s.opacity * 100)}%{@render back(["opacity"], (d) => `${Math.round(d.opacity * 100)}%`)}</div>
       <span>{_("Accent")}</span>
       <div class="row wrap">
         <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="#ffb000" onclick={() => (s.accent = "")}></button>
@@ -1133,6 +1156,7 @@ xtermium close 3`}</pre>
           <button class="swatch" class:selected={s.accent === colour} title={_(name)} aria-label={_("Accent {c}", { c: _(name) })} style:--c={colour} onclick={() => (s.accent = colour)}></button>
         {/each}
         <input type="color" title={_("Any colour")} value={s.accent || "#ffb000"} oninput={(e) => (s.accent = (e.target as HTMLInputElement).value)} />
+        {@render back(["accent"], (d) => _("Amber (default)"))}
       </div>
       <span>{_("App icon")}</span>
       <div class="col">
@@ -1211,16 +1235,19 @@ xtermium close 3`}</pre>
         {#each OUTLINES as [id, name] (id)}
           <button class:selected={s.broadcast_outline === id} onclick={() => (s.broadcast_outline = id)}>{_(name)}</button>
         {/each}
+        {@render back(["broadcast_outline"], (d) => _(OUTLINES.find(([id]) => id === d.broadcast_outline)?.[1] ?? d.broadcast_outline))}
       </div>
       <span class:weak={s.broadcast_outline === "rainbow"}>{_("Colour")}</span>
       <div class="row wrap">
+        <button class="swatch" class:selected={!s.broadcast_outline_color} title={_("Accent")} aria-label={_("Accent")} style:--c="var(--broadcast)" onclick={() => (s.broadcast_outline_color = "")}></button>
         {#each ["#9aa3ad", ...COLORS] as c (c)}
           <button class="swatch" class:selected={s.broadcast_outline_color === c} title={c} aria-label={_("Colour {c}", { c })} style:--c={c} onclick={() => (s.broadcast_outline_color = c)}></button>
         {/each}
-        <input type="color" title={_("Any colour")} value={s.broadcast_outline_color} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
+        <input type="color" title={_("Any colour")} value={s.broadcast_outline_color || s.accent || "#ffb000"} oninput={(e) => (s.broadcast_outline_color = (e.target as HTMLInputElement).value)} />
+        {@render back(["broadcast_outline_color"], (d) => d.broadcast_outline_color || _("Accent"))}
       </div>
       <span>{_("Preview")}</span>
-      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color} {@attach offscreenStill}>$ uptime</div>
+      <div class="outline preview" data-outline={s.broadcast_outline} style:--oc={s.broadcast_outline_color || null} {@attach offscreenStill}>$ uptime</div>
     </div>
     <div class="foot"><button onclick={reset}>{_("Reset appearance and terminal settings")}</button></div>
   {:else if page === "terminal"}
@@ -1228,12 +1255,15 @@ xtermium close 3`}</pre>
     <h3>{_("Font and cursor")}</h3>
     <div class="form">
       <span>{_("Family")}</span>
-      <input list="mono-fonts" bind:value={s.font} placeholder={_("Built-in monospace")} />
+      <div class="row">
+        <input class="grow" list="mono-fonts" bind:value={s.font} placeholder={_("Built-in monospace")} />
+        {@render back(["font"], (d) => _("Built-in monospace"))}
+      </div>
       <datalist id="mono-fonts">
         {#each fonts as f (f)}<option value={f}></option>{/each}
       </datalist>
       <span>{_("Size")}</span>
-      <div class="row"><input type="range" min="8" max="32" step="0.5" bind:value={s.font_size} {@attach filled(s.font_size)} />{s.font_size}</div>
+      <div class="row"><input type="range" min="8" max="32" step="0.5" bind:value={s.font_size} {@attach filled(s.font_size)} />{s.font_size}{@render back(["font_size"], (d) => String(d.font_size))}</div>
       <span></span>
       <span class="weak">
         {_("For every terminal. To make one tab's text bigger or smaller, use the font shortcuts in it:")}
@@ -1245,22 +1275,24 @@ xtermium close 3`}</pre>
           <button class:selected={s.cursor === c} onclick={() => (s.cursor = c)}>{_(c)}</button>
         {/each}
         <label class="check"><input type="checkbox" bind:checked={s.cursor_blink} />{_("Blink")}</label>
+        {@render back(["cursor", "cursor_blink"], (d) => (d.cursor_blink ? `${_(d.cursor)}, ${_("Blink")}` : _(d.cursor)))}
       </div>
       <span>{_("Line height")}</span>
-      <div class="row"><input type="range" min="1" max="2" step="0.05" bind:value={s.line_height} {@attach filled(s.line_height)} />{s.line_height.toFixed(2)}×</div>
+      <div class="row"><input type="range" min="1" max="2" step="0.05" bind:value={s.line_height} {@attach filled(s.line_height)} />{s.line_height.toFixed(2)}×{@render back(["line_height"], (d) => `${d.line_height.toFixed(2)}×`)}</div>
       <span>{_("Pane padding")}</span>
-      <div class="row"><input type="range" min="0" max="32" step="1" bind:value={s.pane_padding} {@attach filled(s.pane_padding)} />{_("{n} px", { n: s.pane_padding })}</div>
+      <div class="row"><input type="range" min="0" max="32" step="1" bind:value={s.pane_padding} {@attach filled(s.pane_padding)} />{_("{n} px", { n: s.pane_padding })}{@render back(["pane_padding"], (d) => _("{n} px", { n: d.pane_padding }))}</div>
       <span>{_("Apply to")}</span>
       <label class="check"><input type="checkbox" bind:checked={s.override_sessions} />{_("all sessions (ignore per-session colours and fonts)")}</label>
     </div>
     <h3>{_("Behaviour")}</h3>
     <div class="form">
       <span>{_("Scrollback")}</span>
-      <div class="row"><input type="number" min="500" max="200000" step="500" bind:value={s.scrollback} /> {_("lines")}</div>
+      <div class="row"><input type="number" min="500" max="200000" step="500" bind:value={s.scrollback} /> {_("lines")}{@render back(["scrollback"], (d) => `${d.scrollback} ${_("lines")}`)}</div>
       <span></span>
       <label class="row">
         {_("Making a pane bigger or smaller with the keyboard changes it by")}
         <input type="number" min="1" max="500" step="1" bind:value={s.pane_step} aria-label={_("Pixels a pane grows or shrinks by")} />{_("pixels")}
+        {@render back(["pane_step"], (d) => `${d.pane_step} ${_("pixels")}`)}
       </label>
       <span></span>
       <label class="check"><input type="checkbox" bind:checked={s.scrollbar} />{_("Show a scroll bar")}</label>
@@ -1848,6 +1880,13 @@ xtermium close 3`}</pre>
   }
   .foot {
     margin-top: 8px;
+  }
+  /* a control's height in a row's: a slider's row stays as dense with the button as without it */
+  .back {
+    margin-block: calc((var(--row) - var(--control)) / 2);
+  }
+  .back.same {
+    visibility: hidden;
   }
   .col {
     display: flex;

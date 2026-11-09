@@ -433,9 +433,6 @@ impl Settings {
         if !png.is_some_and(|b| b.bytes().all(|c| c.is_ascii_alphanumeric() || b"+/=".contains(&c))) || self.app_icon.len() > APP_ICON_MAX {
             self.app_icon.clear();
         }
-        if self.broadcast_outline_color.is_empty() {
-            self.broadcast_outline_color = d.broadcast_outline_color;
-        }
     }
 }
 
@@ -528,5 +525,16 @@ mod tests {
         let mut st = Settings { guide_done: vec!["shell".into(), "shell".into(), "<b>".into()], ..Settings::default() };
         st.sanitize();
         assert_eq!(st.guide_done, ["shell"]);
+    }
+
+    /// The broadcast outline's colour is a picked one, or "" for the accent. Anything else follows
+    /// the accent too, because a terminal that gets your keys must never lose its outline.
+    #[test]
+    fn outline_colour_follows_the_accent_unless_picked() {
+        for (saved, kept) in [("#ABCDEF", "#abcdef"), ("", ""), ("red", "")] {
+            let mut st = Settings { broadcast_outline_color: saved.into(), ..Default::default() };
+            st.sanitize();
+            assert_eq!(st.broadcast_outline_color, kept);
+        }
     }
 }

@@ -597,6 +597,9 @@ it is a cut.
 
 Forms are a two-column grid (labels in `weak`, minimum 120px, gaps `8px 13px`), and a label
 beside a multi-line field aligns to its first baseline.
+A customisable setting with more than two values ends its row with a flat reset button, shown
+only once the value differs from the default and naming that default in its tooltip; it keeps
+its place while hidden, so rows never move, and a reset offers Undo.
 
 This is a desktop app with no breakpoints: things shrink, ellipsize and scroll rather than
 reflow. Long names truncate with an ellipsis; Settings page names wrap to two lines instead.
@@ -854,7 +857,8 @@ one button per kind, glyph and name, the picked one in the amber wash. The type 
 the editor because it decides every field below it; changing it keeps the host typed so far.
 
 ### Broadcast Outline (signature)
-Every terminal that receives broadcast keystrokes gets a 2px inset outline in a chosen colour
+Every terminal that receives broadcast keystrokes gets a 2px inset outline in `--broadcast`
+(the accent on dark, the warning orange on light, as the status bar's marker) or a chosen colour
 (`--oc`), drawn inside the pane at 3px corners. Its style is the user's (steady, breathe, fade,
 ring, march, rainbow, off). While broadcast is on, the focus ring around the pane you type in
 turns to a 2px dashed ring in the text colour (`fg` on dark, `weak` on light, where black dashes

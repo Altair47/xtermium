@@ -1542,7 +1542,7 @@
               dir="ltr"
               class:outline={drawn}
               data-outline={drawn ? app.settings?.broadcast_outline : null}
-              style:--oc={app.settings?.broadcast_outline_color}
+              style:--oc={app.settings?.broadcast_outline_color || null}
               data-pane={pane}
               class:unseen={arriving?.key === t.key}
               class:arrive={arriving?.key === t.key && arriving.up && arriving.clear}

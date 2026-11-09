@@ -836,8 +836,9 @@ progress {
 }
 
 /* Broadcast: the outline on every terminal that gets the keys. `data-outline` is the style
-   (src/settings.rs OUTLINES), `--oc` its colour. */
+   (src/settings.rs OUTLINES), `--oc` its colour, the status bar marker's (`--broadcast`) unless one was picked. */
 .outline {
+  --oc: var(--broadcast);
   position: relative;
 }
 .outline::after {
