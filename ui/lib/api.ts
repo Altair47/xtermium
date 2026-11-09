@@ -517,8 +517,9 @@ export type Update = { version: string; newer: boolean; page: string; download: 
 // Commands (Tauri turns Rust's snake_case argument names into camelCase):
 //   owner:  coop_create() · coop_refresh() every 2 s while the dialog is open · coop_passcode() ·
 //           coop_approve({ user }) · coop_decline({ user }) · coop_kick({ user }) · coop_rename({ user, name }) · coop_end() ·
-//           coop_share({ tab, on }) · coop_cursor({ tab, col, row })
-//   viewer: coop_join({ passcode }) · coop_leave() · coop_cursor({ tab, col, row }) ·
+//           coop_share({ tab, on }) · coop_cursor({ tab, col, row }) · coop_control({ tab, user }) (user "": take it back) ·
+//           coop_decline_control({ tab, user })
+//   viewer: coop_join({ passcode }) · coop_leave() · coop_cursor({ tab, col, row }) · coop_ask_control({ ringTab, want }) ·
 //           coop_open_remote({ ringTab, out }) (a Channel, like tab_attach) · coop_remote_key({ ringTab, key }) ·
 //           coop_remote_text({ ringTab, text }) · coop_remote_mouse({ ringTab, ev, cw, ch }) (the term_key / term_text /
 //           term_mouse arguments; cw, ch: one of your cells in device pixels, as term_resize takes) ·
@@ -553,8 +554,12 @@ export type CoopTraffic = { id: string; up: number; down: number };
 export type CoopCursor = { tab: number; user_id: string; name: string; image: string | null; col: number; row: number };
 /** Another person's selection on a shared terminal tab: its ends in stable rows (`Meta.shared`). */
 export type CoopSelection = { tab: number; user_id: string; a: [number, number]; b: [number, number]; block: boolean };
+/** A guest and a shared desktop (`tab` is the owner's number for it): the one driving it (`control`),
+ *  or one asking to (`wants`). A shared desktop with nobody in `control` is the owner's to drive. */
+export type CoopControl = { tab: number; user_id: string };
 /** The `coop` event: all of it, whenever any of it changes. `shared`: your own tabs (by their id) that
- *  you share. When the ring is over `ring` is null, and `ended` says why when it wasn't you: "pro"
- *  (the owner's Pro lapsed), "kicked", "ended" (the owner ended it), "lost" (the connection),
- *  "signed-out"; `message` is the sentence to show. */
-export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; selections?: CoopSelection[]; ended?: string; message?: string };
+ *  you share. `control`: who drives each shared desktop a guest drives; `wants`: the guests asking for
+ *  control (the owner sees everyone's, a guest their own). When the ring is over `ring` is null, and
+ *  `ended` says why when it wasn't you: "pro" (the owner's Pro lapsed), "kicked", "ended" (the owner
+ *  ended it), "lost" (the connection), "signed-out"; `message` is the sentence to show. */
+export type CoopEvent = { ring: CoopRing | null; shared: number[]; remote: CoopRemote[]; cursors: CoopCursor[]; selections?: CoopSelection[]; control?: CoopControl[]; wants?: CoopControl[]; ended?: string; message?: string };
