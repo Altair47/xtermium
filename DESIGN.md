@@ -708,7 +708,7 @@ Quiet and exact: small, flat faces that brighten a step under the pointer.
 - **Sliders:** drawn by `app.css`, the same on both themes (the engine darkens a native slider's
   empty track to black under a light accent on a light page): a 5px `hover` groove filled in
   `gold-fill` up to the knob (`--f`, from `ui/lib/slider.ts`), and a 13px `gold-fill` knob with a
-  2px rim in the well's colour; disabled, the fill and the knob turn grey (`weak`), as a native slider's do.
+  2px white rim (with a 13% black hairline on light); disabled, the fill and the knob turn grey (`weak`), as a native slider's do.
 - **Too long:** a value, placeholder or choice that doesn't fit ends in `…`; fields never widen
   their dialog. In a `.form` the labels take what the longest needs, from 120 to 233px, and end
   in `…` past that; the fields take the rest. Boxes of text don't resize.

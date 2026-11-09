@@ -541,9 +541,13 @@ input[type="range"]::-webkit-slider-thumb {
   height: 13px;
   /* centred on the groove: half the knob less half the groove */
   margin-top: calc((5px - 13px) / 2);
-  border: 2px solid rgb(var(--deep-rgb));
+  /* a white rim on both themes: in the well's colour it drew a black ring on dark */
+  border: 2px solid #fff;
   border-radius: 50%;
   background: var(--gold-fill);
+}
+/* on white the rim needs a hairline to show where the knob ends */
+:root[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.13);
 }
 input[type="range"]:disabled::-webkit-slider-thumb {
