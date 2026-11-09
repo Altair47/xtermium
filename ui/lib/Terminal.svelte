@@ -13,7 +13,7 @@
   import { Channel, invoke } from "@tauri-apps/api/core";
   import { OS, wheelAction } from "./actions";
   import { bytes, css, fontStack, openUrl, type Meta, type Session } from "./api";
-  import { selectionRows, throttle } from "./coop";
+  import { remoteView, selectionRows, throttle } from "./coop";
   import CoopCursors from "./CoopCursors.svelte";
   import CoopSelections from "./CoopSelections.svelte";
   import { close, decode, frameAt, type Pic } from "./images";
@@ -77,12 +77,8 @@
     const me = app.coop.ring?.members.find((m) => m.you);
     return me ? coopColor(me.id) : null;
   });
-  /** A remote tab's canvas in CSS pixels, and `k` (at most 1) shrinking what the font size can't fit. */
+  /** A remote tab's canvas in CSS pixels (the owner's grid at this viewer's cell), and `k` (at most 1) shrinking it to fit the box. */
   let view = $state({ w: 0, h: 0, k: 1 });
-  /** A remote tab's font size (CSS pixels), picked so the owner's grid fills the box; 0 until fitted. */
-  let fitted = 0;
-  /** fitRemote() is measuring the font it picked: that inner fit only sizes the canvas. */
-  let fitting = false;
   /** The session had ended at the last update: `onexit(true)` comes once per ending. */
   let ended = false;
   let canvas: HTMLCanvasElement = $state()!;
@@ -220,7 +216,7 @@
   }
 
   function font(flags: number) {
-    const size = Math.round(Math.max(6, remote && fitted ? fitted : look!.size + zoom) * devicePixelRatio * 100) / 100;
+    const size = Math.round(Math.max(6, look!.size + zoom) * devicePixelRatio * 100) / 100;
     return `${flags & ITALIC ? "italic " : ""}${flags & BOLD ? "bold " : ""}${size}px ${fontStack(look!.font)}`;
   }
 
@@ -240,35 +236,22 @@
     fit();
   }
 
-  /** A remote tab is never resized: the owner's size wins. Its font grows or shrinks here until their
-   *  grid fills the box (one side, the other as the shapes allow), measured on this computer: its own
-   *  screen scaling and, where the owner's font is missing, its fallback. The grid sits at the top left,
-   *  as a terminal's does; what a font size can't fit (the smallest one, rounding) is scaled down. */
+  /** A remote tab is never resized: the owner's size wins. It is drawn with this viewer's own font and
+   *  zoom, so the canvas is the owner's grid at this cell size, at the top left as a terminal's is; when
+   *  that is larger than the box it is scaled down (`k`, never up) so the whole grid stays visible. */
   function fitRemote() {
     const r = box.getBoundingClientRect();
     if (!size || size[0] < 1 || size[1] < 1 || r.width < 4 || r.height < 4) return;
     const pad = app.settings?.pane_padding ?? 6;
-    const [aw, ah] = [Math.max(1, r.width - 2 * pad), Math.max(1, r.height - 2 * pad)];
-    const [W, H] = [Math.round(size[0] * cell.w), Math.round(size[1] * cell.h)];
-    // Glyphs widen with the font almost exactly in step, so one new size lands within a few percent.
-    const t = Math.min((aw * devicePixelRatio) / W, (ah * devicePixelRatio) / H);
-    const now = fitted || look!.size;
-    const next = Math.max(6, Math.min(72, Math.floor(now * t * 4) / 4));
-    if (!fitting && (t < 0.98 || t > 1.03) && next !== now) {
-      fitted = next;
-      fitting = true;
-      measure(); // measures, then sizes the canvas through fit() and here again
-      fitting = false;
-      return;
-    }
+    const v = remoteView(size[0], size[1], cell.w / devicePixelRatio, cell.h / devicePixelRatio, r.width - 2 * pad, r.height - 2 * pad);
+    const [W, H] = [Math.round(v.w * devicePixelRatio), Math.round(v.h * devicePixelRatio)];
     if (canvas.width !== W || canvas.height !== H) {
       canvas.width = W;
       canvas.height = H;
       full = true;
       schedule();
     }
-    const [w, h] = [W / devicePixelRatio, H / devicePixelRatio];
-    view = { w, h, k: Math.min(1, aw / w, ah / h) };
+    view = { w: W / devicePixelRatio, h: H / devicePixelRatio, k: v.k };
   }
 
   /** Size the canvas to its box and tell the backend the grid size. */

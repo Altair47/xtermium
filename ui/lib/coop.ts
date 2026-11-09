@@ -108,3 +108,11 @@ export function memberColor(id: string, members: { id: string; owner?: boolean }
   }
   return hash(id) % n;
 }
+
+/** A remote tab's canvas in CSS pixels: the owner's `cols` × `rows` at this viewer's own cell size, and
+ *  `k`, the scale (never above 1, so never bigger than the viewer's font) that makes a grid larger than
+ *  the box (`boxW` × `boxH`) fit it whole. */
+export const remoteView = (cols: number, rows: number, cellW: number, cellH: number, boxW: number, boxH: number) => {
+  const [w, h] = [Math.max(0, cols * cellW), Math.max(0, rows * cellH)];
+  return { w, h, k: w > 0 && h > 0 ? Math.min(1, Math.max(0, boxW) / w, Math.max(0, boxH) / h) : 1 };
+};
