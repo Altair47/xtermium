@@ -290,7 +290,8 @@ pub fn readable(c: u32, bg: u32) -> u32 {
     let bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
     let (mut chroma, mut hue) = (a.hypot(bb), bb.atan2(a).to_degrees().rem_euclid(360.0));
     let light = luminance(bg) > 0.179;
-    if light && (60.0..115.0).contains(&hue) {
+    // A grey's hue is rounding noise, often in the yellows: only a real yellow turns orange.
+    if light && chroma >= 0.05 && (60.0..115.0).contains(&hue) {
         // `--warn`'s hue and strength on the light theme (#a34800)
         (hue, chroma) = (48.5, chroma.max(0.138));
     }
@@ -705,6 +706,21 @@ mod tests {
             assert!(contrast(*c, light.bg) >= 4.5, "colour {i} ({c:06x}) is {:.2}:1", contrast(*c, light.bg));
         }
         assert!(contrast(light.fg, light.bg) >= 4.5);
+    }
+
+    /// A grey highlight rule (dim timestamps, say) darkens on a light terminal but stays grey:
+    /// only a real yellow turns orange.
+    #[test]
+    fn grey_highlights_stay_grey_on_light() {
+        for grey in [0x888888, 0x999999, 0xaaaaaa, 0xb0b0b0, 0x8a8a80] {
+            let c = readable(grey, 0xfafafa);
+            let [r, g, b] = [16, 8, 0].map(|s| ((c >> s) & 0xff) as i32);
+            assert!((r - b).abs() <= 12 && (r - g).abs() <= 12, "{grey:06x} became {c:06x}");
+            assert!(contrast(c, 0xfafafa) >= 4.5, "{grey:06x} became {c:06x}");
+        }
+        let yellow = readable(0xe0c040, 0xfafafa);
+        let (r, g) = ((yellow >> 16) as i64, ((yellow >> 8) & 0xff) as i64);
+        assert!(r - g > 40, "a yellow turns orange: {yellow:06x}");
     }
 
     /// A new install (no settings file yet) starts with the getting-started list; a file saved

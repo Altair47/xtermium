@@ -220,6 +220,10 @@
     cursor: pointer;
   }
   .swatch.selected {
+    box-shadow: 0 0 0 2px var(--gold-soft);
+  }
+  /* on light a 22% wash is too faint a ring on white: the solid amber edge of a picked button */
+  :global(:root[data-theme="light"]) .swatch.selected {
     box-shadow: 0 0 0 2px var(--picked-line);
   }
   .swatch.custom {

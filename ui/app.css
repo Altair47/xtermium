@@ -434,7 +434,7 @@ button.primary:hover:not(:disabled) {
 
 /* Light: the primary darkens under the pointer (a paler amber on white reads as fading away), and
    one that can't be pressed yet goes grey, as a light desktop's, not a washed-out yellow. */
-:root[data-theme="light"] button.primary:hover:not(:disabled) {
+:root[data-theme="light"] button.primary:not(.danger):hover:not(:disabled) {
   background: color-mix(in srgb, var(--gold-fill) 92%, black);
 }
 :root[data-theme="light"] button.primary:disabled {
@@ -499,7 +499,7 @@ input[type="radio"] {
   background: rgb(var(--deep-rgb));
   transition: border-width var(--quick) var(--ease-out);
 }
-input[type="radio"]:hover:not(:disabled) {
+input[type="radio"]:hover:not(:disabled, :checked) {
   border-color: var(--weak);
 }
 input[type="radio"]:checked {
@@ -593,12 +593,12 @@ label.check {
   border-inline-start: 3px solid var(--warn-fill);
   border-radius: var(--r-control);
   padding: 5px 8px;
-  & .warn {
-    color: inherit;
-  }
-  & > .icon {
-    color: var(--warn);
-  }
+}
+:root[data-theme="light"] :is(p.warn, .row.warn, p.row:has(> span.warn)) .warn {
+  color: inherit;
+}
+:root[data-theme="light"] :is(p.warn, .row.warn) > .icon {
+  color: var(--warn);
 }
 
 .ok {

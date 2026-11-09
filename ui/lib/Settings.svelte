@@ -1880,7 +1880,7 @@ xtermium close 3`}</pre>
     border-color: var(--weak);
   }
   .scheme.selected {
-    border: 2px solid var(--gold);
+    border: 2px solid var(--gold-fill);
   }
   /* a link that opens in the browser */
   .custom-scheme {

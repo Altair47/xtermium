@@ -393,7 +393,8 @@ wash, `gold-soft`, with amber text on a toggle (`button.on`) and `fg` on a row (
 2px amber inset edge (`.current`); *lit* is under the pointer: a flat thing (a menu item, a list
 row, `button.flat`) takes `raised`, a filled button takes `hover`. The palette's keyboard row
 (`.item.on`) is the one place still written as picked; it means current. A picked button's edge is
-`gold-fill` at 55%: amber on both themes, where the light theme's ink `gold` would draw a black box.
+`gold-fill` (`--picked-line`), at 55% on dark and solid on light: amber on both themes, where the
+light theme's ink `gold` would draw a black box.
 
 The light theme (`:root[data-theme="light"]` in `ui/app.css`) redefines every token above with
 the same roles, in neutral greys with no blue tint and text in the brand's charcoal `#141414`. It

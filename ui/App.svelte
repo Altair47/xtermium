@@ -2374,7 +2374,7 @@
     cursor: col-resize;
   }
   .sizer:hover {
-    background: color-mix(in srgb, var(--gold) 45%, transparent);
+    background: color-mix(in srgb, var(--gold-fill) 45%, transparent);
   }
   /* one file panel per session on screen, stacked */
   .files {
