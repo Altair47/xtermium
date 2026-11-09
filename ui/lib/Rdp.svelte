@@ -208,12 +208,18 @@
     queue = queue.then(() => deliver(to, ev)).catch(() => {});
   };
   /** A viewer's keys, text and pointer go to the owner as the events rdp_input takes; their desktop (or VNC
-   *  server) handles them as it does its own. A website is view-only for now. */
+   *  server, website or BMC console) handles them as it does its own, while the owner gave them control. */
   const deliver = (to: number, ev: object) => (peer ? invoke("coop_remote_input", { ringTab: peer, ev }) : invoke("rdp_input", { id: to, ev }));
 
   /** Where the pointer is over a tab in the ring, in desktop pixels, for the others to see (20 times a
    *  second at most; -1 when it leaves). */
   const pointing = throttle((x: number, y: number) => void (ringTab && invoke("coop_cursor", { tab: ringTab, col: x, row: y }).catch(() => {})), 50);
+  /** A press over a tab in the ring: the others see a mark there. */
+  const clicking = (e: PointerEvent) => {
+    if (!ringTab || !size) return;
+    const { x, y } = remote(e);
+    invoke("coop_click", { tab: ringTab, col: x, row: y, button: e.button }).catch(() => {});
+  };
 
   /** Where a desktop pixel is in the box, in CSS pixels: the picture is centred and scaled to fit. */
   function pixelAt(x: number, y: number): [number, number] {
@@ -349,7 +355,7 @@
   <canvas
     bind:this={canvas}
     class:hidden={!size}
-    onpointerdown={(e) => (box.focus(), canvas.setPointerCapture(e.pointerId), sync(e), send({ t: "button", button: e.button, down: true, ...remote(e) }))}
+    onpointerdown={(e) => (box.focus(), canvas.setPointerCapture(e.pointerId), sync(e), clicking(e), send({ t: "button", button: e.button, down: true, ...remote(e) }))}
     onpointerup={(e) => send({ t: "button", button: e.button, down: false, ...remote(e) })}
     onpointermove={(e) => {
       if (!move) requestAnimationFrame(() => move && (send({ t: "move", ...remote(move) }), (move = null)));

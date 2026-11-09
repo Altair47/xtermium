@@ -17,7 +17,6 @@
 //! (letterboxed); frames are not compressed in transit (an RDP picture is raw RGBA; compress it if
 //! a slow link makes the ring lag, a lagging viewer is resynced meanwhile, see `Queue`).
 
-use crate::config::Kind;
 use crate::{App, Tab, rdp, sync, term, web};
 use iroh::endpoint::{Connection, Incoming, RecvStream, SendStream, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, TransportAddr};
@@ -46,7 +45,6 @@ const SIGN_IN: &str = "Sign in to use Terminal Co-op.";
 const IN_RING: &str = "You are in a ring already. Leave or end it first.";
 const NO_RING: &str = "You aren't in a ring.";
 const NOT_OWNER: &str = "Only the person who started the ring can do that.";
-const AGENT: &str = "AI agent tabs can't be shared.";
 const SITES: &str = "Website tabs can be shared on Windows only.";
 /// The sentence the server answers with for a ring that is over (a 404).
 const GONE: &str = "That ring has ended.";
@@ -69,16 +67,17 @@ const GONE_TAB: &str = "That tab isn't shared with you any more.";
 /// What this app speaks of the protocol, sent after the Hello's own bytes (`encode`): 1 the first
 /// version, 2 copy and paste in terminal tabs (`Msg::Copy`, `Msg::Selection`, `Hands::Paste`), 3
 /// everyone's selection drawn for the ring (`Msg::Selected`), 4 one person at a time driving a
-/// shared desktop (`Msg::Control`, `Msg::Ask`). An older app reads
+/// shared desktop (`Msg::Control`, `Msg::Ask`), 5 everyone's clicks drawn for the ring
+/// (`Msg::Click`). An older app reads
 /// the Hello and ignores the byte, but drops the connection over a message it doesn't know, so
 /// those go only to an app that said 2 (`needs`).
-const WIRE: u8 = 4;
+const WIRE: u8 = 5;
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const PRO_EVERY: Duration = Duration::from_secs(5 * 60);
 /// The UI hears of changes at most this often (20 Hz): cursors would flood it otherwise.
 const EMIT_EVERY: Duration = Duration::from_millis(50);
-const SITE_EVERY: Duration = Duration::from_millis(250);
-const JPEG_QUALITY: u8 = 70;
+/// How often the owner's pointer over a shared website or console is read from its page (15 Hz).
+const POINT_EVERY: Duration = Duration::from_millis(66);
 
 /// A picture message on a tab's channel that Co-op adds for websites: `[6][JPEG]`, the whole page.
 /// (The others are rdp.rs': 2 size, 3 changed areas, 4 status, 5 ended.)
@@ -213,6 +212,16 @@ pub enum Msg {
         tab: u32,
         want: bool,
     },
+    /// Someone pressed a mouse button over a tab, at a cell or a pixel: drawn for the ring (`WIRE` 5;
+    /// last, so older apps keep reading the messages before it).
+    /// `button`: 0 left, 1 middle, 2 right.
+    Click {
+        tab: u32,
+        user_id: String,
+        col: i32,
+        row: i32,
+        button: u8,
+    },
 }
 
 /// A cell of a shared text tab: stable row, column.
@@ -231,6 +240,7 @@ fn needs(m: &Msg) -> u8 {
         Msg::Copy { .. } | Msg::Selection { .. } | Msg::Input { input: Hands::Paste(_), .. } => 2,
         Msg::Selected { .. } => 3,
         Msg::Control { .. } | Msg::Ask { .. } => 4,
+        Msg::Click { .. } => 5,
         _ => 1,
     }
 }
@@ -678,6 +688,26 @@ struct CursorOut {
     image: Option<String>,
     col: i32,
     row: i32,
+}
+
+/// A click in the ring, as the UI hears it (the `coop-click` event, at once: it is drawn as it happens).
+#[derive(Serialize, Clone)]
+struct ClickOut {
+    tab: u32,
+    user_id: String,
+    name: String,
+    col: i32,
+    row: i32,
+    button: u8,
+}
+
+/// Where a shared tab's pictures come from: the tab's own frames (terminals, desktops), a website
+/// taken by its view's DevTools, or a BMC console's screen read from its canvas.
+#[derive(Clone, Copy, PartialEq)]
+enum Feed {
+    Tab,
+    Site,
+    Console,
 }
 
 /// A viewer's connection, seen from the owner.
@@ -1249,6 +1279,12 @@ impl Ring {
             }
             Msg::Refresh { tab } => self.refresh(tab),
             Msg::Selected { tab, sel, .. } => self.selected(tab, &from.id, sel),
+            Msg::Click { tab, col, row, button, .. } => {
+                if !self.st().hosted.contains_key(&tab) {
+                    return;
+                }
+                self.clicked(tab, &from.id, col, row, button);
+            }
             Msg::Cursor { tab, col, row, .. } => {
                 let mut st = self.st();
                 if !st.hosted.contains_key(&tab) {
@@ -1275,6 +1311,57 @@ impl Ring {
     fn give(&self, user: &str, m: Msg) {
         if let Some(p) = self.st().peers.get(user).filter(|p| p.wire >= needs(&m)) {
             let _ = p.ctl.send(m);
+        }
+    }
+
+    /// Who `id` is, as the ring knows them: the owner, a member, or a stranger with no name.
+    fn person(&self, id: &str) -> (String, Option<String>) {
+        let st = self.st();
+        if st.host.id == id {
+            return (st.host.name.clone(), st.host.image.clone());
+        }
+        st.members.iter().find(|m| m.id == id).map(|m| (m.name.clone(), m.image.clone())).unwrap_or_default()
+    }
+
+    /// Someone clicked over shared tab `tab` (the owner's side): everyone else hears, and the UI draws it.
+    fn clicked(&self, tab: u32, user: &str, col: i32, row: i32, button: u8) {
+        let others: Vec<String> = self.st().peers.keys().filter(|p| *p != user).cloned().collect();
+        for id in others {
+            self.give(&id, Msg::Click { tab, user_id: user.into(), col, row, button });
+        }
+        self.show_click(tab, user, col, row, button);
+    }
+
+    /// Tells the UI of a click, to draw at once (not in the payload: it is a moment, not a state).
+    fn show_click(&self, tab: u32, user: &str, col: i32, row: i32, button: u8) {
+        if user == self.st().me.id {
+            return;
+        }
+        let (name, _) = self.person(user);
+        let _ = self.handle.emit_to("main", "coop-click", &ClickOut { tab, user_id: user.into(), name, col, row, button });
+    }
+
+    /// Where the owner's own pointer is over a shared tab (negative: gone): every viewer hears.
+    fn my_cursor(&self, tab: u32, col: i32, row: i32) {
+        let st = self.st();
+        if !st.hosted.contains_key(&tab) {
+            return;
+        }
+        let me = st.me.id.clone();
+        for p in st.peers.values() {
+            let _ = p.ctl.send(Msg::Cursor { tab, user_id: me.clone(), col, row });
+        }
+    }
+
+    /// The owner's own click over a shared tab: every viewer whose app draws clicks hears.
+    fn my_click(&self, tab: u32, col: i32, row: i32, button: u8) {
+        let me = self.st().me.id.clone();
+        if !self.st().hosted.contains_key(&tab) {
+            return;
+        }
+        let ids: Vec<String> = self.st().peers.keys().cloned().collect();
+        for id in ids {
+            self.give(&id, Msg::Click { tab, user_id: me.clone(), col, row, button });
         }
     }
 
@@ -1309,6 +1396,19 @@ impl Ring {
             None => return,
         };
         if !may_drive(controller.as_deref(), from, &hands) {
+            return;
+        }
+        // A website or BMC console tab: its view takes the input (web.rs), not a tab of `tabs`.
+        if let (Hands::Desktop(json), Some(console)) = (&hands, web::console(tab)) {
+            let Ok(ev) = serde_json::from_slice::<rdp::Input>(json).map_err(|_| ()).and_then(|e| desktop_ok(&e).then_some(e).ok_or(())) else { return };
+            if console {
+                let _ = web::console_input(&self.handle, tab, &[ev]);
+            } else {
+                let handle = self.handle.clone();
+                spawn(async move {
+                    let _ = web::site_input(&handle, tab, ev).await;
+                });
+            }
             return;
         }
         let app = self.handle.state::<App>();
@@ -1366,12 +1466,13 @@ impl Ring {
         if self.st().hosted.contains_key(&tab) {
             return Ok(());
         }
-        let (info, site) = describe(&self.handle, tab)?;
+        let (info, feed) = describe(&self.handle, tab)?;
         let (tx, rx) = unbounded_channel::<Vec<u8>>();
         let force = Arc::new(AtomicBool::new(true));
         let mut tasks = vec![spawn(self.clone().fan_out(tab, rx))];
-        if site {
-            tasks.push(spawn(self.clone().shoot(tab, tx.clone(), force.clone())));
+        if feed != Feed::Tab {
+            tasks.push(spawn(self.clone().shoot(tab, tx.clone(), force.clone(), feed)));
+            tasks.push(spawn(self.clone().point(tab)));
         }
         let ctls = {
             let mut st = self.st();
@@ -1392,7 +1493,7 @@ impl Ring {
         for c in ctls {
             let _ = c.send(Msg::Share(info.clone()));
         }
-        if !site {
+        if feed == Feed::Tab {
             with_tab(&self.handle, tab, |t| share_tab(t, Some(tx)));
         }
         self.notify();
@@ -1439,13 +1540,19 @@ impl Ring {
         self.unshare(tab);
     }
 
-    /// A website tab has no frames of its own: its picture is taken (WebView2's DevTools, Windows
-    /// only) four times a second and sent when it changed, as `MSG_JPEG`.
-    async fn shoot(self: Arc<Self>, tab: u32, tx: UnboundedSender<Vec<u8>>, force: Arc<AtomicBool>) {
+    /// A website or console tab has no frames of its own: its picture is taken (a website through
+    /// its view's DevTools, Windows only; a console from its screen's canvas) as often, and as
+    /// finely, as Settings › Terminal Co-op says, and sent when it changed, as `MSG_JPEG`.
+    async fn shoot(self: Arc<Self>, tab: u32, tx: UnboundedSender<Vec<u8>>, force: Arc<AtomicBool>, feed: Feed) {
         let (mut last, mut failed) = (vec![], 0);
         loop {
-            tokio::time::sleep(SITE_EVERY).await;
-            match site_jpeg(&self.handle, tab).await {
+            let (every, quality) = self.handle.state::<App>().settings.lock().unwrap().coop_quality.stream();
+            tokio::time::sleep(every).await;
+            let shot = match feed {
+                Feed::Console => web::console_jpeg(&self.handle, tab, quality).await,
+                _ => site_jpeg(&self.handle, tab, quality).await,
+            };
+            match shot {
                 Ok(Some(jpeg)) => {
                     failed = 0;
                     if force.swap(false, Relaxed) || jpeg != last {
@@ -1465,6 +1572,25 @@ impl Ring {
                         return self.unshare(tab);
                     }
                 }
+            }
+        }
+    }
+
+    /// The owner's own pointer over a shared website or console, and their clicks, read from the
+    /// page (web.rs `pointer`) and sent on as everyone else's are: the view is native, so the window
+    /// itself never sees the pointer over it. Ends with the share (`Hosted::tasks`).
+    async fn point(self: Arc<Self>, tab: u32) {
+        let mut last: Option<(i32, i32)> = None;
+        loop {
+            tokio::time::sleep(POINT_EVERY).await;
+            let Ok(seen) = web::pointer(&self.handle, tab).await else { continue };
+            let at = seen.as_ref().and_then(|p| p.at).unwrap_or((-1, -1));
+            if last != Some(at) {
+                last = Some(at);
+                self.my_cursor(tab, at.0, at.1);
+            }
+            for (x, y, button) in seen.map(|p| p.clicks).unwrap_or_default() {
+                self.my_click(tab, x, y, button);
             }
         }
     }
@@ -1657,6 +1783,11 @@ impl Ring {
                     }
                     self.notify();
                 }
+                Msg::Click { tab, user_id, col, row, button } => {
+                    if self.st().remote.contains_key(&tab) {
+                        self.show_click(tab, &user_id, col, row, button);
+                    }
+                }
                 Msg::Cursor { tab, user_id, col, row } => {
                     let mut st = self.st();
                     if user_id != st.me.id && st.remote.contains_key(&tab) {
@@ -1735,9 +1866,9 @@ fn share_tab(t: &Tab, sink: Option<UnboundedSender<Vec<u8>>>) {
     }
 }
 
-/// What sharing tab `id` would show viewers, and whether it is a website (taken as pictures). Agent
-/// tabs and BMC consoles are refused, and websites off Windows.
-fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, bool)> {
+/// What sharing tab `id` would show viewers, and where its pictures come from. Every kind of tab
+/// shares, but websites off Windows (no way to take their picture there yet).
+fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, Feed)> {
     let picture = |title: &str, (w, h): (usize, usize)| ShareInfo {
         tab: id,
         title: line(title),
@@ -1750,7 +1881,6 @@ fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, bool)> {
     let app = handle.state::<App>();
     let tabs = app.tabs.lock().unwrap();
     match tabs.get(&id) {
-        Some(Tab::Term(t)) if matches!(t.session.kind, Kind::Agent { .. }) => Err(AGENT.into()),
         Some(Tab::Term(t)) => {
             let title = Some(t.title()).filter(|s| !s.is_empty()).unwrap_or_else(|| t.session.name.clone());
             let (cols, rows) = t.grid().0;
@@ -1764,17 +1894,17 @@ fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, bool)> {
                     w: 0,
                     h: 0,
                 },
-                false,
+                Feed::Tab,
             ))
         }
-        Some(Tab::Rdp(t)) => Ok((picture(&t.session.name, t.size()), false)),
-        Some(Tab::Vnc(t)) => Ok((picture(&t.session.name, (0, 0)), false)),
+        Some(Tab::Rdp(t)) => Ok((picture(&t.session.name, t.size()), Feed::Tab)),
+        Some(Tab::Vnc(t)) => Ok((picture(&t.session.name, (0, 0)), Feed::Tab)),
         None => match web::console(id) {
             // Not `web::listed`: it asks every view for its address, which waits for the main thread
             // while `tabs` is held here (a command on the main thread wanting `tabs` would deadlock it).
-            Some(false) if cfg!(windows) => Ok((picture(&web::title_of(id).unwrap_or_default(), (0, 0)), true)),
+            Some(false) if cfg!(windows) => Ok((picture(&web::title_of(id).unwrap_or_default(), (0, 0)), Feed::Site)),
             Some(false) => Err(SITES.into()),
-            Some(true) => Err("BMC console tabs can't be shared.".into()),
+            Some(true) => Ok((picture(&web::title_of(id).unwrap_or_default(), (0, 0)), Feed::Console)),
             None => Err("That tab isn't open.".into()),
         },
     }
@@ -1782,14 +1912,14 @@ fn describe(handle: &AppHandle, id: u32) -> Res<(ShareInfo, bool)> {
 
 /// A website tab's page as a JPEG (None while the tab is out of sight). WebView2's DevTools, so
 /// Windows only; `describe` refuses websites elsewhere before this is ever asked.
-async fn site_jpeg(handle: &AppHandle, id: u32) -> Res<Option<Vec<u8>>> {
+async fn site_jpeg(handle: &AppHandle, id: u32, quality: u8) -> Res<Option<Vec<u8>>> {
     #[cfg(windows)]
     {
-        web::page_jpeg(handle, id, JPEG_QUALITY).await
+        web::page_jpeg(handle, id, quality).await
     }
     #[cfg(not(windows))]
     {
-        let _ = (handle, id, JPEG_QUALITY);
+        let _ = (handle, id, quality);
         Err(SITES.into())
     }
 }
@@ -2063,16 +2193,24 @@ pub async fn coop_share(tab: u32, on: bool) -> Res<()> {
 #[tauri::command]
 pub async fn coop_cursor(tab: u32, col: i32, row: i32) -> Res<()> {
     let Some(ring) = current() else { return Ok(()) };
-    let st = ring.st();
     if ring.owner {
-        if st.hosted.contains_key(&tab) {
-            let me = st.me.id.clone();
-            for p in st.peers.values() {
-                let _ = p.ctl.send(Msg::Cursor { tab, user_id: me.clone(), col, row });
-            }
-        }
-    } else if let Some(l) = st.link.as_ref() {
+        ring.my_cursor(tab, col, row);
+    } else if let Some(l) = ring.st().link.as_ref() {
         let _ = l.ctl.send(Msg::Cursor { tab, user_id: String::new(), col, row });
+    }
+    Ok(())
+}
+
+/// You pressed mouse `button` (0 left, 1 middle, 2 right) over tab `tab`, at a cell of a text tab or
+/// a pixel of a picture: the others see a mark there. Nothing happens on their tabs from this.
+#[tauri::command]
+pub async fn coop_click(tab: u32, col: i32, row: i32, button: u8) -> Res<()> {
+    let Some(ring) = current() else { return Ok(()) };
+    if ring.owner {
+        ring.my_click(tab, col, row, button.min(2));
+    } else if ring.st().remote.contains_key(&tab) {
+        // An owner on an older version can't read it: nothing to say to the person over a click.
+        let _ = ring.to_owner(Msg::Click { tab, user_id: String::new(), col, row, button: button.min(2) });
     }
     Ok(())
 }
@@ -2491,6 +2629,10 @@ mod tests {
         let sel = Msg::Selected { tab: 1, user_id: "u1".into(), sel: Some(((-3, 0), (2, 79), false)) };
         assert_eq!(needs(&sel), 3);
         assert!(needs(&sel) > 2 && WIRE >= 3);
+        // A click is drawn only by an app that knows the message: the fifth version.
+        let click = Msg::Click { tab: 3, user_id: "u1".into(), col: 10, row: 4, button: 2 };
+        assert_eq!((needs(&click), WIRE >= 5), (5, true));
+        assert!(matches!(decode(&encode(&click).unwrap()[4..]).unwrap(), Msg::Click { tab: 3, col: 10, row: 4, button: 2, .. }));
         assert_eq!(postcard::to_allocvec(&sel).unwrap()[0], 12, "past what a version 2 app knows");
         let Msg::Selected { sel: back, .. } = decode(&encode(&sel).unwrap()[4..]).unwrap() else { panic!("not Selected") };
         assert_eq!(back, Some(((-3, 0), (2, 79), false)));

@@ -169,6 +169,26 @@ pub fn screenshot_script() -> String {
     format!(r#"(() => {{{FIND}const c = screen(); return c && c.width && c.height ? c.toDataURL("image/png") : ""; }})()"#)
 }
 
+/// The console's picture as a JPEG `data:` address at `quality` (0 to 100), for a ring (coop.rs);
+/// "" while there is none.
+pub fn jpeg_script(quality: u8) -> String {
+    let q = f32::from(quality.min(100)) / 100.0;
+    format!(r#"(() => {{{FIND}const c = screen(); return c && c.width && c.height ? c.toDataURL("image/jpeg", {q}) : ""; }})()"#)
+}
+
+/// Where the person's pointer is over the console's picture, in its pixels, and the clicks since
+/// last asked (web.rs `pointer`): the page's tracker (web.rs `AWAKE`) keeps them in viewport pixels.
+pub fn pointer_script() -> String {
+    format!(
+        r#"(() => {{{FIND}const c = screen(), p = window.__xtmPtr, clicks = (window.__xtmClicks ?? []).splice(0);
+  if (!c || !c.width || !c.height) return null;
+  const r = c.getBoundingClientRect();
+  const map = (x, y) => [Math.round(((x - r.left) * c.width) / r.width), Math.round(((y - r.top) * c.height) / r.height)];
+  const inside = (x, y) => x >= r.left && y >= r.top && x < r.right && y < r.bottom;
+  return {{ at: p && inside(p.x, p.y) ? map(p.x, p.y) : null, clicks: clicks.filter((k) => inside(k.x, k.y)).map((k) => [...map(k.x, k.y), k.button]) }}; }})()"#
+    )
+}
+
 /// Finds the console in the page: noVNC's viewer and its picture, in whichever frame they are.
 const FIND: &str = r#"
   // Every window of the page, frames inside frames too (the console sits in one).

@@ -723,6 +723,8 @@
     const again = e.button === 0 && e.timeStamp - press.at < 450 && Math.hypot(e.offsetX - press.x, e.offsetY - press.y) < 5;
     press = { at: e.timeStamp, x: e.offsetX, y: e.offsetY, n: again ? (press.n % 3) + 1 : 1 };
     mouse("down", e, 0, press.n);
+    // The ring sees where you clicked, in cells.
+    if (ringTab) invoke("coop_click", { tab: ringTab, col: Math.floor((e.offsetX * devicePixelRatio) / cell.w), row: Math.floor((e.offsetY * devicePixelRatio) / cell.h), button: e.button }).catch(() => {});
   }
 
   function pointermove(e: PointerEvent) {

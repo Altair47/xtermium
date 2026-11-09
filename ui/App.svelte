@@ -1600,6 +1600,7 @@
                   session={t.session}
                   active={pane === focus}
                   visible={pane >= 0}
+                  shared={t.id && app.coop.shared.includes(t.id) ? t.id : 0}
                   onid={(id) => started(t.key, id)}
                   ontitle={(title) => update(t.key, { title })}
                   onfocus={() => (focus = pane)}

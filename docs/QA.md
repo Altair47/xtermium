@@ -20,6 +20,13 @@ Needs two (or three) Pro accounts on separate machines, joined in one ring throu
 - Ring colours: the owner amber and each guest their own colour, the same on every member's
   computer, round the pictures in the Co-op dialog and on pointers and selections (checked
   here only with a faked ring event in one window).
+- Sharing an AI agent tab, a BMC console (its screen as pictures) and a website, and a guest
+  with control driving the website (DevTools input, Windows) or the console: the owner's side
+  was exercised with faked ring state in one window; a real ring hasn't driven either yet.
+- Click rings and the moving pointer's name in every member's view, and the owner's pointer
+  and clicks read from inside a shared page.
+- A shared terminal drawn at each viewer's own font and zoom while the owner resizes or zooms.
+- The picture quality setting's three levels as a viewer sees them.
 
 ## BMC consoles
 

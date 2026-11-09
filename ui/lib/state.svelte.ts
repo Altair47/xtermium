@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
 import { memberColor } from "./coop";
-import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, system, type Background, type CoopControl, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, system, type Background, type CoopClick, type CoopControl, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -33,6 +33,8 @@ export const app = $state({
     selections: [] as CoopSelection[],
     control: [] as CoopControl[],
     wants: [] as CoopControl[],
+    /** The ring's clicks of the last second (CoopCursors.svelte draws them as they come). */
+    clicks: [] as CoopClick[],
   },
   settings: null as Settings | null,
   schemes: [] as Scheme[],
@@ -127,6 +129,14 @@ listen<CoopEvent>("coop", ({ payload: p }) => {
           ? _("The owner removed you from the ring.")
           : _("The ring ended.")),
   );
+});
+/** How long a click stays drawn, in milliseconds. */
+export const CLICK_SHOWN = 1000;
+// A click in the ring: kept for the moment the overlays draw it, then dropped.
+listen<Omit<CoopClick, "at">>("coop-click", ({ payload: c }) => {
+  const fresh = () => app.coop.clicks.filter((k) => performance.now() - k.at < CLICK_SHOWN);
+  app.coop.clicks = [...fresh(), { ...c, at: performance.now() }];
+  setTimeout(() => (app.coop.clicks = fresh()), CLICK_SHOWN + 100);
 });
 // A window that starts or reloads while a ring is up learns of it here; an event that got in first is newer.
 invoke<CoopEvent>("coop_state")

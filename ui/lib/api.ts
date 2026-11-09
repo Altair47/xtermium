@@ -189,6 +189,8 @@ export type Settings = {
   account_button: boolean;
   /** The Terminal Co-op button in the sidebar; always shown with Pro or while a ring is on. */
   coop_button: boolean;
+  /** The pictures of websites and BMC consoles shared in a ring: how often and how finely (src/settings.rs `Quality`). */
+  coop_quality: "low" | "average" | "high";
   confirm_close: boolean;
   auto_reconnect: boolean;
   restore_tabs: boolean;
@@ -564,6 +566,8 @@ export type CoopTraffic = { id: string; up: number; down: number };
 /** Where another person's pointer is over a shared tab (`tab` is the owner's number for it): a cell of
  *  a text tab, a pixel (`col` = x, `row` = y) of a picture. Never your own. */
 export type CoopCursor = { tab: number; user_id: string; name: string; image: string | null; col: number; row: number };
+/** A click in the ring (the `coop-click` event): a cell or a pixel, which button, and when it arrived (`at`, performance.now()). */
+export type CoopClick = { tab: number; user_id: string; name: string; col: number; row: number; button: number; at: number };
 /** Another person's selection on a shared terminal tab: its ends in stable rows (`Meta.shared`). */
 export type CoopSelection = { tab: number; user_id: string; a: [number, number]; b: [number, number]; block: boolean };
 /** A guest and a shared desktop (`tab` is the owner's number for it): the one driving it (`control`),
