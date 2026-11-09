@@ -8,12 +8,13 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl, type Session } from "./api";
   import Icon from "./Icon.svelte";
-  import { app } from "./state.svelte";
+  import { app, coopColor } from "./state.svelte";
 
   let {
     session,
     active,
     visible,
+    shared = 0,
     onid,
     ontitle,
     onfocus,
@@ -22,6 +23,9 @@
     /** In the focused pane: takes the keyboard. */
     active: boolean;
     visible: boolean;
+    /** Your tab's number in the ring while you share it: the others' pointers and clicks are drawn
+     *  in the page, and who drives it shows under the address bar. */
+    shared?: number;
     onid: (id: number) => void;
     ontitle: (title: string) => void;
     onfocus: () => void;
@@ -96,6 +100,51 @@
 
   const go = (action: string, url?: string) => id && invoke("web_go", { id, action, url: url ?? null }).catch((e) => (error = String(e)));
 
+  // ---- Terminal Co-op: the ring's pointers and clicks are drawn inside the page (src/web.rs `web_marks`),
+  // since nothing of this window can lie over the native view; who drives the tab shows in a bar. ----
+  const controller = $derived(shared ? (app.coop.control.find((c) => c.tab === shared)?.user_id ?? "") : "");
+  const nameOf = (uid: string) => app.coop.ring?.members.find((m) => m.id === uid)?.name ?? _("Someone");
+  /** The guests asking for control of this tab. */
+  const asks = $derived(shared ? app.coop.wants.filter((w) => w.tab === shared) : []);
+  const give = (user: string) => invoke("coop_control", { tab: shared, user }).catch((e) => (error = String(e)));
+  const decline = (user: string) => invoke("coop_decline_control", { tab: shared, user }).catch((e) => (error = String(e)));
+  // A pointer that moved in the last second carries its owner's name; a click is drawn once.
+  const MOVING = 1000;
+  let last: Record<string, string> = {};
+  let moved: Record<string, number> = {};
+  let drawn = 0;
+  let tick = $state(0);
+  $effect(() => {
+    // Read first, so the effect follows them even while the view isn't open yet (`id` isn't state).
+    const [cursors, clicks] = [app.coop.cursors, app.coop.clicks];
+    void tick;
+    if (!id) return;
+    if (!shared) {
+      if (drawn) invoke("web_marks", { id, marks: [] }).catch(() => {});
+      [drawn, last, moved] = [0, {}, {}];
+      return;
+    }
+    const t = performance.now();
+    type Mark = { id: string; x: number; y: number; color: string; name: string; initial: string; moving: boolean; clicks: [number, number, number][] };
+    const mark = (uid: string, name: string, x: number, y: number): Mark => ({ id: uid, x, y, color: coopColor(uid), name, initial: [...(name || "?")][0].toUpperCase(), moving: t - (moved[uid] ?? 0) < MOVING, clicks: [] });
+    const marks: Mark[] = cursors
+      .filter((c) => c.tab === shared)
+      .map((c) => {
+        const at = `${c.col},${c.row}`;
+        if (last[c.user_id] !== at) [last[c.user_id], moved[c.user_id]] = [at, t];
+        return mark(c.user_id, c.name, c.col, c.row);
+      });
+    for (const k of clicks.filter((c) => c.tab === shared && c.at > drawn)) {
+      const m = marks.find((m) => m.id === k.user_id) ?? marks[marks.push(mark(k.user_id, k.name, -1, -1)) - 1];
+      m.clicks.push([k.col, k.row, k.button]);
+      drawn = Math.max(drawn, k.at);
+    }
+    drawn ||= 1;
+    invoke("web_marks", { id, marks }).catch(() => {});
+    const timer = setTimeout(() => (tick = performance.now()), MOVING + 50);
+    return () => clearTimeout(timer);
+  });
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     editing = false;
@@ -155,6 +204,21 @@
       <Icon name="world" size={15} />
     </button>
   </form>
+  <!-- Who drives a shared website or console: shown while a guest drives or asks (the owner's side; a guest sees the picture in Rdp.svelte). -->
+  {#if shared && (controller || asks.length)}
+    <div class="row bar control" role="status">
+      <Icon name="group" size={15} />
+      {#if controller}
+        <span>{_("{name} has control.", { name: nameOf(controller) })}</span>
+        <button type="button" class="flat" onclick={() => give("")}>{_("Take control")}</button>
+      {/if}
+      {#each asks as a (a.user_id)}
+        <span>{_("{name} asks for control.", { name: nameOf(a.user_id) })}</span>
+        <button type="button" class="flat" onclick={() => give(a.user_id)}>{_("Give control")}</button>
+        <button type="button" class="flat" onclick={() => decline(a.user_id)}>{_("Not now")}</button>
+      {/each}
+    </div>
+  {/if}
   <div class="area" bind:this={area}>
     {#if error}<p class="error">{error}</p>{/if}
   </div>
@@ -182,6 +246,15 @@
   /* one chevron icon, turned around for Back */
   .bar button:first-child :global(.icon) {
     transform: scaleX(-1);
+  }
+  .control {
+    gap: 8px;
+    padding: 3px 8px;
+    font-size: var(--t-s);
+  }
+  .control button {
+    min-height: var(--row);
+    padding: 0 5px;
   }
   .area {
     position: relative;

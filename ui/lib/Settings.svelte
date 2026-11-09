@@ -1130,6 +1130,16 @@ xtermium close 3`}</pre>
       <button class="link" onclick={() => (app.showCoop = true)}>{_("Open the Co-op dialog")}</button>
       {#if shortcut("coop")}<kbd>{shortcut("coop")}</kbd>{/if}
     </p>
+    <div class="form">
+      <span>{_("Picture quality")}</span>
+      <select bind:value={s.coop_quality}>
+        <option value="low">{_("Low")}</option>
+        <option value="average">{_("Average")}</option>
+        <option value="high">{_("High")}</option>
+      </select>
+      <span></span>
+      <p class="weak">{_("How the websites and BMC consoles you share look to the others: Low sends 2 pictures a second for slow links, Average 4, High 8 in full detail.")}</p>
+    </div>
   {:else if page === "appearance"}
     <div class="form">
       <span>{_("Theme")}</span>

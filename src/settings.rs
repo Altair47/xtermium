@@ -37,6 +37,29 @@ pub enum Cursor {
     Underline,
 }
 
+/// How finely, and how often, a shared website or BMC console's picture goes to a Terminal Co-op
+/// ring (coop.rs `shoot`): the owner's choice for every viewer.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Quality {
+    Low,
+    #[default]
+    Average,
+    High,
+}
+
+impl Quality {
+    /// The time between two pictures, and the JPEG quality (0 to 100).
+    pub fn stream(self) -> (std::time::Duration, u8) {
+        let ms = |n| std::time::Duration::from_millis(n);
+        match self {
+            Quality::Low => (ms(500), 45),
+            Quality::Average => (ms(250), 70),
+            Quality::High => (ms(125), 85),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -122,6 +145,8 @@ pub struct Settings {
     pub account_button: bool,
     /// The Terminal Co-op button at the bottom of the sidebar; always shown with Pro or while a ring is on.
     pub coop_button: bool,
+    /// The pictures of websites and BMC consoles you share in a ring.
+    pub coop_quality: Quality,
     /// Ask before closing a tab whose connection is still up.
     pub confirm_close: bool,
     /// Reconnect SSH tabs whose connection dropped, a few times with growing waits.
@@ -409,6 +434,7 @@ impl Default for Settings {
             sync_logins: false,
             account_button: true,
             coop_button: true,
+            coop_quality: Quality::Average,
             confirm_close: true,
             auto_reconnect: true,
             restore_tabs: false,

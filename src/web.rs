@@ -810,6 +810,12 @@ pub async fn page_screenshot(handle: &AppHandle, id: u32) -> Res<Picture> {
 /// under `data`). WebView2 only.
 #[cfg(windows)]
 async fn devtools_shot(view: &tauri::Webview, params: String) -> Res<String> {
+    devtools(view, "Page.captureScreenshot", params).await
+}
+
+/// A DevTools protocol `method` with its `params` (JSON), as the JSON it answers. WebView2 only.
+#[cfg(windows)]
+async fn devtools(view: &tauri::Webview, method: &'static str, params: String) -> Res<String> {
     use windows::core::HSTRING;
     let (tx, rx) = tokio::sync::oneshot::channel::<Res<String>>();
     let shot = view.with_webview(move |w| {
@@ -821,7 +827,7 @@ async fn devtools_shot(view: &tauri::Webview, params: String) -> Res<String> {
         // handler is kept by WebView2 until it has been called.
         unsafe {
             if let Ok(core) = w.controller().CoreWebView2() {
-                let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Page.captureScreenshot"), &HSTRING::from(params.as_str()), &done);
+                let _ = core.CallDevToolsProtocolMethod(&HSTRING::from(method), &HSTRING::from(params.as_str()), &done);
             }
         }
     });
@@ -850,6 +856,223 @@ pub async fn page_jpeg(handle: &AppHandle, id: u32, quality: u8) -> Res<Option<V
     Ok(Some(jpeg))
 }
 
+/// A BMC console tab's screen as a JPEG at `quality`, for Terminal Co-op (coop.rs shares consoles as
+/// pictures of their screen): None while the console isn't showing yet. The picture is read from
+/// the console's own canvas, so it works on every platform, shown or not.
+pub async fn console_jpeg(handle: &AppHandle, id: u32, quality: u8) -> Res<Option<Vec<u8>>> {
+    use base64::Engine;
+    let view = console_view(handle, id)?;
+    let url: String = serde_json::from_str(&eval(&view, crate::kvm::jpeg_script(quality)).await?).unwrap_or_default();
+    let Some(b64) = url.strip_prefix("data:image/jpeg;base64,").filter(|b| !b.is_empty()) else { return Ok(None) };
+    Ok(Some(base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?))
+}
+
+/// Where the person's pointer is over a shared website or console tab, in its picture's pixels,
+/// and the clicks since last asked (x, y, button): what the page's tracker saw (`AWAKE`).
+#[derive(Deserialize, Default)]
+pub struct Pointed {
+    pub at: Option<(i32, i32)>,
+    #[serde(default)]
+    pub clicks: Vec<(i32, i32, u8)>,
+}
+
+/// The page's own pointer and clicks, mapped to the pixels of the picture viewers see: the whole
+/// page in device pixels for a website, the console's canvas for a console (kvm.rs `pointer_script`).
+const SITE_POINTER: &str = r#"(() => {
+  const p = window.__xtmPtr, d = devicePixelRatio, clicks = (window.__xtmClicks ?? []).splice(0);
+  const m = (x, y) => [Math.round(x * d), Math.round(y * d)];
+  return { at: p ? m(p.x, p.y) : null, clicks: clicks.map((k) => [...m(k.x, k.y), k.button]) };
+})()"#;
+
+pub async fn pointer(handle: &AppHandle, id: u32) -> Res<Option<Pointed>> {
+    let console = console(id).ok_or_else(|| format!("no tab {id}"))?;
+    let view = handle.get_webview(&label(id)).ok_or_else(|| format!("no tab {id}"))?;
+    let script = if console { crate::kvm::pointer_script() } else { SITE_POINTER.into() };
+    Ok(serde_json::from_str(&eval(&view, script).await?).unwrap_or_default())
+}
+
+/// Someone's pointer or click over a shared tab, as the page draws it (`AWAKE` `__xtmMarks`): picture
+/// pixels (negative: gone), the ring colour the UI resolved, who, and the clicks since last told.
+#[derive(Deserialize, Serialize)]
+pub struct Mark {
+    id: String,
+    x: i32,
+    y: i32,
+    color: String,
+    name: String,
+    initial: String,
+    moving: bool,
+    clicks: Vec<(i32, i32, u8)>,
+}
+
+/// Draws the ring's pointers and clicks over a shared website or console tab's page (the view is
+/// native: nothing of the window's own can lie over it).
+#[tauri::command]
+pub fn web_marks(window: Window, id: u32, marks: Vec<Mark>) -> Res<()> {
+    let console = console(id).ok_or_else(|| format!("no tab {id}"))?;
+    let marks: Vec<Mark> = marks
+        .into_iter()
+        .map(|m| Mark {
+            color: crate::clean::text(&m.color).chars().take(40).collect(),
+            name: crate::clean::text(&m.name).chars().take(60).collect(),
+            initial: m.initial.chars().take(2).collect(),
+            ..m
+        })
+        .collect();
+    let json = serde_json::to_string(&marks).map_err(|e| e.to_string())?;
+    web(&window, id)?.eval(format!("window.__xtmMarks?.({json}, {console})")).map_err(|e| e.to_string())
+}
+
+/// A ring member's keys, text, pointer and wheel for a shared website tab (coop.rs `drive`): through
+/// the view's DevTools input domain, picture pixels (device pixels of the page) turned into the
+/// page's CSS pixels. Modifier keys count as held for the events after them; the page's own
+/// listeners see ordinary events. WebView2 only.
+#[cfg(windows)]
+pub async fn site_input(handle: &AppHandle, id: u32, ev: Input) -> Res<()> {
+    let view = site_view(handle, id)?;
+    let stale = DRIVE.lock().unwrap().get(&id).is_none_or(|d| d.measured.elapsed() > Duration::from_secs(2));
+    if stale {
+        let dpr: f64 = serde_json::from_str(&eval(&view, "devicePixelRatio".into()).await?).unwrap_or(1.0);
+        let mut all = DRIVE.lock().unwrap();
+        let d = all.entry(id).or_default();
+        (d.dpr, d.measured) = (dpr.max(0.1), std::time::Instant::now());
+    }
+    let Some((method, params)) = DRIVE.lock().unwrap().entry(id).or_default().event(ev) else { return Ok(()) };
+    devtools(&view, method, params).await.map(|_| ())
+}
+
+/// What a shared website's page has from the ring's input so far: the modifiers and buttons held,
+/// where the pointer is (CSS pixels), and the page's device pixel ratio as last measured.
+#[cfg(windows)]
+struct Drive {
+    modifiers: u32,
+    buttons: u32,
+    x: f64,
+    y: f64,
+    dpr: f64,
+    measured: std::time::Instant,
+}
+
+#[cfg(windows)]
+impl Default for Drive {
+    fn default() -> Self {
+        Drive { modifiers: 0, buttons: 0, x: 0.0, y: 0.0, dpr: 1.0, measured: std::time::Instant::now() - Duration::from_secs(60) }
+    }
+}
+
+#[cfg(windows)]
+static DRIVE: Mutex<BTreeMap<u32, Drive>> = Mutex::new(BTreeMap::new());
+
+#[cfg(windows)]
+impl Drive {
+    /// The DevTools call for `ev`, if it has one: (method, params as JSON).
+    fn event(&mut self, ev: Input) -> Option<(&'static str, String)> {
+        use serde_json::json;
+        // Alt 1, Ctrl 2, Meta 4, Shift 8, as DevTools counts them.
+        let modifier = |code: &str| match code {
+            "AltLeft" | "AltRight" => 1,
+            "ControlLeft" | "ControlRight" => 2,
+            "MetaLeft" | "MetaRight" => 4,
+            "ShiftLeft" | "ShiftRight" => 8,
+            _ => 0,
+        };
+        match ev {
+            Input::Move { x, y } => {
+                (self.x, self.y) = (f64::from(x) / self.dpr, f64::from(y) / self.dpr);
+                Some(("Input.dispatchMouseEvent", json!({ "type": "mouseMoved", "x": self.x, "y": self.y, "modifiers": self.modifiers, "buttons": self.buttons, "button": button_name(self.buttons) }).to_string()))
+            }
+            Input::Button { button, down, x, y } => {
+                (self.x, self.y) = (f64::from(x) / self.dpr, f64::from(y) / self.dpr);
+                let bit = [1, 4, 2].get(usize::from(button)).copied().unwrap_or(0);
+                self.buttons = if down { self.buttons | bit } else { self.buttons & !bit };
+                let name = ["left", "middle", "right"].get(usize::from(button)).copied().unwrap_or("none");
+                Some(("Input.dispatchMouseEvent", json!({ "type": if down { "mousePressed" } else { "mouseReleased" }, "x": self.x, "y": self.y, "button": name, "buttons": self.buttons, "clickCount": 1, "modifiers": self.modifiers }).to_string()))
+            }
+            Input::Wheel { dx, dy } => Some(("Input.dispatchMouseEvent", json!({ "type": "mouseWheel", "x": self.x, "y": self.y, "deltaX": -dx * 100.0, "deltaY": -dy * 100.0, "modifiers": self.modifiers }).to_string())),
+            Input::Key { code, down } => {
+                let m = modifier(&code);
+                self.modifiers = if down { self.modifiers | m } else { self.modifiers & !m };
+                let (key, vk) = key_of(&code, self.modifiers & 8 != 0);
+                Some(("Input.dispatchKeyEvent", json!({ "type": if down { "keyDown" } else { "keyUp" }, "code": code, "key": key, "windowsVirtualKeyCode": vk, "modifiers": self.modifiers }).to_string()))
+            }
+            Input::Text { text } => Some(("Input.insertText", json!({ "text": text }).to_string())),
+            Input::Release => {
+                self.modifiers = 0;
+                None
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The DevTools name of the one button held, for a move (none when several or none are).
+#[cfg(windows)]
+fn button_name(buttons: u32) -> &'static str {
+    match buttons {
+        1 => "left",
+        2 => "right",
+        4 => "middle",
+        _ => "none",
+    }
+}
+
+/// A DOM key code's `key` value on a US layout, and its Windows virtual key, which the page's event
+/// needs for the keys that type nothing (Enter, arrows, Backspace, F-keys).
+#[cfg(windows)]
+fn key_of(code: &str, shift: bool) -> (String, u32) {
+    if let Some(c) = code.strip_prefix("Key").filter(|c| c.len() == 1 && c.is_ascii()) {
+        let letter = if shift { c.to_uppercase() } else { c.to_lowercase() };
+        return (letter, u32::from(c.as_bytes()[0].to_ascii_uppercase()));
+    }
+    if let Some(d) = code.strip_prefix("Digit").filter(|d| d.len() == 1 && d.as_bytes()[0].is_ascii_digit()) {
+        let n = usize::from(d.as_bytes()[0] - b'0');
+        return (if shift { ")!@#$%^&*("[n..=n].into() } else { d.into() }, 0x30 + n as u32);
+    }
+    if let Some(f) = code.strip_prefix('F').and_then(|f| f.parse::<u32>().ok()).filter(|f| (1..=24).contains(f)) {
+        return (code.into(), 0x6F + f);
+    }
+    let (key, vk) = match code {
+        "Enter" | "NumpadEnter" => ("Enter", 0x0D),
+        "Tab" => ("Tab", 0x09),
+        "Escape" => ("Escape", 0x1B),
+        "Backspace" => ("Backspace", 0x08),
+        "Space" => (" ", 0x20),
+        "ArrowLeft" => ("ArrowLeft", 0x25),
+        "ArrowUp" => ("ArrowUp", 0x26),
+        "ArrowRight" => ("ArrowRight", 0x27),
+        "ArrowDown" => ("ArrowDown", 0x28),
+        "Home" => ("Home", 0x24),
+        "End" => ("End", 0x23),
+        "PageUp" => ("PageUp", 0x21),
+        "PageDown" => ("PageDown", 0x22),
+        "Insert" => ("Insert", 0x2D),
+        "Delete" => ("Delete", 0x2E),
+        "CapsLock" => ("CapsLock", 0x14),
+        "ShiftLeft" | "ShiftRight" => ("Shift", 0x10),
+        "ControlLeft" | "ControlRight" => ("Control", 0x11),
+        "AltLeft" | "AltRight" => ("Alt", 0x12),
+        "MetaLeft" | "MetaRight" => ("Meta", 0x5B),
+        "Minus" => (if shift { "_" } else { "-" }, 0xBD),
+        "Equal" => (if shift { "+" } else { "=" }, 0xBB),
+        "Comma" => (if shift { "<" } else { "," }, 0xBC),
+        "Period" => (if shift { ">" } else { "." }, 0xBE),
+        "Slash" => (if shift { "?" } else { "/" }, 0xBF),
+        "Backquote" => (if shift { "~" } else { "`" }, 0xC0),
+        "BracketLeft" => (if shift { "{" } else { "[" }, 0xDB),
+        "Backslash" => (if shift { "|" } else { "\\" }, 0xDC),
+        "BracketRight" => (if shift { "}" } else { "]" }, 0xDD),
+        "Quote" => (if shift { "\"" } else { "'" }, 0xDE),
+        "Semicolon" => (if shift { ":" } else { ";" }, 0xBA),
+        other => (other, 0),
+    };
+    (key.into(), vk)
+}
+
+#[cfg(not(windows))]
+pub async fn site_input(_: &AppHandle, _: u32, _: Input) -> Res<()> {
+    Err("Websites shared in a ring can be driven on Windows only.".into())
+}
+
 #[tauri::command]
 pub fn web_close(window: Window, id: u32) {
     crate::coop::forget(id);
@@ -867,14 +1090,115 @@ pub fn web_close(window: Window, id: u32) {
 /// timer sees (dispatched on the document, so no console's screen gets it), and a quiet request
 /// for the page, which keeps the server's session going. Hidden pages' timers run once a minute at
 /// most, which is plenty.
-const AWAKE: &str = r#"(() => {
+const AWAKE: &str = r##"(() => {
   if (window.__xtmAwake || !location.protocol.startsWith("http")) return;
   window.__xtmAwake = true;
   setInterval(() => {
     document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
     if (window === window.top) fetch(location.href, { credentials: "include", cache: "no-store" }).catch(() => {});
   }, 4 * 60 * 1000);
-})();"#;
+  // For a ring (coop.rs): where the pointer is over the page and what was clicked, kept on the top
+  // window in its viewport's CSS pixels (`pointer` reads them), and the others' pointers and
+  // clicks drawn over the page (`web_marks`). The top page hooks every frame it can reach, now and
+  // then: a frame made by script (a console's) gets no copy of this script.
+  if (window !== window.top) return;
+  const T = window;
+  T.__xtmClicks = [];
+  const wins = (w) => {
+    const all = [w];
+    try {
+      for (const f of Array.from(w.frames)) all.push(...wins(f));
+    } catch {}
+    return all;
+  };
+  // Where a frame's viewport sits in the top one.
+  const origin = (w) => {
+    let [x, y, f] = [0, 0, w];
+    try {
+      while (f !== T) {
+        const r = f.frameElement.getBoundingClientRect();
+        [x, y, f] = [x + r.left, y + r.top, f.parent];
+      }
+    } catch {}
+    return [x, y];
+  };
+  const hook = (w) => {
+    const d = w.document;
+    if (d.__xtmHooked) return;
+    d.__xtmHooked = true;
+    d.addEventListener("pointermove", (e) => {
+      const [ox, oy] = origin(w);
+      T.__xtmPtr = { x: e.clientX + ox, y: e.clientY + oy };
+    }, true);
+    d.addEventListener("pointerdown", (e) => {
+      const [ox, oy] = origin(w);
+      if (T.__xtmClicks.length < 32) T.__xtmClicks.push({ x: e.clientX + ox, y: e.clientY + oy, button: e.button });
+    }, true);
+    if (w === T) d.addEventListener("mouseout", (e) => e.relatedTarget || (T.__xtmPtr = null), true);
+  };
+  const sweep = () => {
+    for (const w of wins(T)) {
+      try {
+        hook(w);
+      } catch {}
+    }
+  };
+  sweep();
+  setInterval(sweep, 1000);
+  // The others' marks: `marks` are {id, x, y, color, name, initial, moving, clicks: [[x, y, button]]}
+  // in picture pixels (x < 0: gone); `console`: the picture is the console's canvas, else the page.
+  // Styles go through the CSSOM: a page's CSP may refuse inline style attributes.
+  const make = (tag, css) => {
+    const el = document.createElement(tag);
+    el.style.cssText = css;
+    return el;
+  };
+  T.__xtmMarks = (marks, console) => {
+    let box = document.getElementById("xtm-marks");
+    if (!box) {
+      box = make("div", "position:fixed;inset:0;pointer-events:none;z-index:2147483647;font:12px system-ui,sans-serif");
+      box.id = "xtm-marks";
+      document.documentElement.append(box);
+    }
+    let to = (x, y) => [x / devicePixelRatio, y / devicePixelRatio];
+    if (console) {
+      let c = null;
+      for (const w of wins(T)) {
+        try {
+          for (const k of w.document.querySelectorAll("canvas")) if (!c || k.width * k.height > c.width * c.height) c = k;
+        } catch {}
+      }
+      if (!c) return;
+      const r = c.getBoundingClientRect(), [ox, oy] = origin(c.ownerDocument.defaultView);
+      to = (x, y) => [ox + r.left + (x * r.width) / c.width, oy + r.top + (y * r.height) / c.height];
+    }
+    const seen = new Set();
+    for (const m of marks) {
+      seen.add(m.id);
+      let el = [...box.children].find((e) => e.dataset.id === m.id);
+      if (!el) {
+        el = make("div", "position:absolute;left:0;top:0;transition:translate 80ms linear");
+        el.dataset.id = m.id;
+        el.append(make("i", "display:block;width:8px;height:8px;border:2px solid;border-radius:50%;box-sizing:content-box;outline:1px solid rgba(0,0,0,.5)"));
+        el.append(make("b", "position:absolute;left:8px;top:8px;display:grid;place-items:center;min-width:13px;height:13px;padding:0 3px;border-radius:7px;color:#fff;font-weight:700;font-size:9px;line-height:1;white-space:nowrap;outline:1px solid rgba(0,0,0,.5)"));
+        box.append(el);
+      }
+      const [x, y] = to(m.x, m.y);
+      el.style.translate = `${x}px ${y}px`;
+      el.style.display = m.x < 0 || m.y < 0 ? "none" : "";
+      el.firstChild.style.borderColor = m.color;
+      el.lastChild.style.background = m.color;
+      el.lastChild.textContent = m.moving ? m.name : m.initial;
+      for (const k of m.clicks ?? []) {
+        const [cx, cy] = to(k[0], k[1]);
+        const ring = make("i", `position:absolute;left:${cx}px;top:${cy}px;width:0;height:0;border:2px ${k[2] ? "dashed" : "solid"} ${m.color};border-radius:50%;translate:-50% -50%;box-sizing:content-box`);
+        box.append(ring);
+        ring.animate([{ width: "0px", height: "0px", opacity: 1 }, { width: "34px", height: "34px", opacity: 0 }], { duration: 700, easing: "ease-out" }).onfinish = () => ring.remove();
+      }
+    }
+    for (const el of [...box.children]) if (el.dataset.id && !seen.has(el.dataset.id)) el.remove();
+  };
+})();"##;
 
 // ---- website sessions' own profiles: <data folder>/websites/<profile> ----
 
@@ -930,6 +1254,29 @@ mod tests {
         assert_eq!(chord(0x50).as_deref(), Some("P"));
         assert_eq!(chord(0xBC).as_deref(), Some(","));
         assert_eq!(chord(0x5B), None, "the Windows key alone");
+    }
+
+    /// A ring member's keys and mouse for a shared website become the page's own events: picture
+    /// pixels turned into CSS pixels, buttons and modifiers remembered for the events after.
+    #[cfg(windows)]
+    #[test]
+    fn ring_input_becomes_page_events() {
+        assert_eq!(key_of("KeyA", false), ("a".into(), 0x41));
+        assert_eq!(key_of("KeyA", true), ("A".into(), 0x41));
+        assert_eq!(key_of("Digit1", true), ("!".into(), 0x31));
+        assert_eq!(key_of("Enter", false), ("Enter".into(), 0x0D));
+        assert_eq!(key_of("F5", false), ("F5".into(), 0x74));
+        let mut d = Drive { dpr: 2.0, ..Default::default() };
+        let (m, p) = d.event(Input::Button { button: 0, down: true, x: 200, y: 100 }).unwrap();
+        assert_eq!(m, "Input.dispatchMouseEvent");
+        let p: serde_json::Value = serde_json::from_str(&p).unwrap();
+        assert_eq!((p["type"].as_str(), p["x"].as_f64(), p["y"].as_f64(), p["button"].as_str(), p["buttons"].as_u64()), (Some("mousePressed"), Some(100.0), Some(50.0), Some("left"), Some(1)));
+        d.event(Input::Key { code: "ShiftLeft".into(), down: true });
+        let (_, p) = d.event(Input::Key { code: "KeyB".into(), down: true }).unwrap();
+        let p: serde_json::Value = serde_json::from_str(&p).unwrap();
+        assert_eq!((p["key"].as_str(), p["modifiers"].as_u64()), (Some("B"), Some(8)));
+        assert!(d.event(Input::Paste).is_none());
+        assert_eq!(d.event(Input::Text { text: "é".into() }).unwrap().0, "Input.insertText");
     }
 
 }

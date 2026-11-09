@@ -1,7 +1,7 @@
 // Run with `npm test`: node runs TypeScript directly.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clock, memberColor, pace, passcode, PASSCODE_ALPHABET, rate, selectionRows, throttle, traffic } from "./coop.ts";
+import { clock, memberColor, pace, passcode, PASSCODE_ALPHABET, rate, remoteView, selectionRows, throttle, traffic } from "./coop.ts";
 
 test("a passcode is upper case, from the alphabet, and 8 characters at most", () => {
   assert.equal(passcode("a7k2m9qx"), "A7K2M9QX");
@@ -107,4 +107,22 @@ test("a ring member's selection is drawn row by row, only what is on screen", ()
   assert.deepEqual(rows([200, 0], [210, 4]), []);
   assert.deepEqual(rows([90, 0], [100, 4]), [[0, 0, 5]]);
   assert.deepEqual(rows([102, 3], [1_000_000, 0]), [[2, 3, 10]]);
+});
+
+test("a remote tab is the owner's grid at the viewer's cell, scaled down only when the box is smaller", () => {
+  // 80 × 24 cells of 8 × 16 is 640 × 384: it fits a 800 × 600 box as it is.
+  assert.deepEqual(remoteView(80, 24, 8, 16, 800, 600), { w: 640, h: 384, k: 1 });
+  // A bigger box never scales it up.
+  assert.equal(remoteView(80, 24, 8, 16, 6400, 6000).k, 1);
+  // Too wide, too tall, or both: the tighter side sets `k`, and the canvas itself keeps its size.
+  assert.deepEqual(remoteView(80, 24, 8, 16, 320, 600), { w: 640, h: 384, k: 0.5 });
+  assert.deepEqual(remoteView(80, 24, 8, 16, 800, 192), { w: 640, h: 384, k: 0.5 });
+  assert.equal(remoteView(80, 24, 8, 16, 320, 96).k, 0.25);
+  // A bigger cell (the viewer zoomed in) makes a bigger canvas, not a different grid.
+  assert.deepEqual(remoteView(80, 24, 16, 32, 1280, 768), { w: 1280, h: 768, k: 1 });
+  // Nothing to draw, or no box: finite numbers, never NaN or Infinity.
+  for (const a of [[0, 0, 8, 16, 800, 600], [80, 24, 0, 0, 800, 600], [80, 24, 8, 16, 0, 0], [80, 24, 8, 16, -5, -5], [0, 24, 8, 16, 0, 0]]) {
+    const v = remoteView(a[0], a[1], a[2], a[3], a[4], a[5]);
+    assert.ok(Object.values(v).every(Number.isFinite) && v.k >= 0 && v.k <= 1);
+  }
 });
