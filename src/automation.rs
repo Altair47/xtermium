@@ -291,7 +291,7 @@ see folder_save), `still`, `notes` and `style` are optional. An existing one \
 {type: \"ssh\", host, port, user, key (private key path), credential (a login id), jump: {host, port, user, key, credential} or null, \
 command (typed after login), ciphers: [], keepalive (seconds) or null, compression or null, agent_forward}; \
 {type: \"rdp\", host, port, user (DOMAIN\\user), quality (0 quality, 1 balanced, 2 speed) or null, credential, smb_login (true/false) or null, no_shares (true: the file panel never opens its shared folders)}; \
-{type: \"vnc\", host, port, credential}; {type: \"kvm\", vendor: \"supermicro\" or \"idrac\", host, port, credential} (a BMC console); {type: \"telnet\", host, port}; {type: \"serial\", port, baud}; \
+{type: \"vnc\", host, port, credential}; {type: \"kvm\", vendor: \"supermicro\", \"idrac\", \"ilo\" or \"megarac\", host, port, credential} (a BMC console); {type: \"telnet\", host, port}; {type: \"serial\", port, baud}; \
 {type: \"shell\", program}; {type: \"browser\", url, credential}; {type: \"agent\", tool, args, dir}. \
 null means the global setting. `style`: {font, font_size, term, fg, bg, cursor: [r, g, b] or null, palette: 16 [r, g, b] or null}. \
 Passwords aren't stored in sessions: give a shared login's id as `credential` (see `logins`), or xtermium asks when it connects.";

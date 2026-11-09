@@ -347,7 +347,6 @@
   "Open with the desktop's login": "Avaa työpöydän kirjautumisella",
   "Open with the desktop's login (as in Settings)": "Avaa työpöydän kirjautumisella (kuten asetuksissa)",
   "OpenSSH config": "OpenSSH-määritys",
-  "Opens the BMC's own HTML5 console, signed in with the shared login (Supermicro: X11 and newer). The console tab can paste your clipboard as key presses.": "Avaa BMC:n oman HTML5-konsolin jaetulla kirjautumisella kirjautuneena (Supermicro: X11 ja uudemmat). Konsolivälilehti voi liittää leikepöytäsi näppäinpainalluksina.",
   "Other assistants that take MCP servers over HTTP mostly read a configuration like this one:": "Muut avustajat, jotka ottavat MCP-palvelimia HTTP:n yli, lukevat yleensä tällaisen määrityksen:",
   "Page {n} of {total} · {keys} keys": "Sivu {n}/{total} · {keys} avainta",
   "Pane padding": "Ruudun reunus",

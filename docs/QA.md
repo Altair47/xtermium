@@ -21,6 +21,19 @@ Needs two (or three) Pro accounts on separate machines, joined in one ring throu
   computer, round the pictures in the Co-op dialog and on pointers and selections (checked
   here only with a faked ring event in one window).
 
+## BMC consoles
+
+Checked on 2026-11-09 against real BMCs (read only): iLO 4 (autologin, console over the page,
+video), a Gigabyte MegaRAC SP-X and ASUS ASMB10 and ASMB11 (sign-in, H5Viewer launched in the
+tab, scaled to fill it), a Supermicro X11 (autologin, console), and pasting into a console.
+Still to see:
+
+- Autologin on the ASUS boards with their own passwords (they were signed in by hand; the
+  form filled and submitted, and the BMC refused the other board's password, as expected).
+- The mouse through the MegaRAC cursor layer (automation and Co-op desktop control).
+- iDRAC 7 and 8 after the shared changes (notes kept on the top window, key target).
+- The Java hints: an iLO with firmware older than 2.70, a MegaRAC with the H5Viewer disabled.
+
 ## macOS
 
 The macOS build ships unsigned, and nobody has run these on a Mac yet.

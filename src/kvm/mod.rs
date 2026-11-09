@@ -5,6 +5,8 @@
 //! screenshots, and trust on first use for the BMC's self-signed certificate.
 
 mod idrac;
+mod ilo;
+mod megarac;
 pub mod relay;
 mod supermicro;
 
@@ -18,6 +20,8 @@ type Res<T> = Result<T, String>;
 pub fn home(vendor: &str) -> &'static str {
     match vendor {
         "idrac" => idrac::HOME,
+        "ilo" => ilo::HOME,
+        "megarac" => megarac::HOME,
         _ => supermicro::HOME,
     }
 }
@@ -26,6 +30,8 @@ pub fn home(vendor: &str) -> &'static str {
 pub fn java_hint(vendor: &str) -> &'static str {
     match vendor {
         "idrac" => idrac::JAVA,
+        "ilo" => ilo::JAVA,
+        "megarac" => megarac::JAVA,
         _ => supermicro::JAVA,
     }
 }
@@ -37,6 +43,8 @@ pub fn login_script(vendor: &str, host: &str, user: &str, password: &str, relay:
     let q = |s: &str| serde_json::to_string(s).unwrap_or_default();
     let script = match vendor {
         "idrac" => idrac::SCRIPT,
+        "ilo" => ilo::SCRIPT,
+        "megarac" => megarac::SCRIPT,
         _ => supermicro::SCRIPT,
     };
     format!(
@@ -50,12 +58,13 @@ pub fn login_script(vendor: &str, host: &str, user: &str, password: &str, relay:
 
 /// The helpers vendors' scripts use.
 const COMMON: &str = r#"
-  // What happened in this tab so far, kept in window.name: it outlives the pages (Supermicro's
-  // clears sessionStorage once signed in). The login is filled in once: a refused password shows
-  // the form again, and that's left to the person.
-  const notes = () => (window.name.startsWith("xtm:") ? window.name.slice(4).split(",") : []);
+  // What happened in this tab so far, kept in the top window's name: it outlives the pages
+  // (Supermicro's clears sessionStorage once signed in) and is one for every frame (iLO signs in
+  // from one). The login is filled in once: a refused password shows the form again, and that's
+  // left to the person.
+  const notes = () => (top.name.startsWith("xtm:") ? top.name.slice(4).split(",") : []);
   const seen = (k) => notes().includes(k);
-  const mark = (k) => (window.name = "xtm:" + [...new Set([...notes(), k])].join(","));
+  const mark = (k) => (top.name = "xtm:" + [...new Set([...notes(), k])].join(","));
   const set = (el, v) => {
     el.focus();
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
@@ -139,8 +148,9 @@ pub async fn trust(prompter: &crate::prompt::Prompter, id: &str, fp: &str) -> Re
 
 /// Remote desktop input (pasted text, automation, broadcast) for the console, the way a keyboard
 /// on a US layout and a mouse would send it: keys through the page's noVNC viewer when it has one
-/// (Supermicro's does), else as page key events; the mouse as events on the console's picture, at
-/// desktop pixels. The console sends key codes to the server, not characters: characters without
+/// (Supermicro's does), else as page key events where the console listens (iLO's on its page,
+/// MegaRAC's on a hidden text field); the mouse as events on whatever draws the console's picture
+/// (a cursor layer may lie over it), at desktop pixels. The console sends key codes to the server, not characters: characters without
 /// a key are skipped. Keys are paced, since consoles drop keys that come too fast; one queue per
 /// page keeps calls that overlap in order.
 pub fn input_script(evs: &[Input]) -> String {
@@ -206,10 +216,19 @@ const INPUT: &str = r#"
     if (base >= "0" && base <= "9") return [base.charCodeAt(0), "Digit" + base, shift];
     return KEYS[base] && [...KEYS[base], shift];
   };
+  // Where key events go: the focused element of the innermost frame with the keyboard, or of the
+  // console's frame when the page has one but the keyboard is elsewhere. MegaRAC's viewer listens
+  // on a hidden text field (focused when a key would otherwise go to the page).
   const target = () => {
     let d = document;
-    while (/^I?FRAME$/.test(d.activeElement?.tagName) && d.activeElement.contentDocument) d = d.activeElement.contentDocument;
-    return d.activeElement ?? d.body;
+    for (;;) {
+      const a = d.activeElement, f = /^I?FRAME$/.test(a?.tagName) ? a : d.getElementById("xtm-console");
+      if (!f?.contentDocument) break;
+      d = f.contentDocument;
+    }
+    const el = (d.activeElement && d.activeElement !== d.body ? d.activeElement : null) ?? d.getElementById("kvm_textbox") ?? d.body;
+    el.focus?.();
+    return el;
   };
   const fire = (type, key, code, keyCode, shiftKey) => {
     const e = new KeyboardEvent(type, { key, code, shiftKey, bubbles: true, cancelable: true });
@@ -253,7 +272,7 @@ const INPUT: &str = r#"
     [q.x, q.y] = [x, y];
     const at = { clientX: r.left + ((x + 0.5) * r.width) / c.width, clientY: r.top + ((y + 0.5) * r.height) / c.height };
     const E = type.includes("wheel") ? w.WheelEvent : w.MouseEvent;
-    c.dispatchEvent(new E(type, { bubbles: true, cancelable: true, view: w, buttons: q.held, ...at, ...init }));
+    (c.ownerDocument.elementFromPoint(at.clientX, at.clientY) ?? c).dispatchEvent(new E(type, { bubbles: true, cancelable: true, view: w, buttons: q.held, ...at, ...init }));
   };
   const BITS = [1, 4, 2]; // `buttons` bits of the left, middle and right buttons
   const ops = [];
@@ -315,10 +334,15 @@ mod tests {
     /// Each vendor's console tab starts at its own page, with its own script after the shared one.
     #[test]
     fn vendors_have_their_own_start_and_script() {
-        assert_eq!((home("supermicro"), home("idrac")), ("/", "/login.html?console"));
+        assert_eq!((home("supermicro"), home("idrac"), home("ilo"), home("megarac")), ("/", "/login.html?console", "/", "/"));
         let s = login_script("idrac", "bmc", "u", "p", "");
         assert!(s.contains("const fillIn") && s.contains("virtualconsolehtml5") && !s.contains("man_ikvm"));
         assert!(login_script("supermicro", "bmc", "u", "p", "").contains("man_ikvm_html5_bootstrap"));
+        assert!(login_script("ilo", "bmc", "u", "p", "").contains("/irc.html"));
+        assert!(login_script("megarac", "bmc", "u", "p", "").contains(r"viewer\.html"));
+        for v in crate::config::KVM_VENDORS {
+            assert!(!java_hint(v).is_empty() && !home(v).is_empty(), "{v}");
+        }
     }
 
     #[test]
