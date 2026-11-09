@@ -22,7 +22,7 @@ use crate::{App, Tab, rdp, sync, term, web};
 use iroh::endpoint::{Connection, Incoming, RecvStream, SendStream, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, TransportAddr};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -68,10 +68,11 @@ const KEY_TEXT: usize = 4;
 const GONE_TAB: &str = "That tab isn't shared with you any more.";
 /// What this app speaks of the protocol, sent after the Hello's own bytes (`encode`): 1 the first
 /// version, 2 copy and paste in terminal tabs (`Msg::Copy`, `Msg::Selection`, `Hands::Paste`), 3
-/// everyone's selection drawn for the ring (`Msg::Selected`). An older app reads
+/// everyone's selection drawn for the ring (`Msg::Selected`), 4 one person at a time driving a
+/// shared desktop (`Msg::Control`, `Msg::Ask`). An older app reads
 /// the Hello and ignores the byte, but drops the connection over a message it doesn't know, so
 /// those go only to an app that said 2 (`needs`).
-const WIRE: u8 = 3;
+const WIRE: u8 = 4;
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const PRO_EVERY: Duration = Duration::from_secs(5 * 60);
 /// The UI hears of changes at most this often (20 Hz): cursors would flood it otherwise.
@@ -200,6 +201,18 @@ pub enum Msg {
         user_id: String,
         sel: Option<Sel>,
     },
+    /// Who drives shared desktop `tab` (a picture tab): the viewer `user_id`, or the owner again
+    /// when it is empty. The owner tells everyone at each change, and a viewer who joins (`WIRE` 4).
+    Control {
+        tab: u32,
+        user_id: String,
+    },
+    /// From a viewer: they ask for control of desktop `tab` (`want`), or give it back or withdraw
+    /// the ask. From the owner to a viewer: their ask was turned down (`WIRE` 4).
+    Ask {
+        tab: u32,
+        want: bool,
+    },
 }
 
 /// A cell of a shared text tab: stable row, column.
@@ -217,6 +230,7 @@ fn needs(m: &Msg) -> u8 {
     match m {
         Msg::Copy { .. } | Msg::Selection { .. } | Msg::Input { input: Hands::Paste(_), .. } => 2,
         Msg::Selected { .. } => 3,
+        Msg::Control { .. } | Msg::Ask { .. } => 4,
         _ => 1,
     }
 }
@@ -408,6 +422,16 @@ fn desktop_ok(ev: &rdp::Input) -> bool {
     }
 }
 
+/// Whether viewer `from` may drive a shared tab with `hands`. A terminal takes everyone's typing;
+/// a desktop's keys and pointer only the one viewer the owner gave control to (`Hosted::controller`),
+/// so two people never fight over one pointer. The owner's own input never comes this way.
+fn may_drive(controller: Option<&str>, from: &str, hands: &Hands) -> bool {
+    match hands {
+        Hands::Desktop(_) => controller == Some(from),
+        _ => true,
+    }
+}
+
 /// A user id is what the server made: letters, digits, `_` and `-`. Checked before it goes in a path.
 fn id_ok(id: &str) -> bool {
     !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -581,6 +605,10 @@ pub struct Payload {
     cursors: Vec<CursorOut>,
     /// The others' selections on shared text tabs.
     selections: Vec<SelOut>,
+    /// Shared desktops a viewer drives, and who; any other shared desktop is the owner's to drive.
+    control: Vec<ControlOut>,
+    /// Asks for control of a desktop: the viewers asking (the owner's side), or your own (a viewer's).
+    wants: Vec<ControlOut>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ended: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -635,6 +663,13 @@ struct SelOut {
     block: bool,
 }
 
+/// A viewer and a shared desktop: who drives it, or who asks to.
+#[derive(Serialize, Clone)]
+struct ControlOut {
+    tab: u32,
+    user_id: String,
+}
+
 #[derive(Serialize, Clone)]
 struct CursorOut {
     tab: u32,
@@ -670,12 +705,17 @@ struct Hosted {
     sink: WeakUnboundedSender<Vec<u8>>,
     force: Arc<AtomicBool>,
     tasks: Vec<JoinHandle<()>>,
+    /// The one viewer driving this desktop (`may_drive`); None: the owner. Always None for a
+    /// text tab, where everyone types.
+    controller: Option<String>,
 }
 
 /// A tab shared with us. Frames reach `channel` once the UI has opened it (`coop_open_remote`).
 struct Remote {
     info: ShareInfo,
     channel: Arc<Mutex<Option<Channel>>>,
+    /// Who drives this desktop, as the owner last said (`Msg::Control`); "" the owner.
+    controller: String,
 }
 
 struct State {
@@ -696,6 +736,9 @@ struct State {
     /// A viewer's selections waiting for the owner's answer (`coop_remote_select`), by number.
     asks: HashMap<u32, tokio::sync::oneshot::Sender<Picked>>,
     next_ask: u32,
+    /// Asks for control of a shared desktop, (tab, who): viewers asking, on the owner's side; the
+    /// desktops we asked for (with our own id), on a viewer's.
+    wants: BTreeSet<(u32, String)>,
 }
 
 struct Ring {
@@ -774,6 +817,7 @@ impl Ring {
                 selections: HashMap::new(),
                 asks: HashMap::new(),
                 next_ask: 0,
+                wants: BTreeSet::new(),
             }),
             tasks: Mutex::new(vec![]),
         })
@@ -843,6 +887,15 @@ impl Ring {
             .map(|((tab, user), (a, b, block))| SelOut { tab: *tab, user_id: user.clone(), a: *a, b: *b, block: *block })
             .collect();
         selections.sort_by(|a, b| (a.tab, &a.user_id).cmp(&(b.tab, &b.user_id)));
+        let control = if self.owner {
+            st.hosted.iter().filter_map(|(t, h)| h.controller.clone().map(|u| ControlOut { tab: *t, user_id: u })).collect()
+        } else {
+            st.remote
+                .values()
+                .filter(|r| !r.controller.is_empty())
+                .map(|r| ControlOut { tab: r.info.tab, user_id: r.controller.clone() })
+                .collect()
+        };
         Payload {
             ring: Some(RingOut {
                 id: self.id.clone(),
@@ -869,6 +922,8 @@ impl Ring {
                 .collect(),
             cursors,
             selections,
+            control,
+            wants: st.wants.iter().map(|(t, u)| ControlOut { tab: *t, user_id: u.clone() }).collect(),
             ended: None,
             message: None,
         }
@@ -892,6 +947,7 @@ impl Ring {
             st.remote.clear();
             st.cursors.clear();
             st.selections.clear();
+            st.wants.clear();
             (std::mem::take(&mut st.peers), st.link.take(), std::mem::take(&mut st.hosted))
         };
         let code = if reason == Some("kicked") { KICKED } else { ENDED };
@@ -960,7 +1016,7 @@ impl Ring {
         for (p, kicked) in cut {
             let _ = p.ctl.send(if kicked { Msg::Kicked } else { Msg::Ended });
             p.conn.close(if kicked { KICKED } else { LEFT }.into(), b"removed");
-            self.unselect(&p.person.id);
+            self.gone(&p.person.id);
         }
         self.notify();
         Ok(())
@@ -1026,14 +1082,19 @@ impl Ring {
         for info in &shares {
             let _ = ctl.send(Msg::Share(info.clone()));
         }
-        // Every viewer starts from the same state as the owner's window: whole frames again, and
-        // everyone's selections.
+        // Every viewer starts from the same state as the owner's window: whole frames again,
+        // everyone's selections, and who drives each desktop.
         for info in &shares {
             self.refresh(info.tab);
         }
         let sels: Vec<_> = self.st().selections.iter().map(|((t, u), s)| (*t, u.clone(), *s)).collect();
         for (tab, user_id, sel) in sels.into_iter().filter(|(_, u, _)| *u != person.id) {
             self.give(&person.id, Msg::Selected { tab, user_id, sel: Some(sel) });
+        }
+        let held: Vec<(u32, String)> =
+            self.st().hosted.iter().filter_map(|(t, h)| h.controller.clone().map(|u| (*t, u))).collect();
+        for (tab, user_id) in held {
+            self.give(&person.id, Msg::Control { tab, user_id });
         }
         self.notify();
 
@@ -1053,9 +1114,64 @@ impl Ring {
                     let _ = c.send(Msg::Cursor { tab: *tab, user_id: person.id.clone(), col: -1, row: -1 });
                 }
             }
-            self.unselect(&person.id);
+            self.gone(&person.id);
         }
         Ok(())
+    }
+
+    /// Who drives shared desktop `tab` from now: viewer `user` (connected), or the owner again when
+    /// `user` is empty. Everyone in the ring hears, and the ask this answers is done.
+    fn control(&self, tab: u32, user: &str) -> Res<()> {
+        {
+            let mut st = self.st();
+            if !user.is_empty() && !st.peers.contains_key(user) {
+                return Err("That person isn't connected to the ring.".into());
+            }
+            let h = st.hosted.get_mut(&tab).ok_or("That tab isn't shared.")?;
+            if h.info.kind != Shape::Picture {
+                return Err("Only a shared desktop has control to give.".into());
+            }
+            h.controller = (!user.is_empty()).then(|| user.to_string());
+            st.wants.retain(|(t, u)| !(*t == tab && u == user));
+        }
+        self.tell(tab, user);
+        self.notify();
+        Ok(())
+    }
+
+    /// Tells every viewer who drives desktop `tab` now ("" the owner).
+    fn tell(&self, tab: u32, user_id: &str) {
+        let ids: Vec<String> = self.st().peers.keys().cloned().collect();
+        for id in ids {
+            self.give(&id, Msg::Control { tab, user_id: user_id.into() });
+        }
+    }
+
+    /// Viewer `user` asks for control of desktop `tab` (`want`), or gives it back or withdraws the
+    /// ask. The owner's window shows the ask; giving it back needs no yes.
+    fn asked(&self, tab: u32, user: &str, want: bool) {
+        let holds = {
+            let mut st = self.st();
+            let Some(h) = st.hosted.get(&tab).filter(|h| h.info.kind == Shape::Picture) else { return };
+            let holds = h.controller.as_deref() == Some(user);
+            if want && !holds {
+                st.wants.insert((tab, user.to_string()));
+            } else {
+                st.wants.remove(&(tab, user.to_string()));
+            }
+            holds
+        };
+        if !want && holds {
+            let _ = self.control(tab, "");
+        }
+        self.notify();
+    }
+
+    /// Turns down viewer `user`'s ask for control of desktop `tab`; they're told.
+    fn decline(&self, tab: u32, user: &str) {
+        self.st().wants.remove(&(tab, user.to_string()));
+        self.give(user, Msg::Ask { tab, want: false });
+        self.notify();
     }
 
     /// `user`'s selection on shared tab `tab` changed (None: gone): kept, and told to everyone else
@@ -1082,18 +1198,32 @@ impl Ring {
         self.notify();
     }
 
-    /// Someone left or was taken out: their selections go, here and for the others.
-    fn unselect(&self, user: &str) {
-        let (tabs, ids) = {
+    /// Someone left or was taken out: their selections go, here and for the others, the desktops
+    /// they drove are the owner's again, and their asks are forgotten.
+    fn gone(&self, user: &str) {
+        let (tabs, ids, drove) = {
             let mut st = self.st();
             let tabs: Vec<u32> = st.selections.keys().filter(|(_, u)| u == user).map(|(t, _)| *t).collect();
             st.selections.retain(|(_, u), _| u != user);
-            (tabs, st.peers.keys().cloned().collect::<Vec<_>>())
+            st.wants.retain(|(_, u)| u != user);
+            let drove: Vec<u32> = st
+                .hosted
+                .iter_mut()
+                .filter(|(_, h)| h.controller.as_deref() == Some(user))
+                .map(|(t, h)| {
+                    h.controller = None;
+                    *t
+                })
+                .collect();
+            (tabs, st.peers.keys().cloned().collect::<Vec<_>>(), drove)
         };
         for tab in tabs {
             for id in &ids {
                 self.give(id, Msg::Selected { tab, user_id: user.into(), sel: None });
             }
+        }
+        for tab in drove {
+            self.tell(tab, "");
         }
         self.notify();
     }
@@ -1110,7 +1240,8 @@ impl Ring {
     /// one they wrote.
     fn on_peer(&self, from: &Person, m: Msg) {
         match m {
-            Msg::Input { tab, input } => self.drive(tab, input),
+            Msg::Input { tab, input } => self.drive(tab, &from.id, input),
+            Msg::Ask { tab, want } => self.asked(tab, &from.id, want),
             Msg::Copy { ask, tab, a, b, block, unit } => {
                 let ((a, b), text) = self.pick(tab, (a, b), block, unit);
                 let (text, cut) = clip(text.unwrap_or_default());
@@ -1166,11 +1297,18 @@ impl Ring {
         .unwrap_or(none)
     }
 
-    /// A viewer types, pastes or clicks in a shared tab: the owner's own paths for it, unless the
-    /// owner has locked xtermium. Never through broadcast, never to or from the owner's clipboard,
-    /// never the owner's selection.
-    fn drive(&self, tab: u32, hands: Hands) {
-        if crate::lock::is_locked() || !self.st().hosted.contains_key(&tab) {
+    /// Viewer `from` types, pastes or clicks in a shared tab: the owner's own paths for it, unless the
+    /// owner has locked xtermium, or it is a desktop someone else drives (`may_drive`). Never through
+    /// broadcast, never to or from the owner's clipboard, never the owner's selection.
+    fn drive(&self, tab: u32, from: &str, hands: Hands) {
+        if crate::lock::is_locked() {
+            return;
+        }
+        let controller = match self.st().hosted.get(&tab) {
+            Some(h) => h.controller.clone(),
+            None => return,
+        };
+        if !may_drive(controller.as_deref(), from, &hands) {
             return;
         }
         let app = self.handle.state::<App>();
@@ -1242,7 +1380,7 @@ impl Ring {
                 tasks.iter().for_each(JoinHandle::abort);
                 return Ok(());
             }
-            st.hosted.insert(tab, Hosted { info: info.clone(), sink: tx.downgrade(), force, tasks });
+            st.hosted.insert(tab, Hosted { info: info.clone(), sink: tx.downgrade(), force, tasks, controller: None });
             let mut ctls = vec![];
             let ring = self.clone();
             for p in st.peers.values_mut() {
@@ -1271,6 +1409,7 @@ impl Ring {
             }
             st.cursors.retain(|(t, _), _| *t != tab);
             st.selections.retain(|(t, _), _| *t != tab);
+            st.wants.retain(|(t, _)| *t != tab);
             (h, st.peers.values().map(|p| p.ctl.clone()).collect::<Vec<_>>())
         };
         h.tasks.iter().for_each(JoinHandle::abort);
@@ -1478,7 +1617,7 @@ impl Ring {
                         .remote
                         .entry(info.tab)
                         .and_modify(|r| r.info = info.clone())
-                        .or_insert_with(|| Remote { info, channel: Default::default() });
+                        .or_insert_with(|| Remote { info, channel: Default::default(), controller: String::new() });
                     self.notify();
                 }
                 Msg::Unshare { tab } => {
@@ -1486,6 +1625,29 @@ impl Ring {
                     st.remote.remove(&tab);
                     st.cursors.retain(|(t, _), _| *t != tab);
                     st.selections.retain(|(t, _), _| *t != tab);
+                    st.wants.retain(|(t, _)| *t != tab);
+                    drop(st);
+                    self.notify();
+                }
+                // Who drives a desktop now. Given to us, our ask is answered; given to someone
+                // else, it still waits with the owner.
+                Msg::Control { tab, user_id } => {
+                    let mut st = self.st();
+                    let me = st.me.id.clone();
+                    if let Some(r) = st.remote.get_mut(&tab) {
+                        r.controller = line(&user_id);
+                    }
+                    if user_id == me {
+                        st.wants.remove(&(tab, me));
+                    }
+                    drop(st);
+                    self.notify();
+                }
+                // The owner turned our ask down.
+                Msg::Ask { tab, .. } => {
+                    let mut st = self.st();
+                    let me = st.me.id.clone();
+                    st.wants.remove(&(tab, me));
                     drop(st);
                     self.notify();
                 }
@@ -1552,7 +1714,7 @@ impl Ring {
         let st = self.st();
         let l = st.link.as_ref().ok_or(GONE_TAB)?;
         if l.wire < needs(&m) {
-            return Err(format!("{} needs a newer xtermium for copy and paste in shared tabs.", st.host.name));
+            return Err(format!("{} needs a newer xtermium for that.", st.host.name));
         }
         l.ctl.send(m).map_err(|_| GONE_TAB.to_string())
     }
@@ -1779,9 +1941,27 @@ pub async fn coop_kick(user: String) -> Res<Payload> {
         let _ = p.ctl.send(Msg::Kicked);
         p.conn.close(KICKED.into(), b"kicked");
         ring.st().cursors.retain(|(_, u), _| *u != user);
-        ring.unselect(&user);
+        ring.gone(&user);
     }
     Ok(payload)
+}
+
+/// Gives viewer `user` control of your shared desktop `tab` (keys and pointer; nobody else's reach
+/// it meanwhile), or takes it back with `user` empty. Everyone in the ring is told.
+#[tauri::command]
+pub async fn coop_control(tab: u32, user: String) -> Res<()> {
+    host()?.control(tab, &user)
+}
+
+/// Turns down viewer `user`'s ask for control of your shared desktop `tab`.
+#[tauri::command]
+pub async fn coop_decline_control(tab: u32, user: String) -> Res<()> {
+    let ring = host()?;
+    if !id_ok(&user) {
+        return Err("That person isn't in the ring.".into());
+    }
+    ring.decline(tab, &user);
+    Ok(())
 }
 
 /// Gives a person in the ring another name (theirs was offensive, say). The server keeps it for this
@@ -2058,13 +2238,48 @@ pub async fn coop_remote_mouse(ring_tab: u32, ev: term::Mouse, cw: Option<f32>, 
     hands(ring_tab, Hands::Mouse(ev, cw.unwrap_or(0.0), ch.unwrap_or(0.0)))
 }
 
-/// Keyboard and pointer for a remote picture (`rdp_input`'s events).
+/// Keyboard and pointer for a remote picture (`rdp_input`'s events). Only while the owner gave you
+/// control of it: the owner's app refuses the rest anyway (`may_drive`), so nothing is sent.
 #[tauri::command]
 pub async fn coop_remote_input(ring_tab: u32, ev: rdp::Input) -> Res<()> {
     if !desktop_ok(&ev) {
         return Ok(());
     }
+    let ring = viewer()?;
+    let mine = {
+        let st = ring.st();
+        st.remote.get(&ring_tab).is_some_and(|r| r.controller == st.me.id)
+    };
+    if !mine {
+        return Ok(());
+    }
     hands(ring_tab, Hands::Desktop(serde_json::to_vec(&ev).map_err(|e| e.to_string())?))
+}
+
+/// Asks the owner for control of a desktop shared with you (`want`), or gives it back or withdraws
+/// the ask. The owner's yes arrives as the `coop` event's `control`; a no takes your ask off `wants`.
+#[tauri::command]
+pub async fn coop_ask_control(ring_tab: u32, want: bool) -> Res<()> {
+    let ring = viewer()?;
+    let me = {
+        let mut st = ring.st();
+        if !st.remote.contains_key(&ring_tab) {
+            return Err(GONE_TAB.into());
+        }
+        let me = st.me.id.clone();
+        if want {
+            st.wants.insert((ring_tab, me.clone()));
+        } else {
+            st.wants.remove(&(ring_tab, me.clone()));
+        }
+        me
+    };
+    let sent = ring.to_owner(Msg::Ask { tab: ring_tab, want });
+    if sent.is_err() {
+        ring.st().wants.remove(&(ring_tab, me));
+    }
+    ring.notify();
+    sent
 }
 
 #[cfg(test)]
@@ -2124,6 +2339,8 @@ mod tests {
 ".into()) },
             Msg::Copy { ask: 3, tab: 7, a: (-5, 2), b: (12, 0), block: true, unit: 1 },
             Msg::Selection { ask: 3, a: (-5, 0), b: (12, 79), text: "ls /var/log".into(), cut: false },
+            Msg::Control { tab: 8, user_id: "u2".into() },
+            Msg::Ask { tab: 8, want: true },
         ];
         for m in &msgs {
             let wire = encode(m).unwrap();
@@ -2279,6 +2496,29 @@ mod tests {
         assert_eq!(back, Some(((-3, 0), (2, 79), false)));
         let gone = Msg::Selected { tab: 1, user_id: "u1".into(), sel: None };
         assert!(matches!(decode(&encode(&gone).unwrap()[4..]).unwrap(), Msg::Selected { sel: None, .. }));
+        // Control of a shared desktop is version 4.
+        let control = Msg::Control { tab: 1, user_id: "u1".into() };
+        let ask = Msg::Ask { tab: 1, want: true };
+        for m in [&control, &ask] {
+            assert_eq!(needs(m), 4);
+            assert!(needs(m) <= WIRE);
+            assert!(postcard::to_allocvec(m).unwrap()[0] > 12, "past what a version 3 app knows");
+            assert!(decode(&encode(m).unwrap()[4..]).is_ok());
+        }
+    }
+
+    /// A shared terminal takes everyone's typing; a shared desktop only the one viewer the owner
+    /// gave control to, and nobody's until the owner gives it.
+    #[test]
+    fn only_the_viewer_with_control_drives_a_desktop() {
+        let click = || Hands::Desktop(serde_json::to_vec(&rdp::Input::Button { button: 0, down: true, x: 1, y: 1 }).unwrap());
+        let typing = || Hands::Text("ls".into());
+        assert!(!may_drive(None, "u1", &click()));
+        assert!(may_drive(Some("u1"), "u1", &click()));
+        assert!(!may_drive(Some("u1"), "u2", &click()));
+        assert!(may_drive(None, "u1", &typing()));
+        assert!(may_drive(Some("u2"), "u1", &typing()));
+        assert!(may_drive(None, "u1", &Hands::Paste("x".into())));
     }
 
     /// A paste has a limit that keeps it inside one control message, and says it; a copy is cut

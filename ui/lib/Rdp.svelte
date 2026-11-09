@@ -52,6 +52,20 @@
   let channel = 0;
   /** The tab's number in the ring, if it is in one: pointers are shown over it and sent from it. */
   const ringTab = $derived(peer || shared);
+  // One person at a time drives a shared desktop (src/coop.rs `may_drive`): the owner, or the one
+  // guest they gave control to. A guest asks; the owner gives, declines or takes it back any time.
+  /** The guest driving this desktop, "" for the owner. */
+  const controller = $derived(ringTab ? (app.coop.control.find((c) => c.tab === ringTab)?.user_id ?? "") : "");
+  const me = $derived(app.coop.ring?.members.find((m) => m.you)?.id ?? "");
+  const ownerName = $derived(app.coop.ring?.members.find((m) => m.owner)?.name ?? _("The owner"));
+  const nameOf = (id: string) => app.coop.ring?.members.find((m) => m.id === id)?.name ?? _("Someone");
+  /** The asks for this desktop: the owner sees every guest's, a guest their own. */
+  const asks = $derived(ringTab ? app.coop.wants.filter((w) => w.tab === ringTab) : []);
+  /** A guest drives only with control; the owner's own keys and pointer always go. */
+  const mayDrive = $derived(!peer || (!!me && controller === me));
+  const ask = (want: boolean) => invoke("coop_ask_control", { ringTab: peer, want }).catch((e) => (app.status = String(e))).finally(() => box.focus());
+  const give = (user: string) => invoke("coop_control", { tab: shared, user }).catch((e) => (app.status = String(e))).finally(() => box.focus());
+  const decline = (user: string) => invoke("coop_decline_control", { tab: shared, user }).catch((e) => (app.status = String(e))).finally(() => box.focus());
   let status = $state(_("starting…"));
   let closed = $state(false);
   let size = $state<[number, number] | null>(null);
@@ -189,7 +203,7 @@
    *  on the way (a Windows key released before it was pressed stays held on the desktop). */
   let queue: Promise<unknown> = Promise.resolve();
   const send = (ev: object) => {
-    if (!id || closed) return;
+    if (!id || closed || !mayDrive) return;
     const to = id;
     queue = queue.then(() => deliver(to, ev)).catch(() => {});
   };
@@ -362,6 +376,36 @@
       <button class="flat icon-only" title={_("Dismiss")} aria-label={_("Dismiss")} onclick={() => ((insecure = false), box.focus())}><Icon name="x" /></button>
     </div>
   {/if}
+  <!-- Who drives a shared desktop. A guest always sees it (with the way to ask); the owner only while a guest drives or asks. -->
+  {#if ringTab && !closed && (peer || controller || asks.length)}
+    <div class="control" role="status">
+      <Icon name="group" color={controller === me && me ? "var(--gold)" : undefined} />
+      <span>
+        {#if peer}
+          {controller === me ? _("You have control.") : _("{name} has control.", { name: controller ? nameOf(controller) : ownerName })}
+        {:else if controller}
+          {_("{name} has control.", { name: nameOf(controller) })}
+        {/if}
+      </span>
+      {#if peer}
+        {#if controller === me}
+          <button class="flat" onclick={() => ask(false)}>{_("Give control back")}</button>
+        {:else if asks.some((a) => a.user_id === me)}
+          <span class="weak">{_("Asked…")}</span>
+          <button class="flat" onclick={() => ask(false)}>{_("Cancel")}</button>
+        {:else}
+          <button class="flat" onclick={() => ask(true)}>{_("Ask for control")}</button>
+        {/if}
+      {:else}
+        {#if controller}<button class="flat" onclick={() => give("")}>{_("Take control")}</button>{/if}
+        {#each asks as a (a.user_id)}
+          <span class="asker">{_("{name} asks for control.", { name: nameOf(a.user_id) })}</span>
+          <button class="flat" onclick={() => give(a.user_id)}>{_("Give control")}</button>
+          <button class="flat" onclick={() => decline(a.user_id)}>{_("Not now")}</button>
+        {/each}
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -392,8 +436,9 @@
     color: #ccc; /* over the picture's black, which doesn't follow the theme */
     pointer-events: none;
   }
-  /* Floats over the desktop's top edge, in the app's colours. */
-  .insecure {
+  /* Float over the desktop's top edge, in the app's colours. */
+  .insecure,
+  .control {
     position: absolute;
     top: 8px;
     inset-inline: 8px;
@@ -403,14 +448,35 @@
     padding: 5px 8px;
     color: var(--fg);
     background: var(--raised);
-    border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line));
+    border: 1px solid var(--line);
     border-radius: var(--r-menu);
     box-shadow: var(--shadow-float);
     animation: float-in var(--move) var(--ease-out);
   }
-  .insecure span {
+  .insecure {
+    border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+  }
+  .insecure span,
+  .control > span:first-of-type {
     flex: 1;
     min-width: 0;
+  }
+  /* one line, its buttons small, under the VNC warning when both show */
+  .control {
+    align-items: center;
+    flex-wrap: wrap;
+    width: fit-content;
+    max-width: calc(100% - 2 * 8px);
+    inset-inline-start: 8px;
+    inset-inline-end: auto;
+    font-size: var(--t-s);
+  }
+  .control button {
+    min-height: var(--row);
+    padding: 0 5px;
+  }
+  .insecure ~ .control {
+    top: calc(8px + var(--bar) + 8px);
   }
   /* Over the last picture (reconnecting, or the connection ended): dimmed so the words read. */
   .over {
