@@ -86,8 +86,8 @@
     margin-top: 3px;
   }
   .format.on {
-    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-    background: var(--gold-soft);
+    border-color: var(--picked-line);
+    background: var(--picked);
   }
   .format > span {
     display: flex;

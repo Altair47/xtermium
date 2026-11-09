@@ -36,6 +36,7 @@
   import { _, LOCALES, N_, nativeName, pick } from "./i18n.svelte";
   import { ACCOUNT, boot, confirmIt, copyText, loadLock, lock, shortcut, signOut, syncNow, toast, workspaceOp } from "./state.svelte";
   import { passkeyMake, passkeysWork } from "./passkey";
+  import { filled } from "./slider";
 
   /** `onrun`: runs a command in a new local shell (the MCP page's Run buttons; App.svelte). */
   let { onclose, onrun }: { onclose: () => void; onrun: (command: string) => void } = $props();
@@ -1116,7 +1117,7 @@ xtermium close 3`}</pre>
         {/each}
       </div>
       <span>{_("Interface scale")}</span>
-      <div class="row"><input type="range" min="0.8" max="1.6" step="0.05" bind:value={s.ui_scale} />{s.ui_scale.toFixed(2)}×</div>
+      <div class="row"><input type="range" min="0.8" max="1.6" step="0.05" bind:value={s.ui_scale} {@attach filled(s.ui_scale)} />{s.ui_scale.toFixed(2)}×</div>
       <span>{_("Window effect")}</span>
       <div class="row wrap">
         {#each ["None", "Transparent"] as const as e (e)}
@@ -1124,13 +1125,12 @@ xtermium close 3`}</pre>
         {/each}
       </div>
       <span class:weak={!transparent}>{_("Opacity")}</span>
-      <div class="row"><input type="range" min="0.8" max="1" step="0.01" disabled={!transparent} bind:value={s.opacity} />{Math.round(s.opacity * 100)}%</div>
+      <div class="row"><input type="range" min="0.8" max="1" step="0.01" disabled={!transparent} bind:value={s.opacity} {@attach filled(s.opacity)} />{Math.round(s.opacity * 100)}%</div>
       <span>{_("Accent")}</span>
       <div class="row wrap">
-        <!-- each swatch shows the value the theme in use gets -->
-        <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="light-dark(#754b00, #ffb000)" onclick={() => (s.accent = "")}></button>
-        {#each ACCENTS as [name, dark, light] (dark)}
-          <button class="swatch" class:selected={s.accent === dark} title={_(name)} aria-label={_("Accent {c}", { c: _(name) })} style:--c="light-dark({light}, {dark})" onclick={() => (s.accent = dark)}></button>
+        <button class="swatch" class:selected={!s.accent} title={_("Amber (default)")} aria-label={_("Default accent")} style:--c="#ffb000" onclick={() => (s.accent = "")}></button>
+        {#each ACCENTS as [name, colour] (colour)}
+          <button class="swatch" class:selected={s.accent === colour} title={_(name)} aria-label={_("Accent {c}", { c: _(name) })} style:--c={colour} onclick={() => (s.accent = colour)}></button>
         {/each}
         <input type="color" title={_("Any colour")} value={s.accent || "#ffb000"} oninput={(e) => (s.accent = (e.target as HTMLInputElement).value)} />
       </div>
@@ -1233,7 +1233,7 @@ xtermium close 3`}</pre>
         {#each fonts as f (f)}<option value={f}></option>{/each}
       </datalist>
       <span>{_("Size")}</span>
-      <div class="row"><input type="range" min="8" max="32" step="0.5" bind:value={s.font_size} />{s.font_size}</div>
+      <div class="row"><input type="range" min="8" max="32" step="0.5" bind:value={s.font_size} {@attach filled(s.font_size)} />{s.font_size}</div>
       <span></span>
       <span class="weak">
         {_("For every terminal. To make one tab's text bigger or smaller, use the font shortcuts in it:")}
@@ -1247,9 +1247,9 @@ xtermium close 3`}</pre>
         <label class="check"><input type="checkbox" bind:checked={s.cursor_blink} />{_("Blink")}</label>
       </div>
       <span>{_("Line height")}</span>
-      <div class="row"><input type="range" min="1" max="2" step="0.05" bind:value={s.line_height} />{s.line_height.toFixed(2)}×</div>
+      <div class="row"><input type="range" min="1" max="2" step="0.05" bind:value={s.line_height} {@attach filled(s.line_height)} />{s.line_height.toFixed(2)}×</div>
       <span>{_("Pane padding")}</span>
-      <div class="row"><input type="range" min="0" max="32" step="1" bind:value={s.pane_padding} />{_("{n} px", { n: s.pane_padding })}</div>
+      <div class="row"><input type="range" min="0" max="32" step="1" bind:value={s.pane_padding} {@attach filled(s.pane_padding)} />{_("{n} px", { n: s.pane_padding })}</div>
       <span>{_("Apply to")}</span>
       <label class="check"><input type="checkbox" bind:checked={s.override_sessions} />{_("all sessions (ignore per-session colours and fonts)")}</label>
     </div>
@@ -1880,7 +1880,7 @@ xtermium close 3`}</pre>
     border-color: var(--weak);
   }
   .scheme.selected {
-    border: 2px solid var(--gold);
+    border: 2px solid var(--gold-fill);
   }
   /* a link that opens in the browser */
   .custom-scheme {

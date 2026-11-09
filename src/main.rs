@@ -128,6 +128,7 @@ impl App {
             let size = s.style.font_size * st.font_size / Settings::default().font_size;
             (s.style.font.clone(), size, term::palette(&s.style, base))
         };
+        let bg = term::rgb32(palette.background);
         term::Look {
             font,
             font_size,
@@ -141,7 +142,7 @@ impl App {
             right_click_paste: st.right_click_paste,
             strip_paste: st.strip_paste,
             log: st.log_to_file,
-            highlights: Arc::new(settings::Highlight::compile(st.highlight, &st.highlights)),
+            highlights: Arc::new(settings::Highlight::compile(st.highlight, &st.highlights, bg)),
         }
     }
 

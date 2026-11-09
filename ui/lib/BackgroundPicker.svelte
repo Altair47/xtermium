@@ -8,6 +8,7 @@
   import Icon from "./Icon.svelte";
   import { compile } from "./shader";
   import { app } from "./state.svelte";
+  import { filled } from "./slider";
 
   /** `label`: the first row's ("Behind the text"). */
   let { place, label }: { place: Place; label: string } = $props();
@@ -79,7 +80,7 @@
 {/if}
 <span>{_("Strength")}</span>
 <div class="row">
-  <input type="range" min="0.05" max="0.95" step="0.05" bind:value={b.show} disabled={!b.kind} />{_("{n} %", { n: Math.round(b.show * 100) })}
+  <input type="range" min="0.05" max="0.95" step="0.05" bind:value={b.show} disabled={!b.kind} {@attach filled(b.show)} />{_("{n} %", { n: Math.round(b.show * 100) })}
 </div>
 
 <style>

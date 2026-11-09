@@ -53,7 +53,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="backdrop lockscreen" {@attach keepLast} onkeydown={(e) => e.key === "Escape" && lock.confirm?.(false)}>
     <div class="box" role="dialog" aria-modal="true" aria-labelledby="lock-title">
-      <Icon name="lock-alt" size={34} color="var(--gold)" />
+      <Icon name="lock-alt" size={34} color="var(--gold-fill)" />
       <h2 id="lock-title">{lock.confirm ? _("Confirm it's you") : _("xtermium is locked")}</h2>
       {#if !lock.info}
         <Icon name="loader-alt" spin />

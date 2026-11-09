@@ -484,12 +484,13 @@ export const COLORS = ["#5c8df0", "#33b8a6", "#b5c14a", "#9c70e6", "#dd6b9c", "#
 export const OWNER_COLOR = "#ffb000";
 
 /** Accents offered besides the default amber: metals, apart from the kinds' colours, each with
- *  its dark-theme value (the one stored) and a darker one that reads on the light theme. */
-export const ACCENTS: [name: string, dark: string, light: string][] = [
-  [N_("Brushed gold"), "#d8a84e", "#85590a"],
-  [N_("Platinum"), "#c3ccd8", "#4b5868"],
-  [N_("Bronze"), "#a99a78", "#6f6440"],
-  [N_("Rose gold"), "#e2a395", "#8f4d40"],
+ *  the colour that is stored. On the light theme it is the fill, the wash and the marks, as the
+ *  amber is there, and text stays in ink (App.svelte `accent`). */
+export const ACCENTS: [name: string, colour: string][] = [
+  [N_("Brushed gold"), "#d8a84e"],
+  [N_("Platinum"), "#c3ccd8"],
+  [N_("Bronze"), "#a99a78"],
+  [N_("Rose gold"), "#e2a395"],
 ];
 
 /** RDP picture quality against speed, by level (the helper's `config` has the details). */
