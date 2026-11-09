@@ -3,7 +3,7 @@
   // it has the new one. Stored encrypted with the sessions, and synced with them.
   import { _ } from "./i18n.svelte";
   import { score } from "./actions";
-  import type { Credential } from "./api";
+  import { here, type Credential } from "./api";
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
   import PathInput from "./PathInput.svelte";
@@ -138,7 +138,7 @@
           <Icon name="lock-alt" />
           <div class="what">
             <strong>{c.name}</strong>
-            <span class="weak">{c.user || _("no user")}{c.password ? ` · ${_("password")}` : ""}{c.key ? ` · ${_("key")}` : ""}{c.gateway ? ` · ${_("via {host}", { host: c.gateway.host })}` : ""} · {_("used by {n} sessions", { n })}</span>
+            <span class="weak">{c.user || _("no user")}{c.password ? ` · ${_("password")}` : ""}{here(c.key) ? ` · ${_("key")}` : ""}{c.gateway ? ` · ${_("via {host}", { host: c.gateway.host })}` : ""} · {_("used by {n} sessions", { n })}</span>
           </div>
           <button class="flat icon-only" title={_("Edit")} aria-label={_("Edit {name}", { name: c.name })} onclick={() => ((showPassword = false), (editing = { index: i, c: $state.snapshot(c) }))}><Icon name="edit" /></button>
           <button class="flat icon-only" title={n ? _("Delete (sessions using it go back to their own username and password)") : _("Delete")} aria-label={_("Delete {name}", { name: c.name })} onclick={() => remove(i)}><Icon name="trash" /></button>

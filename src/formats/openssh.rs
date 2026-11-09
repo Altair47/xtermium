@@ -202,7 +202,7 @@ pub fn export(store: &Store) -> Export {
             let _ = writeln!(out, "    User {}", e.user);
         }
         if !e.key.is_empty() {
-            let _ = writeln!(out, "    IdentityFile \"{}\"", e.key);
+            let _ = writeln!(out, "    IdentityFile \"{}\"", e.key.here());
         }
     };
     let mut skipped = 0;
@@ -285,7 +285,7 @@ Host *.example
         assert_eq!(r.sessions.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["bastion", "db"]);
         let Kind::Ssh(db) = &r.sessions[1].kind else { panic!() };
         assert_eq!(
-            (db.target.host.as_str(), db.target.user.as_str(), db.target.key.as_str()),
+            (db.target.host.as_str(), db.target.user.as_str(), db.target.key.here()),
             ("192.0.2.15", "root", "~/.ssh/id_ed25519")
         );
         let j = db.jump.as_ref().unwrap();

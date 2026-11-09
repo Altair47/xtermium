@@ -82,7 +82,7 @@ pub fn file_name(s: &str) -> String {
 fn endpoint(e: &mut Endpoint, default_port: u16) {
     e.host = host(&e.host);
     e.user = text(&e.user);
-    e.key = text(&e.key);
+    e.key.clean();
     if e.port == 0 {
         e.port = default_port;
     }
@@ -119,7 +119,8 @@ impl Store {
                     ssh.target.host.clone()
                 }
                 Kind::Shell { program, dir } => {
-                    (*program, *dir) = (text(program), text(dir));
+                    program.clean();
+                    dir.clean();
                     "shell".into()
                 }
                 Kind::Serial { port, baud } => {
@@ -171,7 +172,8 @@ impl Store {
                     if !crate::config::AGENT_EFFORTS.contains(&effort.as_str()) {
                         effort.clear();
                     }
-                    (*args, *dir, *model) = (text(args), text(dir), text(model));
+                    (*args, *model) = (text(args), text(model));
+                    dir.clean();
                     *env = lines(env).chars().take(4096).collect();
                     for off in [mcp_off, skills_off] {
                         let mut seen = std::collections::HashSet::new();
@@ -240,12 +242,13 @@ impl Store {
         for c in &mut self.credentials {
             c.name = text(&c.name);
             c.user = text(&c.user);
-            c.key = text(&c.key);
+            c.key.clean();
             // Spaces can be part of a password: only control characters go.
             c.password.retain(|ch| !ch.is_control());
             c.id.retain(|ch| ch.is_ascii_alphanumeric());
             if let Some(g) = &mut c.gateway {
-                (g.host, g.user, g.key) = (host(&g.host), text(&g.user), text(&g.key));
+                (g.host, g.user) = (host(&g.host), text(&g.user));
+                g.key.clean();
                 g.password.retain(|ch| !ch.is_control());
                 if g.port == 0 {
                     g.port = 22;

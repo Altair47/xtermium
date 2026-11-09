@@ -123,7 +123,7 @@ pub struct Credential {
     pub password: String,
     /// Private key path (SSH).
     #[serde(default)]
-    pub key: String,
+    pub key: Portable,
     /// Sessions using this login connect through this SSH server: as the jump host of an SSH
     /// session without one of its own, a forwarded port for RDP and VNC, a SOCKS proxy for websites.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -142,7 +142,82 @@ pub struct Gateway {
     pub password: String,
     /// Private key path. Empty = agent / default keys / password.
     #[serde(default)]
-    pub key: String,
+    pub key: Portable,
+}
+
+/// A program or path stored with a session or login: the same everywhere, or one for each system.
+/// Sessions sync between Windows, macOS and Linux computers, and `C:\Users\me\tools\pwsh.exe` means
+/// nothing on the others; `Each` keeps a value per system and `here()` is this computer's.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum Portable {
+    One(String),
+    Each {
+        #[serde(default)]
+        windows: String,
+        #[serde(default)]
+        macos: String,
+        #[serde(default)]
+        linux: String,
+    },
+}
+
+impl Default for Portable {
+    fn default() -> Self {
+        Self::One(String::new())
+    }
+}
+
+impl From<String> for Portable {
+    fn from(s: String) -> Self {
+        Self::One(s)
+    }
+}
+
+impl From<&str> for Portable {
+    fn from(s: &str) -> Self {
+        Self::One(s.into())
+    }
+}
+
+impl Portable {
+    /// This computer's value. Systems other than Windows and macOS read Linux's, the nearest kin.
+    pub fn here(&self) -> &str {
+        match self {
+            Self::One(s) => s,
+            Self::Each { windows, macos, linux } => match std::env::consts::OS {
+                "windows" => windows,
+                "macos" => macos,
+                _ => linux,
+            },
+        }
+    }
+
+    /// Empty on this computer (another system's value may still be set).
+    pub fn is_empty(&self) -> bool {
+        self.here().is_empty()
+    }
+
+    /// Cleans every value, this system's and the others'.
+    pub fn clean(&mut self) {
+        match self {
+            Self::One(s) => *s = crate::clean::text(s),
+            Self::Each { windows, macos, linux } => {
+                for s in [windows, macos, linux] {
+                    *s = crate::clean::text(s);
+                }
+            }
+        }
+    }
+}
+
+/// Nothing set for any system, so the field can be left out of the file. `Portable::is_empty`
+/// would also drop the other systems' values when this one's is empty.
+fn portable_unset(p: &Portable) -> bool {
+    match p {
+        Portable::One(s) => s.is_empty(),
+        Portable::Each { windows, macos, linux } => windows.is_empty() && macos.is_empty() && linux.is_empty(),
+    }
 }
 
 impl Gateway {
@@ -242,10 +317,10 @@ pub enum Kind {
     Ssh(Ssh),
     Shell {
         #[serde(default)]
-        program: String,
+        program: Portable,
         /// The folder it starts in, "" for the home folder ("Open in xtermium" from a folder).
-        #[serde(default, skip_serializing_if = "String::is_empty")]
-        dir: String,
+        #[serde(default, skip_serializing_if = "portable_unset")]
+        dir: Portable,
     },
     Serial {
         port: String,
@@ -317,7 +392,7 @@ pub enum Kind {
         #[serde(default)]
         args: String,
         #[serde(default)]
-        dir: String,
+        dir: Portable,
         /// How much it asks, one of `AGENT_MODES`; "" leaves the tool's default.
         #[serde(default)]
         mode: String,
@@ -493,7 +568,7 @@ pub struct Endpoint {
     pub user: String,
     /// Private key path. Empty = agent / default keys / password.
     #[serde(default)]
-    pub key: String,
+    pub key: Portable,
     /// A shared login's id (Store::credentials): its user, key and password are used instead.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub credential: String,
@@ -508,7 +583,7 @@ impl Default for Endpoint {
             host: String::new(),
             port: 22,
             user: String::new(),
-            key: String::new(),
+            key: Portable::default(),
             credential: String::new(),
             password: None,
         }
@@ -1419,6 +1494,32 @@ pub fn forget(id: &str) {
 mod tests {
     use super::*;
 
+    /// A path stored as a plain string (older data) still reads, a per-system one reads as such,
+    /// both write back unchanged, and this computer gets its own system's value.
+    #[test]
+    fn portable_paths() {
+        let one: Portable = serde_json::from_str(r#""/bin/zsh""#).unwrap();
+        assert_eq!(one, Portable::One("/bin/zsh".into()));
+        assert_eq!(serde_json::to_string(&one).unwrap(), r#""/bin/zsh""#);
+        let text = r#"{"windows":"pwsh.exe","macos":"/bin/zsh","linux":"/bin/bash"}"#;
+        let each: Portable = serde_json::from_str(text).unwrap();
+        assert!(matches!(each, Portable::Each { .. }));
+        assert_eq!(serde_json::to_string(&each).unwrap(), text);
+        let want = match std::env::consts::OS {
+            "windows" => "pwsh.exe",
+            "macos" => "/bin/zsh",
+            _ => "/bin/bash",
+        };
+        assert_eq!(each.here(), want);
+        // Another system's value alone keeps the field in the file.
+        let other: Portable = serde_json::from_str(r#"{"linux":"/srv"}"#).unwrap();
+        assert!(!portable_unset(&other));
+        assert!(portable_unset(&Portable::Each { windows: String::new(), macos: String::new(), linux: String::new() }));
+        let shell = Kind::Shell { program: one, dir: other };
+        let back: Kind = serde_json::from_str(&serde_json::to_string(&shell).unwrap()).unwrap();
+        assert!(back == shell, "inside a session's kind too");
+    }
+
     /// The data folder is the user's alone, also when it was made more openly before.
     #[cfg(unix)]
     #[test]
@@ -1503,7 +1604,7 @@ mod tests {
             name: "prod admin".into(),
             user: "admin".into(),
             password: "s3cret".into(),
-            key: String::new(),
+            key: Default::default(),
             gateway: None,
         });
         let mut ssh = Ssh::default();
@@ -1527,7 +1628,7 @@ mod tests {
         assert!(store.gateway(&rdp).is_none());
 
         // A login's gateway: the jump host of SSH sessions without one, the way in for the rest.
-        let gw = Gateway { host: "bastion".into(), port: 2222, user: "gw".into(), password: "pw".into(), key: String::new() };
+        let gw = Gateway { host: "bastion".into(), port: 2222, user: "gw".into(), password: "pw".into(), key: Default::default() };
         store.credentials[0].gateway = Some(gw);
         let web = Kind::Browser { url: "https://pve:8006".into(), credential: "c1".into(), profile: String::new() };
         let e = store.gateway(&web).unwrap();
@@ -1546,7 +1647,7 @@ mod tests {
 
     #[test]
     fn subtree_and_merge() {
-        let s = |name: &str, folder: &str| Session::new(name, folder, Kind::Shell { program: String::new(), dir: String::new() });
+        let s = |name: &str, folder: &str| Session::new(name, folder, Kind::Shell { program: Default::default(), dir: Default::default() });
         let mut store = Store {
             sessions: vec![s("a", "Prod"), s("b", "Prod/DB"), s("c", "Production")],
             tunnels: vec![],
@@ -1565,7 +1666,7 @@ mod tests {
     /// Each workspace comes out on its own and goes back where it was; the file keeps them all.
     #[test]
     fn workspaces_split_and_join() {
-        let s = |name: &str| Session::new(name, "", Kind::Shell { program: String::new(), dir: String::new() });
+        let s = |name: &str| Session::new(name, "", Kind::Shell { program: Default::default(), dir: Default::default() });
         let names = |st: &Store| st.sessions.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
         let mut all = Store { sessions: vec![s("home")], agent_prompt: "home rules".into(), ..Default::default() };
         all.workspaces.push(Workspace { name: "Work".into(), data: Store { sessions: vec![s("job")], agent_prompt: "work rules".into(), ..Default::default() } });
@@ -1678,7 +1779,7 @@ mod tests {
 
     #[test]
     fn moving_a_folder_takes_everything_inside_and_merges() {
-        let s = |name: &str, folder: &str| Session::new(name, folder, Kind::Shell { program: String::new(), dir: String::new() });
+        let s = |name: &str, folder: &str| Session::new(name, folder, Kind::Shell { program: Default::default(), dir: Default::default() });
         let mut store = Store {
             sessions: vec![s("a", "Prod"), s("b", "Prod/Web"), s("c", "Production"), s("d", "Lab")],
             folders: vec![

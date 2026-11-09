@@ -3,7 +3,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { N_ } from "./i18n.svelte";
 
-export type Endpoint = { host: string; port: number; user: string; key: string; credential?: string };
+/** A program or path stored with a session or login (src/config.rs `Portable`): the same on every
+ *  system, or one for each, since sessions sync between Windows, macOS and Linux computers. */
+export type Portable = string | { windows: string; macos: string; linux: string };
+export const SYSTEMS: [keyof Exclude<Portable, string>, string][] = [["windows", "Windows"], ["macos", "macOS"], ["linux", "Linux"]];
+/** This computer's system as Rust names it (`std::env::consts::OS`); boot sets it (state.svelte.ts),
+ *  here rather than read from `app` because state.svelte.ts imports this module. */
+export const system = { os: "" };
+/** This computer's value of a Portable; systems other than Windows and macOS read Linux's, as in Rust. */
+export const here = (p: Portable): string => (typeof p === "string" ? p : (p[system.os as keyof typeof p] ?? p.linux ?? ""));
+
+export type Endpoint = { host: string; port: number; user: string; key: Portable; credential?: string };
 export type Rgb = [number, number, number];
 export type Style = {
   font: string;
@@ -26,7 +36,7 @@ export type Kind =
       agent_forward: boolean;
     } & Endpoint)
   /** `dir`: the folder it starts in ("" or none: home), as "Open in xtermium" in File Explorer opens it. */
-  | { type: "shell"; program: string; dir?: string }
+  | { type: "shell"; program: Portable; dir?: Portable }
   | { type: "serial"; port: string; baud: number }
   /** `quality`: 0 quality, 1 balanced, 2 speed (RDP_QUALITY); null = the global setting. */
   /** `smb_login`: the file panel logs in to the shares as the desktop's login; null = the global setting.
@@ -45,7 +55,7 @@ export type Kind =
    *  (AGENT_MODES), `effort` (AGENT_EFFORTS) and `model` ("" = the tool's default) and then `args`; "custom": `args` is the command.
    *  `mcp_off` and `skills_off` name what stays off in the session; `env` is its variables, one NAME=value a line;
    *  `resume` (a tab's session only) a past conversation to go on with, by the tool's id for it. */
-  | { type: "agent"; tool: string; args: string; dir: string; mode: string; effort: string; model: string; mcp_off: string[]; skills_off: string[]; env: string; resume?: string }
+  | { type: "agent"; tool: string; args: string; dir: Portable; mode: string; effort: string; model: string; mcp_off: string[]; skills_off: string[]; env: string; resume?: string }
   /** A tab someone in your Terminal Co-op ring shares with you (App.svelte `openRemote`): `tab` is its
    *  number at the owner, `picture` a remote desktop rather than a terminal. Never stored or saved. */
   | { type: "coop"; tab: number; picture: boolean; owner: string };
@@ -105,8 +115,8 @@ export type Store = { session: Session[]; tunnel: Tunnel[]; folder: Folder[]; sn
 export type SavedLayout = { name: string; arrangement: string; pane: Session[]; at?: number[]; label?: string[]; sizes?: { rows: number[]; cols: number[][] } };
 /** A login sessions can share (`credential` on an endpoint or RDP/VNC/website session is its id).
  *  `gateway`: an SSH server those sessions connect through. */
-export type Credential = { id: string; name: string; user: string; password: string; key: string; gateway?: Gateway | null };
-export type Gateway = { host: string; port: number; user: string; password: string; key: string };
+export type Credential = { id: string; name: string; user: string; password: string; key: Portable; gateway?: Gateway | null };
+export type Gateway = { host: string; port: number; user: string; password: string; key: Portable };
 /** A saved command. `text` may hold `{{name}}` placeholders; `run` presses Enter after it. */
 export type Snippet = { name: string; text: string; run: boolean };
 
@@ -352,7 +362,7 @@ export function host(k: Kind): string {
     case "ssh":
       return `${k.user ? k.user + "@" : ""}${k.host}:${k.port}`;
     case "shell":
-      return k.program;
+      return here(k.program);
     case "serial":
       return `${k.port} @ ${k.baud}`;
     case "rdp":

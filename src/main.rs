@@ -1512,7 +1512,7 @@ fn open_term(app: State<App>, mut session: Session, out: Channel) -> u32 {
     if let Kind::Shell { program, .. } = &mut session.kind
         && program.is_empty()
     {
-        *program = app.settings.lock().unwrap().shell.clone();
+        *program = app.settings.lock().unwrap().shell.clone().into();
     }
     let look = app.look(&session);
     let tab = term::Tab::open(session, look, app.prompter.clone(), out);
@@ -2149,7 +2149,7 @@ mod tests {
     fn backups_round_trip() {
         use super::*;
         let mut store = Store::default();
-        store.sessions.push(Session::new("db1", "Prod", Kind::Shell { program: String::new(), dir: String::new() }));
+        store.sessions.push(Session::new("db1", "Prod", Kind::Shell { program: Default::default(), dir: Default::default() }));
         store.credentials.push(config::Credential { id: "c1".into(), password: "s3cret".into(), ..Default::default() });
         let mut settings = Settings { font_size: 17.0, sync_token: "tok".into(), automation_token: "auto".into(), ..Default::default() };
         settings.shortcuts.insert("palette".into(), "F1".into());

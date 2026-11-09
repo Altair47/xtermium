@@ -508,7 +508,7 @@ fn target(k: &Kind) -> String {
     match k {
         Kind::Ssh(s) => s.target.label(),
         Kind::Shell { program, .. } if program.is_empty() => "local shell".into(),
-        Kind::Shell { program, .. } => program.clone(),
+        Kind::Shell { program, .. } => program.here().into(),
         Kind::Serial { port, baud } => format!("{port} at {baud} baud"),
         Kind::Rdp { host, .. } => host.clone(),
         Kind::Browser { url, .. } => url.clone(),
@@ -840,11 +840,11 @@ impl Tab {
                 );
             }
             Kind::Shell { program, dir } => {
-                std::thread::spawn(move || done(run_pty(&program, &dir, &style_term, rx, feed)));
+                std::thread::spawn(move || done(run_pty(program.here(), dir.here(), &style_term, rx, feed)));
             }
             Kind::Agent { tool, args, dir, mode, effort, model, mcp_off, skills_off, env, resume, prompt } => {
-                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model, &resume), &mcp_off, &skills_off, &dir, &env, &prompt);
-                std::thread::spawn(move || done(run_argv(argv, env, &dir, &style_term, rx, feed)));
+                let (argv, env) = crate::automation::agent_launch(&tool, Kind::agent_argv(&tool, &args, &mode, &effort, &model, &resume), &mcp_off, &skills_off, dir.here(), &env, &prompt);
+                std::thread::spawn(move || done(run_argv(argv, env, dir.here(), &style_term, rx, feed)));
             }
             Kind::Serial { port, baud } => {
                 std::thread::spawn(move || done(run_serial(&port, baud, rx, feed)));
@@ -1985,7 +1985,7 @@ pub fn code_args(kind: &Kind, cwd: &str, user: &str) -> Result<Vec<String>, Stri
             // OSC 7 hands over a URL's path: "/C:/Users/…" on Windows.
             let cwd = cwd.strip_prefix('/').filter(|p| cfg!(windows) && p.get(1..2) == Some(":")).unwrap_or(cwd);
             let home = directories::UserDirs::new().map(|d| d.home_dir().display().to_string()).unwrap_or_default();
-            let folder = [cwd, dir, &home].into_iter().find(|d| !d.is_empty() && std::path::Path::new(d).is_dir());
+            let folder = [cwd, dir.here(), &home].into_iter().find(|d| !d.is_empty() && std::path::Path::new(d).is_dir());
             Ok(vec![folder.ok_or("No folder to open.")?.to_string()])
         }
         _ => Err("Only SSH sessions and local shells open in VS Code.".into()),

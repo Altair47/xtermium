@@ -4,7 +4,7 @@
   // row can be renamed (kept by xtermium, the tool's file untouched) or deleted (the tool's file).
   import { _ } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { human, type Session } from "./api";
+  import { here, human, type Session } from "./api";
   import { toast } from "./state.svelte";
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
@@ -25,7 +25,7 @@
 
   async function load() {
     if (!kind) return;
-    const [tool, dir] = [kind.tool, kind.dir];
+    const [tool, dir] = [kind.tool, here(kind.dir)];
     try {
       list = await invoke<Conversation[]>("agent_history", { tool, dir });
       error = "";
@@ -93,7 +93,7 @@
     <h3>{_("Session history")}</h3>
     <button class="icon-only" title={_("Refresh")} onclick={load}><Icon name={list === null ? "loader-alt" : "refresh"} spin={list === null} /></button>
   </div>
-  <p class="weak">{_("Past conversations of {title} in {dir}. Click one to go on with it in a new tab.", { title, dir: kind?.dir || _("your home folder") })}</p>
+  <p class="weak">{_("Past conversations of {title} in {dir}. Click one to go on with it in a new tab.", { title, dir: (kind && here(kind.dir)) || _("your home folder") })}</p>
   {#if (list?.length ?? 0) > 8}
     <input bind:value={filter} placeholder={_("Find a conversation")} />
   {/if}

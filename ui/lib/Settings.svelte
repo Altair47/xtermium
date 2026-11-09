@@ -887,7 +887,7 @@
       {#if s.quick_shell}
         <div class="form">
           <span>{_("Shell for it")}</span>
-          <PathInput bind:value={s.start_shell} exec placeholder={_("Local shell's program (Settings › Defaults)")} />
+          <PathInput bind:value={s.start_shell} single exec placeholder={_("Local shell's program (Settings › Defaults)")} />
         </div>
       {/if}
       <label class="check"><input type="checkbox" bind:checked={s.remember_folders} />{_("Remember which folders are open in the sidebar")}</label>
@@ -1518,7 +1518,7 @@ xtermium close 3`}</pre>
     <h3>{_("Local shell")}</h3>
     <div class="form">
       <span>{_("Program")}</span>
-      <PathInput bind:value={s.shell} exec placeholder={_("System default ({shell})", { shell: app.os === "windows" ? "cmd.exe" : "$SHELL" })} />
+      <PathInput bind:value={s.shell} single exec placeholder={_("System default ({shell})", { shell: app.os === "windows" ? "cmd.exe" : "$SHELL" })} />
     </div>
     <p class="weak">{@html _("Used by Local shell, and by shell sessions that don't name a program. Arguments are allowed, e.g. <code>wsl.exe -d Debian</code>.")}</p>
     <h3>{_("SSH")}</h3>
@@ -1527,7 +1527,7 @@ xtermium close 3`}</pre>
       <span>{_("User")}</span>
       <input bind:value={s.ssh_user} placeholder={_("ask each time")} />
       <span>{_("Private key")}</span>
-      <PathInput bind:value={s.ssh_key} start="~/.ssh/" placeholder={_("path, e.g. ~/.ssh/id_ed25519")} />
+      <PathInput bind:value={s.ssh_key} single start="~/.ssh/" placeholder={_("path, e.g. ~/.ssh/id_ed25519")} />
       <span>{_("Password")}</span>
       <div class="row">
         <input class="grow" type={showPassword ? "text" : "password"} bind:value={s.ssh_password} placeholder={_("ask each time")} autocomplete="off" />

@@ -128,7 +128,7 @@ fn endpoint(s: &str, port: u16) -> Endpoint {
             _ => (rest, None),
         },
     };
-    Endpoint { host: host.into(), port: p.unwrap_or(port), user: user.into(), key: String::new(), ..Default::default() }
+    Endpoint { host: host.into(), port: p.unwrap_or(port), user: user.into(), key: Default::default(), ..Default::default() }
 }
 
 /// `host:port`, bracketing IPv6 addresses.
@@ -153,7 +153,7 @@ pub(crate) mod tests {
 
     /// A store with one of everything, for round trips.
     pub fn sample() -> Store {
-        let ep = |h: &str, p: u16, u: &str| Endpoint { host: h.into(), port: p, user: u.into(), key: String::new(), ..Default::default() };
+        let ep = |h: &str, p: u16, u: &str| Endpoint { host: h.into(), port: p, user: u.into(), key: Default::default(), ..Default::default() };
         Store {
             sessions: vec![
                 ssh(
@@ -171,7 +171,7 @@ pub(crate) mod tests {
                 ),
                 Session::new("console", "Lab", Kind::Serial { port: "COM3".into(), baud: 115200 }),
                 Session::new("wiki", "", Kind::Browser { url: "https://wiki.example".into(), credential: String::new(), profile: String::new() }),
-                Session::new("local", "", Kind::Shell { program: "pwsh.exe".into(), dir: String::new() }),
+                Session::new("local", "", Kind::Shell { program: "pwsh.exe".into(), dir: Default::default() }),
             ],
             tunnels: vec![Tunnel {
                 name: "pg".into(),
