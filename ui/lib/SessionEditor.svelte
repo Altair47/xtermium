@@ -252,7 +252,7 @@
       <Login bind:value={() => k.credential ?? "", (v) => (k.credential = v)} />
       <span></span>
       <p class="weak">
-        {_("Opens the BMC's own HTML5 console, signed in with the shared login (Supermicro: X11 and newer). The console tab can paste your clipboard as key presses.")}
+        {_("Opens the BMC's own HTML5 console, signed in with the shared login: Supermicro X11 and newer, iDRAC 7 and 8, iLO 4 (firmware 2.70 or newer) and 5, and boards with AMI's MegaRAC SP-X web interface. The console tab can paste your clipboard as key presses.")}
       </p>
     {:else if s.kind.type === "winrm"}
       {@const w = s.kind}

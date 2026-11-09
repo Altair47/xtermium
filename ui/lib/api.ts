@@ -70,6 +70,8 @@ export const joinsBroadcast = (k: Kind) => k.type !== "browser" && k.type !== "c
 export const KVM_VENDORS: [string, string][] = [
   ["supermicro", "Supermicro"],
   ["idrac", "Dell iDRAC"],
+  ["ilo", "HPE iLO"],
+  ["megarac", "AMI MegaRAC (ASUS, Gigabyte, ASRock Rack)"],
 ];
 /** Agent tools (src/config.rs `AGENTS`) by the program that runs them, then "custom" for any other agent. */
 export const AGENTS: [string, string][] = [

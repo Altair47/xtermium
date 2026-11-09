@@ -347,7 +347,6 @@
   "Open with the desktop's login": "Åpne med skrivebordets pålogging",
   "Open with the desktop's login (as in Settings)": "Åpne med skrivebordets pålogging (som i innstillingene)",
   "OpenSSH config": "OpenSSH-konfigurasjon",
-  "Opens the BMC's own HTML5 console, signed in with the shared login (Supermicro: X11 and newer). The console tab can paste your clipboard as key presses.": "Åpner BMC-ens egen HTML5-konsoll, pålogget med den delte påloggingen (Supermicro: X11 og nyere). Konsollfanen kan lime inn utklippstavlen din som tastetrykk.",
   "Other assistants that take MCP servers over HTTP mostly read a configuration like this one:": "Andre assistenter som tar MCP-servere over HTTP, leser stort sett en konfigurasjon som denne:",
   "Page {n} of {total} · {keys} keys": "Side {n} av {total} · {keys} nøkler",
   "Pane padding": "Ruteutfylling",

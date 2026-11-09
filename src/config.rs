@@ -450,7 +450,7 @@ fn https_port() -> u16 {
 }
 
 /// The BMCs a console session can be for (ui/lib/api.ts `KVM_VENDORS`).
-pub const KVM_VENDORS: &[&str] = &["supermicro", "idrac"];
+pub const KVM_VENDORS: &[&str] = &["supermicro", "idrac", "ilo", "megarac"];
 
 fn supermicro() -> String {
     KVM_VENDORS[0].into()
