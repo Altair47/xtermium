@@ -2115,6 +2115,9 @@ fn main() {
             coop::coop_remote_select,
             coop::coop_selection,
             coop::coop_remote_paste,
+            coop::coop_control,
+            coop::coop_decline_control,
+            coop::coop_ask_control,
         ])
         .build(tauri::generate_context!())
         .expect("starting xtermium")

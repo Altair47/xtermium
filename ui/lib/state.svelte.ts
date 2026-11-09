@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { keysOf, shown } from "./actions";
 import { listen } from "@tauri-apps/api/event";
 import { memberColor } from "./coop";
-import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, system, type Background, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
+import { COLORS, KIND_COLOR, KIND_ICON, OWNER_COLOR, system, type Background, type CoopControl, type CoopCursor, type CoopEvent, type CoopSelection, type CoopRemote, type CoopRing, type Place, type Session, type Scheme, type Settings, type Store, type Workspaces } from "./api";
 import { _, setLanguage } from "./i18n.svelte";
 import { shrinkIcon } from "./images";
 import { oneAtATime } from "./serial";
@@ -23,9 +23,17 @@ export const app = $state({
   /** The Terminal Co-op dialog is open (Coop.svelte). */
   showCoop: false,
   /** Terminal Co-op as the backend last said (the `coop` event, src/coop.rs): the ring you are in, your
-   *  tabs it shares (their ids), the tabs shared with you, where the others' pointers are and what
-   *  they have selected. */
-  coop: { ring: null as CoopRing | null, shared: [] as number[], remote: [] as CoopRemote[], cursors: [] as CoopCursor[], selections: [] as CoopSelection[] },
+   *  tabs it shares (their ids), the tabs shared with you, where the others' pointers are, what
+   *  they have selected, who drives each shared desktop and who asks to. */
+  coop: {
+    ring: null as CoopRing | null,
+    shared: [] as number[],
+    remote: [] as CoopRemote[],
+    cursors: [] as CoopCursor[],
+    selections: [] as CoopSelection[],
+    control: [] as CoopControl[],
+    wants: [] as CoopControl[],
+  },
   settings: null as Settings | null,
   schemes: [] as Scheme[],
   ciphers: [] as string[],
@@ -60,15 +68,54 @@ export const app = $state({
 // Terminal Co-op: the whole picture arrives whenever any of it changes, pointers up to 20 times a
 // second, so only the parts that differ are assigned and the rest of the interface isn't redrawn.
 function takeCoop(p: CoopEvent) {
-  const next = { ring: p.ring ?? null, shared: p.shared ?? [], remote: p.remote ?? [], cursors: p.cursors ?? [], selections: p.selections ?? [] };
+  const next = {
+    ring: p.ring ?? null,
+    shared: p.shared ?? [],
+    remote: p.remote ?? [],
+    cursors: p.cursors ?? [],
+    selections: p.selections ?? [],
+    control: p.control ?? [],
+    wants: p.wants ?? [],
+  };
   const same = (k: keyof typeof next) => JSON.stringify(app.coop[k]) === JSON.stringify(next[k]);
   Object.assign(app.coop, Object.fromEntries(Object.entries(next).filter(([k]) => !same(k as keyof typeof next))));
+}
+
+/** Everyone in the ring hears who drives a shared desktop, as it changes: a toast on each window, so
+ *  nobody wonders why their clicks do nothing, or whose pointer that is. The desktop's own banner
+ *  (Rdp.svelte) says the standing state. */
+function sayControl(before: CoopControl[], wanted: CoopControl[]) {
+  const ring = app.coop.ring;
+  if (!ring) return;
+  const me = ring.members.find((m) => m.you)?.id ?? "";
+  const owner = ring.members.find((m) => m.owner);
+  const nameOf = (id: string) => ring.members.find((m) => m.id === id)?.name ?? _("Someone");
+  const held = (list: CoopControl[], tab: number) => list.find((c) => c.tab === tab)?.user_id ?? "";
+  const tabs = new Set([...before, ...app.coop.control].map((c) => c.tab));
+  for (const tab of tabs) {
+    const [was, now] = [held(before, tab), held(app.coop.control, tab)];
+    if (was === now) continue;
+    if (now === me) toast(_("You have control of the shared desktop."));
+    else if (now) toast(_("{name} has control of the shared desktop.", { name: nameOf(now) }));
+    else if (ring.owner) toast(_("You have control of the shared desktop again."));
+    else toast(_("{name} has control of the shared desktop again.", { name: owner?.name ?? _("The owner") }));
+  }
+  // The owner hears each new ask; a guest hears when theirs was turned down (it went without control following).
+  for (const w of app.coop.wants) {
+    if (ring.owner && !wanted.some((b) => b.tab === w.tab && b.user_id === w.user_id)) toast(_("{name} asks for control of the shared desktop.", { name: nameOf(w.user_id) }));
+  }
+  for (const w of wanted) {
+    const kept = app.coop.wants.some((n) => n.tab === w.tab && n.user_id === w.user_id);
+    if (!ring.owner && !kept && held(app.coop.control, w.tab) !== me && app.coop.remote.some((r) => r.id === w.tab)) toast(_("The owner kept control of the desktop."));
+  }
 }
 let heard = false;
 listen<CoopEvent>("coop", ({ payload: p }) => {
   heard = true;
   const was = app.coop.ring;
+  const [control, wants] = [app.coop.control, app.coop.wants];
   takeCoop(p);
+  sayControl(control, wants);
   // Said once, as the ring goes; later events that still carry the reason don't repeat it. The backend's
   // own sentence says why best; these are for when it sent none.
   if (!p.ended || !was) return;
