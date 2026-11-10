@@ -593,11 +593,12 @@ from before it don't. Hide puts it away with an Undo toast; Settings › General
 turns it on again and Start over clears its ticks.
 
 Most steps open a tab, which hides the start screen, so the list is reachable from there too.
-While it's on, unfinished and behind tabs, the sidebar's foot starts with its progress: a 16px
-ring filling in `gold-fill` over a `line` track, "Getting started" and "2/8" in `weak` at `--t-s`
-(the ring alone on the rail). It opens the same list in a popover (a `.menu`, 377 wide, the list
-inset without its own edge) over the foot or beside the rail; the open step's Try it takes the
-keyboard, opening another row keeps it in the popover, Escape closes it. A step ticked away from the list brings a toast, "Done: … Next: …", with Show
+While it's on, unfinished and behind tabs, the tab strip's tools start with its progress: a 16px
+ring filling in `gold-fill` over a `line` track, "Getting started" and "2/8" in `weak` at `--t-s`,
+where the eye goes, and over nothing (a card floating on the panes would cover output and sit
+under website views). It opens the same list in a popover (a `.menu`, 377 wide, the list inset
+without its own edge) hanging under it, its end lined up with the button's; the open step's Try it
+takes the keyboard, opening another row keeps it in the popover, Escape closes it. A step ticked away from the list brings a toast, "Done: … Next: …", with Show
 opening the popover, and the palette's "Getting started" opens it as well (turning the list back
 on if it was hidden).
 

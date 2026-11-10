@@ -32,7 +32,7 @@
 
 <script lang="ts">
   // Getting started: a short list for someone new, on the start screen in place of its four start
-  // buttons, and with tabs open in a popover from the sidebar's foot (App.svelte). One step is open
+  // buttons, and with tabs open in a popover from the tab bar's end (App.svelte). One step is open
   // at a time, the next one to start with: it says what the step is and has Try it, which does the
   // step. Clicking another row opens that one instead, so a step can be read before it's done.
   // Steps tick themselves once done. Hide puts the list away (with Undo); Settings › General

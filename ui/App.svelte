@@ -1274,10 +1274,10 @@
   }
 
   // ---- Getting started while tabs hide the start screen ----
-  /** The list's popover: from the sidebar's foot, the palette or a tick's toast, placed by its
-   *  inline-start edge and its bottom (both from the window's edges). */
-  let guidePop = $state<{ start: number; bottom: number } | null>(null);
-  /** The sidebar foot's progress button, which the popover opens from. */
+  /** The list's popover: from the tab bar's progress button, the palette or a tick's toast,
+   *  hanging under the tab bar by its inline-end edge (both from the window's edges). */
+  let guidePop = $state<{ end: number; top: number } | null>(null);
+  /** The tab bar's progress button, which the popover hangs from. */
   let guideButton = $state<HTMLElement>();
   const guide = $derived(app.settings?.guide ? guideRows() : []);
   const guideDoneCount = $derived(guide.filter((r) => r.done).length);
@@ -1292,11 +1292,12 @@
     if (!strip.length) return void (guidePop = null);
     await tick(); // the progress button, if the list was hidden until now
     const rtl = document.documentElement.dir === "rtl";
-    const r = guideButton?.getBoundingClientRect();
-    // over the sidebar's foot, beside the collapsed rail, or the window's corner with no sidebar
-    if (!r || !r.width) guidePop = { start: 13, bottom: 13 };
-    else if (app.settings.sidebar_collapsed) guidePop = { start: (rtl ? innerWidth - r.left : r.right) + 5, bottom: innerHeight - r.bottom };
-    else guidePop = { start: rtl ? innerWidth - r.right : r.left, bottom: innerHeight - r.top + 5 };
+    // Under the progress button, its end lined up with the button's; with every step done there is
+    // no button (the palette still opens the list), so under the tab bar's tools.
+    const at = guideButton ?? document.querySelector<HTMLElement>(".strip .tools");
+    const r = at?.getBoundingClientRect();
+    if (!r || !r.height) guidePop = { end: 13, top: 89 };
+    else guidePop = { end: Math.max(5, rtl ? r.left : innerWidth - r.right), top: r.bottom + 5 };
     // After the palette or a dialog that opened it has handed the keyboard back (`refocus`).
     const step = (sel: string) => document.querySelector<HTMLElement>(`.guide-pop ${sel}`);
     setTimeout(() => (step(".open .go") ?? step(".step"))?.focus(), 0);
@@ -1380,28 +1381,7 @@
 
 {#snippet corner()}
   <!-- The sidebar's foot (the rail's, collapsed), at its end: settings (About is a page there),
-       then the account. Before them, while tabs hide the start screen, Getting started's progress:
-       a ring and "2 of 8" (only the ring on the rail), opening the list in a popover. -->
-  {#if guideAway}
-    {@const share = guideDoneCount / guide.length}
-    {@const label = _("Getting started: {n} of {total} done", { n: guideDoneCount, total: guide.length })}
-    <button
-      bind:this={guideButton}
-      class="flat guide-button"
-      class:icon-only={app.settings?.sidebar_collapsed}
-      class:on={!!guidePop}
-      title={label}
-      aria-label={label}
-      aria-expanded={!!guidePop}
-      onclick={() => (guidePop ? closeGuide() : openGuide())}
-    >
-      <svg class="steps-ring" viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="8" cy="8" r="6.5" pathLength="100" />
-        <circle class="fill" cx="8" cy="8" r="6.5" pathLength="100" stroke-dasharray="{share * 100} 100" />
-      </svg>
-      {#if !app.settings?.sidebar_collapsed}<span>{_("Getting started")}</span><span class="count">{guideDoneCount}/{guide.length}</span>{/if}
-    </button>
-  {/if}
+       then the account. -->
   <button class="flat icon-only settings" class:on={app.showSettings} onclick={() => (app.showSettings = !app.showSettings)} title={tip(_("Settings"), "settings")} aria-label={_("Settings")}><Icon name="cog" size={16} /></button>
   {#if lock.info && (lock.info.password || lock.info.pin || lock.info.passkey || lock.info.biometrics)}
     <button class="flat icon-only" onclick={() => run("lock")} title={tip(_("Lock xtermium"), "lock")} aria-label={_("Lock xtermium")}><Icon name="lock-alt" size={16} /></button>
@@ -1529,6 +1509,26 @@
         </div>
         <!-- the tools act on tabs, so they come as the tabs do: files and snippets with a terminal tab, broadcast with two tabs -->
         <div class="tools row">
+          <!-- Getting started's progress while tabs hide the start screen: a ring, the name and
+               "3/8", opening the list in a popover under it. First, so it reads before the tools. -->
+          {#if guideAway}
+            {@const label = _("Getting started: {n} of {total} done", { n: guideDoneCount, total: guide.length })}
+            <button
+              bind:this={guideButton}
+              class="flat guide-button"
+              class:on={!!guidePop}
+              title={label}
+              aria-label={label}
+              aria-expanded={!!guidePop}
+              onclick={() => (guidePop ? closeGuide() : openGuide())}
+            >
+              <svg class="steps-ring" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5" pathLength="100" />
+                <circle class="fill" cx="8" cy="8" r="6.5" pathLength="100" stroke-dasharray="{(guideDoneCount / guide.length) * 100} 100" />
+              </svg>
+              <span>{_("Getting started")}</span><span class="count">{guideDoneCount}/{guide.length}</span>
+            </button>
+          {/if}
           {#if tasks.length}
             <button
               class="flat tasks"
@@ -1967,8 +1967,8 @@
          and it takes the keys (Escape or Tab closes it); a step picked closes it, then is done. -->
     <div
       class="menu guide-pop"
-      style:inset-inline-start="{guidePop.start}px"
-      style:bottom="{guidePop.bottom}px"
+      style:inset-inline-end="{guidePop.end}px"
+      style:top="{guidePop.top}px"
       {@attach menu(closeGuide)}
     >
       <Guide
@@ -2175,12 +2175,12 @@
   .corner .settings {
     margin-inline-start: auto;
   }
-  /* Getting started's progress at the sidebar's foot: a ring filling with the steps done, the
-     name and the count; on the rail, the ring alone. Quiet like the foot's icons. */
+  /* Getting started's progress at the tab bar's end: a ring filling with the steps done, the
+     name and the count. Quiet like the tools beside it, as the Tasks count is. */
   .guide-button {
+    flex: none;
     gap: var(--gap);
-    min-width: 0;
-    padding: 3px 5px;
+    padding: 2px 5px;
     color: var(--weak);
     font-size: var(--t-s);
   }
@@ -2205,10 +2205,10 @@
     stroke: var(--gold-fill);
     stroke-linecap: round;
   }
-  /* the list away from the start screen, over the sidebar's foot or beside the rail */
+  /* the list away from the start screen, hanging from the tab bar's end over the panes */
   .guide-pop {
     width: min(377px, calc(100vw - 2 * 13px));
-    max-height: calc(100vh - var(--titlebar) - 2 * 13px);
+    max-height: calc(100vh - var(--titlebar) - var(--bar) - 3 * 13px);
     overflow: auto;
     padding: 0;
   }
