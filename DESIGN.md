@@ -595,7 +595,7 @@ turns it on again and Start over clears its ticks.
 Most steps open a tab, which hides the start screen, so the list is reachable from there too.
 While it's on, unfinished and behind tabs, the tab strip's tools start with its progress: an
 amber pill (a `gold-soft` wash with a `picked-line` edge, `picked` on hover and while open)
-holding a 16px ring filling in `gold` (bronze on the light theme) over a `weak` track at 55%,
+holding a 16px ring filling in `gold-fill` over a `weak` track at 55%,
 "Getting started" in `fg` at `--t-s` and 500, and "2/8" in the short face at 600. It is the one
 tinted thing in the strip, where the eye goes, and over nothing (a card floating on the panes
 would cover output and sit under website views). It pulses twice, an amber halo spreading 8px

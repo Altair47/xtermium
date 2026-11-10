@@ -2243,9 +2243,8 @@
     stroke: color-mix(in srgb, var(--weak) 55%, transparent);
     stroke-width: 2;
   }
-  /* done so far: `--gold`, which the light theme deepens to bronze, so it reads on the wash */
   .steps-ring .fill {
-    stroke: var(--gold);
+    stroke: var(--gold-fill);
     stroke-linecap: round;
   }
   /* the list away from the start screen, hanging from the tab bar's end over the panes */
