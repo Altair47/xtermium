@@ -1330,9 +1330,31 @@
     if (!ticked || !app.settings?.guide || !strip.length || guidePop) return;
     const done = rows.find((r) => r.id === ticked)!.title;
     const next = rows.find((r) => !r.done)?.title;
-    untrack(() =>
-      toast(next ? _("Done: {done}. Next: {next}.", { done, next }) : _("Getting started is all done."), { label: _("Show"), run: openGuide }),
-    );
+    untrack(() => {
+      toast(next ? _("Done: {done}. Next: {next}.", { done, next }) : _("Getting started is all done."), { label: _("Show"), run: openGuide });
+      nudgeGuide();
+    });
+  });
+
+  /** The progress button pulses for a moment: when it first shows (the start screen just went
+   *  behind a tab) and when a step ticks, so the eye finds where the list went. Not under reduced
+   *  motion (app.css stops animations). */
+  let guideNudge = $state(false);
+  let nudgeTimer = 0;
+  function nudgeGuide() {
+    guideNudge = false;
+    clearTimeout(nudgeTimer);
+    // off, then on again a moment later: a pulse already running starts over
+    nudgeTimer = setTimeout(() => {
+      guideNudge = true;
+      nudgeTimer = setTimeout(() => (guideNudge = false), 2600);
+    }, 21);
+  }
+  let wasAway = false;
+  $effect(() => {
+    const away = guideAway;
+    if (away && !wasAway) untrack(nudgeGuide);
+    wasAway = away;
   });
 
   /** Every level of every session's folder: Prod/Web counts Prod as well. */
@@ -1515,8 +1537,9 @@
             {@const label = _("Getting started: {n} of {total} done", { n: guideDoneCount, total: guide.length })}
             <button
               bind:this={guideButton}
-              class="flat guide-button"
-              class:on={!!guidePop}
+              class="guide-button"
+              class:open={!!guidePop}
+              class:nudge={guideNudge}
               title={label}
               aria-label={label}
               aria-expanded={!!guidePop}
@@ -2176,21 +2199,39 @@
     margin-inline-start: auto;
   }
   /* Getting started's progress at the tab bar's end: a ring filling with the steps done, the
-     name and the count. Quiet like the tools beside it, as the Tasks count is. */
-  .guide-button {
+     name and the count, on an amber wash with an amber edge (the accent as a fill, as a picked
+     button wears it) so it stands out from the quiet tools beside it: it's where the list went. */
+  .tools .guide-button {
     flex: none;
     gap: var(--gap);
-    padding: 2px 5px;
-    color: var(--weak);
+    padding: 2px 8px 2px 5px;
+    border: 1px solid var(--picked-line);
+    background: var(--gold-soft);
+    color: var(--fg);
     font-size: var(--t-s);
+    font-weight: 500;
   }
-  .guide-button:hover,
-  .guide-button.on {
+  .tools .guide-button:hover:not(:disabled),
+  .tools .guide-button.open {
+    background: var(--picked);
     color: var(--fg);
   }
   .guide-button .count {
     font-family: var(--short);
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+  /* a ring widening out of its edge and fading, twice */
+  .guide-button.nudge {
+    animation: guide-nudge 1.2s var(--ease-out) 2;
+  }
+  @keyframes guide-nudge {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-fill) 70%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 8px transparent;
+    }
   }
   .steps-ring {
     flex: none;
@@ -2198,11 +2239,13 @@
     height: 16px;
     rotate: -90deg;
     fill: none;
-    stroke: var(--line);
+    /* the track, what's left to do: a hairline's `--line` vanished on the amber wash */
+    stroke: color-mix(in srgb, var(--weak) 55%, transparent);
     stroke-width: 2;
   }
+  /* done so far: `--gold`, which the light theme deepens to bronze, so it reads on the wash */
   .steps-ring .fill {
-    stroke: var(--gold-fill);
+    stroke: var(--gold);
     stroke-linecap: round;
   }
   /* the list away from the start screen, hanging from the tab bar's end over the panes */
