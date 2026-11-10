@@ -32,10 +32,11 @@
 
 <script lang="ts">
   // Getting started: a short list for someone new, on the start screen in place of its four start
-  // buttons, and with tabs open in a popover from the sidebar's foot (App.svelte). Each row does
-  // what it says, and ticks itself once that's done. Only the step to do next says more (its hint
-  // and keys); the others are one line each, their hint in the row's tooltip. Hide puts it away
-  // (with Undo); Settings › General brings it back.
+  // buttons, and with tabs open in a popover from the sidebar's foot (App.svelte). One step is open
+  // at a time, the next one to start with: it says what the step is and has Try it, which does the
+  // step. Clicking another row opens that one instead, so a step can be read before it's done.
+  // Steps tick themselves once done. Hide puts the list away (with Undo); Settings › General
+  // brings it back.
   import Icon from "./Icon.svelte";
   import { toast } from "./state.svelte";
 
@@ -47,6 +48,16 @@
   const count = $derived(rows.filter((r) => r.done).length);
   /** The first step not done yet: the one to do next stands out. */
   const next = $derived(rows.find((r) => !r.done)?.id);
+  /** The row opened by a click; until then, and after Try it, the next step. */
+  let picked = $state<Step | null>(null);
+  const open = $derived(picked ?? next);
+
+  /** Opens a row. In the popover, a click in a menu hands the keyboard back to where it was
+   *  (menu.ts `pick`); opening a row isn't picking, so the keyboard stays on it. */
+  function show(id: Step, e: MouseEvent) {
+    picked = id;
+    (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+  }
 
   function hide() {
     s.guide = false;
@@ -62,24 +73,22 @@
   </header>
   <ol>
     {#each rows as r, i (r.id)}
-      <li>
-        <button
-          class="flat step"
-          class:done={r.done}
-          class:next={r.id === next}
-          aria-current={r.id === next ? "step" : undefined}
-          title={r.id === next ? null : r.hint}
-          onclick={() => onstep(r.id)}
-        >
+      <li class:open={r.id === open} class:done={r.done} class:next={r.id === next}>
+        <button class="flat step" aria-expanded={r.id === open} aria-current={r.id === next ? "step" : undefined} onclick={(e) => show(r.id, e)}>
           <span class="mark" aria-hidden="true">{#if r.done}<Icon name="check" size={16} />{:else}{i + 1}{/if}</span>
-          <span class="text">
-            <span class="title">{r.title}<span class="sr">{r.done ? _(" (done)") : ""}</span></span>
-            <span class="hint">{r.hint}</span>
-          </span>
+          <span class="title">{r.title}<span class="sr">{r.done ? _(" (done)") : ""}</span></span>
           {#if r.keys}<kbd>{r.keys}</kbd>{/if}
         </button>
-        {#if r.id === "session" && r.id === next}
-          <button class="link quiet also" onclick={onimport}>{_("Or import them from MobaXterm or ~/.ssh/config")}</button>
+        {#if r.id === open}
+          <div class="more">
+            <p class="hint">{r.hint}</p>
+            <div class="acts">
+              <button class="go" class:primary={!r.done} onclick={() => ((picked = null), onstep(r.id))}>{r.done ? _("Do it again") : _("Try it")}</button>
+              {#if r.id === "session" && !r.done}
+                <button class="link quiet also" onclick={onimport}>{_("Or import them from MobaXterm or ~/.ssh/config")}</button>
+              {/if}
+            </div>
+          </div>
         {/if}
       </li>
     {/each}
@@ -138,25 +147,32 @@
   li {
     display: flex;
     flex-direction: column;
+    border-radius: calc(var(--r-menu) - 3px);
   }
-  /* a row: the step's number (a tick once done), what to do, its keys; one line, but the step to
-     do next also says why, so the eye has one place to go. The words wrap (a button keeps them on
-     one line), so a narrow window never puts them under the keys. */
+  /* the open step: a soft band holding its row, what it is and Try it */
+  li.open {
+    background: var(--hover);
+  }
+  /* a row: the step's number (a tick once done), what to do, its keys, on one line. The words
+     wrap (a button keeps them on one line), so a narrow window never puts them under the keys. */
   .step {
     display: grid;
     grid-template-columns: var(--row) minmax(0, 1fr) auto;
     white-space: normal;
     align-items: center;
-    gap: 8px 13px;
+    gap: 13px;
     padding: 3px 8px;
     border: 0;
-    border-radius: calc(var(--r-menu) - 3px);
+    border-radius: inherit;
     text-align: start;
     color: var(--fg);
   }
-  .step.next {
-    padding-block: 5px;
-    background: var(--hover);
+  .open .step {
+    padding-block-start: 5px;
+  }
+  /* the open row already wears the band; the pointer adds nothing to it */
+  .open .step:hover {
+    background: none;
   }
   /* the number, plain; only the next step's has a ring */
   .mark {
@@ -180,30 +196,10 @@
     background: color-mix(in srgb, var(--ok) 18%, transparent);
     color: var(--ok);
   }
-  .text {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
   .title {
+    min-width: 0;
     font-family: var(--short);
     font-weight: 500;
-  }
-  .hint {
-    font-family: var(--ui);
-    font-size: var(--t-s);
-    color: var(--weak);
-    line-height: 1.4;
-  }
-  /* only the next step shows its hint; the others keep it for screen readers (and the tooltip) */
-  .step:not(.next) .hint,
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
   /* done: still there to do again, but stepped back */
   .done .title {
@@ -219,19 +215,61 @@
     font-size: var(--t-s);
     color: var(--weak);
   }
-  .next kbd {
+  .open kbd {
     color: var(--fg);
   }
   .done kbd {
     opacity: var(--dim);
   }
-  /* the import link under its step, lined up with the step's text */
+  /* under the open row, lined up with its title: what the step is, then Try it */
+  .more {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 8px 8px;
+    padding-inline-start: calc(8px + var(--row) + 13px);
+  }
+  .hint {
+    margin: 0;
+    font-family: var(--ui);
+    font-size: var(--t-s);
+    color: var(--weak);
+    line-height: 1.4;
+  }
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 13px;
+  }
+  /* Try it is the list's one primary; Do it again an ordinary button. Set here as well, because in
+     the popover a menu's items are drawn flat (app.css `.menu button`). */
+  .go {
+    border: 1px solid var(--line);
+    border-radius: var(--r-control);
+    background: var(--raised);
+  }
+  .go.primary {
+    border-color: transparent;
+    background: var(--gold-fill);
+    color: var(--gold-fill-ink);
+  }
+  .go.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--gold-fill) 86%, white);
+  }
+  :global(:root[data-theme="light"]) .go.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--gold-fill) 92%, black);
+  }
   .also {
-    align-self: flex-start;
     min-height: 0; /* in the popover, a menu's items are taller */
     padding: 0;
-    margin-block: 3px;
-    margin-inline-start: calc(8px + var(--row) + 13px);
     font-size: var(--t-s);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 </style>

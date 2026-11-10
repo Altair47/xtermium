@@ -1299,7 +1299,7 @@
     else guidePop = { start: rtl ? innerWidth - r.right : r.left, bottom: innerHeight - r.top + 5 };
     // After the palette or a dialog that opened it has handed the keyboard back (`refocus`).
     const step = (sel: string) => document.querySelector<HTMLElement>(`.guide-pop ${sel}`);
-    setTimeout(() => (step(".step.next") ?? step(".step"))?.focus(), 0);
+    setTimeout(() => (step(".open .go") ?? step(".step"))?.focus(), 0);
   }
   function closeGuide() {
     guidePop = null;
