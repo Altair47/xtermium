@@ -56,6 +56,7 @@ export const ACTIONS: Action[] = [
   { id: "coop", label: "Terminal Co-op", keys: "Ctrl+Shift+G", mac: "Shift+Meta+G" },
   { id: "sync", label: "Sync the account now", keys: "Ctrl+Shift+J", mac: "Shift+Meta+J" },
   { id: "credentials", label: "Shared logins", keys: "" },
+  { id: "getting-started", label: "Getting started", keys: "" },
   { id: "import", label: "Import sessions", keys: "" },
   { id: "export", label: "Export all sessions", keys: "" },
   { id: "settings", label: "Settings", keys: "Ctrl+,", mac: "Meta+," },

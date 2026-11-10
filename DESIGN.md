@@ -187,6 +187,9 @@ components:
     textColor: "{colors.fg}"
     typography: "{typography.short-strong}"
     rounded: "2px"
+    padding: "3px 8px"
+  guide-step-next:
+    backgroundColor: "{colors.hover}"
     padding: "5px 8px"
   guide-step-done:
     textColor: "{colors.weak}"
@@ -574,17 +577,28 @@ run it in a shell." Settings › About shows the same logo at 233px.
 For someone new, the ways to start give way to **Getting started** (`ui/lib/Guide.svelte`): one
 panel (hairline, `--r-menu`) headed by its title in the short face (`--t-l`, 600), "n of 8 done"
 in `weak` ("All done" once every step is) and a flat Hide, over eight rows, most important first: a local shell, a saved server
-(with an import link under it), the palette, panes, a tunnel, broadcast, the lock, sync. A row is
-a flat button in three columns: its number in a 21px hairline ring (a tick on an `ok` tint once
-done; the next step's ring and number in `fg`, the rest `weak`), the step in the short face at
-500 with a `weak` hint under it in the long face at `--t-s`, and its shortcut in a `kbd`. The
-words wrap, so a narrow window never puts them under the shortcut. Clicking a row does the step for real (panes and
-broadcast open two local shells to show on). A step is done when the state it leads to is there
-(a saved session, a tunnel, a lock, an account) or once it was done; done rows step back to
-`weak`. While the list shows with nothing saved, the "No saved sessions yet" line goes (the list
-says it). A new install starts with it on; installs from before it don't. Hide puts it away with
-an Undo toast; Settings › General › Getting started turns it on again and Start over clears its
-ticks.
+(with an import link under it while that step is next), the palette, panes, a tunnel, broadcast,
+the lock, sync. A row is a flat button in three columns, one line each: its number, plain and
+`weak` (a tick on an `ok` tint once done), the step in the short face at 500, and its shortcut as
+quiet `weak` text, not a key cap. Only the step to do next says more: it sits on a `--hover` band,
+its number in a 21px `fg` ring, its hint under it in the long face at `--t-s` (`weak`), its
+shortcut in `fg`. The other rows keep their hint for screen readers and in their tooltip, so the
+eye has one place to go. The words wrap, so a narrow window never puts them under the shortcut.
+Clicking a row does the step for real (panes and broadcast open two local shells to show on). A
+step is done when the state it leads to is there (a saved session, a tunnel, a lock, an account)
+or once it was done; done rows step back to `weak`. While the list shows with nothing saved, the
+"No saved sessions yet" line goes (the list says it). A new install starts with it on; installs
+from before it don't. Hide puts it away with an Undo toast; Settings › General › Getting started
+turns it on again and Start over clears its ticks.
+
+Most steps open a tab, which hides the start screen, so the list is reachable from there too.
+While it's on, unfinished and behind tabs, the sidebar's foot starts with its progress: a 16px
+ring filling in `gold-fill` over a `line` track, "Getting started" and "2/8" in `weak` at `--t-s`
+(the ring alone on the rail). It opens the same list in a popover (a `.menu`, 377 wide, the list
+inset without its own edge) over the foot or beside the rail; the next step takes the keyboard,
+Escape closes it. A step ticked away from the list brings a toast, "Done: … Next: …", with Show
+opening the popover, and the palette's "Getting started" opens it as well (turning the list back
+on if it was hidden).
 
 The prompt is real. A character typed there (outside any field, with no dialog, palette or menu
 open) opens a local shell, and every key typed is held until the shell can take it, then handed
