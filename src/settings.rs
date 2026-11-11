@@ -183,7 +183,8 @@ pub struct Settings {
     /// off, so people who already know their way around don't get it.
     #[serde(default)]
     pub guide: bool,
-    /// The list's steps done so far (ui/lib/Guide.svelte ids).
+    /// The list's steps done so far (ui/lib/Guide.svelte ids), and `pill-seen` once the tab bar's
+    /// progress pill has had its one pulse (App.svelte).
     pub guide_done: Vec<String>,
     /// Keyboard shortcuts changed from the defaults: action → key chord ("" = none).
     /// The actions and their defaults are in the UI (ui/lib/actions.ts).

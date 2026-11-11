@@ -598,8 +598,9 @@ amber pill (a `gold-soft` wash with a `picked-line` edge, `picked` on hover and 
 holding a 16px ring filling in `gold-fill` over a `weak` track at 55%,
 "Getting started" in `fg` at `--t-s` and 500, and "2/8" in the short face at 600. It is the one
 tinted thing in the strip, where the eye goes, and over nothing (a card floating on the panes
-would cover output and sit under website views). It pulses twice, an amber halo spreading 8px
-and fading, when it first appears and after each tick's toast; reduced motion stops the pulse. It opens the same list in a popover (a `.menu`, 377 wide, the list inset
+would cover output and sit under website views). The first time it appears on a
+device it pulses twice, an amber halo spreading 8px and fading; after that the tick's toast says
+where the list went. Reduced motion stops the pulse. It opens the same list in a popover (a `.menu`, 377 wide, the list inset
 without its own edge) hanging under it, its end lined up with the button's; the open step's Try it
 takes the keyboard, opening another row keeps it in the popover, Escape closes it. A step ticked away from the list brings a toast, "Done: … Next: …", with Show
 opening the popover, and the palette's "Getting started" opens it as well (turning the list back

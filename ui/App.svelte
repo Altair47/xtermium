@@ -1316,29 +1316,32 @@
 
   /** Where each step stood when last told, so a step that ticks says so, once. */
   const guideSeen = new Map<Step, boolean>();
+  /** The workspace the steps were last read in. */
+  let guideWorkspace: string | undefined;
   // A step done away from the list (most of them open a tab, which hides the start screen) brings
   // a toast naming it and the next one, with Show. Not on the list's own screen, where the tick is
-  // seen, nor for steps only now known (the lock's state arrives after the window opens).
+  // seen, nor for steps only now known (the lock's state arrives after the window opens), nor on a
+  // workspace switch: one with saved sessions ticks "Save your first server", but nobody did that.
   $effect(() => {
     const rows = app.settings ? guideRows() : [];
+    const switched = guideWorkspace !== undefined && guideWorkspace !== app.workspace;
+    guideWorkspace = app.workspace;
     let ticked: Step | undefined;
     for (const r of rows) {
       if (!r.known) continue;
       if (guideSeen.get(r.id) === false && r.done) ticked ??= r.id;
       guideSeen.set(r.id, r.done);
     }
-    if (!ticked || !app.settings?.guide || !strip.length || guidePop) return;
+    if (!ticked || switched || !app.settings?.guide || !strip.length || guidePop) return;
     const done = rows.find((r) => r.id === ticked)!.title;
     const next = rows.find((r) => !r.done)?.title;
-    untrack(() => {
-      toast(next ? _("Done: {done}. Next: {next}.", { done, next }) : _("Getting started is all done."), { label: _("Show"), run: openGuide });
-      nudgeGuide();
-    });
+    untrack(() => toast(next ? _("Done: {done}. Next: {next}.", { done, next }) : _("Getting started is all done."), { label: _("Show"), run: openGuide }));
   });
 
-  /** The progress button pulses for a moment: when it first shows (the start screen just went
-   *  behind a tab) and when a step ticks, so the eye finds where the list went. Not under reduced
-   *  motion (app.css stops animations). */
+  /** The progress button pulses for a moment the first time it shows on this device (the start
+   *  screen just went behind a tab), so the eye finds where the list went; after that the Done
+   *  toast says so. `guide_done` remembers it as `pill-seen`, and Start over clears it with the
+   *  steps. Not under reduced motion (app.css stops animations). */
   let guideNudge = $state(false);
   let nudgeTimer = 0;
   function nudgeGuide() {
@@ -1353,7 +1356,12 @@
   let wasAway = false;
   $effect(() => {
     const away = guideAway;
-    if (away && !wasAway) untrack(nudgeGuide);
+    if (away && !wasAway)
+      untrack(() => {
+        if (app.settings?.guide_done.includes("pill-seen")) return;
+        guideDone("pill-seen");
+        nudgeGuide();
+      });
     wasAway = away;
   });
 
