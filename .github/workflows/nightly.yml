@@ -89,6 +89,17 @@ jobs:
           tool: cargo-about@0.9.3
       - run: npm run notices
 
+      # Developer ID signing and notarization, when the repository has the Apple secrets.
+      - if: runner.os == 'macOS'
+        run: sh scripts/apple-env.sh
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+
       - run: npx tauri build ${{ matrix.args }}
         env:
           # Shown in Settings › About, to tell builds apart (src/support.rs).
@@ -103,6 +114,11 @@ jobs:
           for b in xtermium xtermium-rdp; do lipo "$app/Contents/MacOS/$b" -verify_arch arm64 x86_64; done
           codesign --verify --deep --strict --verbose=2 "$app"
           "$app/Contents/MacOS/xtermium" help 2>&1 | grep -q "Drive the running xtermium"
+          # Signed with the Developer ID: Gatekeeper takes it, and the notarization ticket is stapled on.
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            spctl --assess --type execute --verbose=2 "$app"
+            xcrun stapler validate "$app"
+          fi
 
       # The portable build, as release.yml makes it: the files the MSI puts in its folder.
       - if: runner.os == 'Windows'
