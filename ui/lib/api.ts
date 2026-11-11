@@ -236,7 +236,8 @@ export type Settings = {
   focus_animated: boolean;
   /** The interface's accent colour, `#rrggbb`; "" = the built-in amber. */
   accent: string;
-  /** The getting-started list on the start screen (Guide.svelte); `guide_done`: the steps done. */
+  /** The getting-started list on the start screen (Guide.svelte); `guide_done`: the steps done,
+   *  and `pill-seen` once the tab bar's progress pill has pulsed. */
   guide: boolean;
   guide_done: string[];
   /** The app's own icon, a 256px square `data:image/png` URL (images.ts `appIcon`); "" = the mark. */

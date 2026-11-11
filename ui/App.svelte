@@ -8,7 +8,7 @@
   import { bindings, cell, chord, DIRECTIONS, EDGES, even, fill as fillIn, MOVES, neighbour, nudge, resize as resized, placeholders, quickConnect, tile, tileRows, zoomed, type Filter, type Sizes } from "./lib/actions";
   import { addressSession, broadcasts, COLORS, isDesktop, joinsBroadcast, newSession, openUrl, seeThrough, type CoopRemote, type Meta, type SavedLayout, type Session, type Snippet, type Update } from "./lib/api";
   import Backdrop from "./lib/Backdrop.svelte";
-  import Guide, { type Step } from "./lib/Guide.svelte";
+  import Guide, { guideRows, type Step } from "./lib/Guide.svelte";
   import Logo from "./lib/Logo.svelte";
   import Account from "./lib/Account.svelte";
   import Coop from "./lib/Coop.svelte";
@@ -1071,6 +1071,9 @@
         showPalette = !showPalette;
         if (showPalette) guideDone("palette");
         break;
+      case "getting-started":
+        openGuide();
+        break;
       case "find":
         paletteFilter = "sessions";
         showPalette = true;
@@ -1270,6 +1273,98 @@
     }
   }
 
+  // ---- Getting started while tabs hide the start screen ----
+  /** The list's popover: from the tab bar's progress button, the palette or a tick's toast,
+   *  hanging under the tab bar by its inline-end edge (both from the window's edges). */
+  let guidePop = $state<{ end: number; top: number } | null>(null);
+  /** The tab bar's progress button, which the popover hangs from. */
+  let guideButton = $state<HTMLElement>();
+  const guide = $derived(app.settings?.guide ? guideRows() : []);
+  const guideDoneCount = $derived(guide.filter((r) => r.done).length);
+  /** The progress button shows while the list is on, unfinished and out of sight behind tabs. */
+  const guideAway = $derived(strip.length > 0 && guideDoneCount < guide.length);
+
+  /** Shows the list: on the start screen it's there already; with tabs, in the popover. Turns
+   *  the list back on if it was hidden (the palette's "Getting started" is how you ask). */
+  async function openGuide() {
+    if (!app.settings) return;
+    app.settings.guide = true;
+    if (!strip.length) return void (guidePop = null);
+    await tick(); // the progress button, if the list was hidden until now
+    const rtl = document.documentElement.dir === "rtl";
+    // Under the progress button, its end lined up with the button's; with every step done there is
+    // no button (the palette still opens the list), so under the tab bar's tools.
+    const at = guideButton ?? document.querySelector<HTMLElement>(".strip .tools");
+    const r = at?.getBoundingClientRect();
+    if (!r || !r.height) guidePop = { end: 13, top: 89 };
+    else guidePop = { end: Math.max(5, rtl ? r.left : innerWidth - r.right), top: r.bottom + 5 };
+    // After the palette or a dialog that opened it has handed the keyboard back (`refocus`).
+    const step = (sel: string) => document.querySelector<HTMLElement>(`.guide-pop ${sel}`);
+    setTimeout(() => (step(".open .go") ?? step(".step"))?.focus(), 0);
+  }
+  function closeGuide() {
+    guidePop = null;
+    // The keyboard goes back where it was; if that's gone (the palette), to the focused pane.
+    tick().then(() => document.activeElement === document.body && refocus());
+  }
+
+  // Hidden (its own Hide) or the last tab closed (the start screen has it): the popover goes, and
+  // doesn't come back by itself when the list or a tab does.
+  $effect(() => {
+    if (guidePop && (!app.settings?.guide || !strip.length)) guidePop = null;
+  });
+
+  /** Where each step stood when last told, so a step that ticks says so, once. */
+  const guideSeen = new Map<Step, boolean>();
+  /** The workspace the steps were last read in. */
+  let guideWorkspace: string | undefined;
+  // A step done away from the list (most of them open a tab, which hides the start screen) brings
+  // a toast naming it and the next one, with Show. Not on the list's own screen, where the tick is
+  // seen, nor for steps only now known (the lock's state arrives after the window opens), nor on a
+  // workspace switch: one with saved sessions ticks "Save your first server", but nobody did that.
+  $effect(() => {
+    const rows = app.settings ? guideRows() : [];
+    const switched = guideWorkspace !== undefined && guideWorkspace !== app.workspace;
+    guideWorkspace = app.workspace;
+    let ticked: Step | undefined;
+    for (const r of rows) {
+      if (!r.known) continue;
+      if (guideSeen.get(r.id) === false && r.done) ticked ??= r.id;
+      guideSeen.set(r.id, r.done);
+    }
+    if (!ticked || switched || !app.settings?.guide || !strip.length || guidePop) return;
+    const done = rows.find((r) => r.id === ticked)!.title;
+    const next = rows.find((r) => !r.done)?.title;
+    untrack(() => toast(next ? _("Done: {done}. Next: {next}.", { done, next }) : _("Getting started is all done."), { label: _("Show"), run: openGuide }));
+  });
+
+  /** The progress button pulses for a moment the first time it shows on this device (the start
+   *  screen just went behind a tab), so the eye finds where the list went; after that the Done
+   *  toast says so. `guide_done` remembers it as `pill-seen`, and Start over clears it with the
+   *  steps. Not under reduced motion (app.css stops animations). */
+  let guideNudge = $state(false);
+  let nudgeTimer = 0;
+  function nudgeGuide() {
+    guideNudge = false;
+    clearTimeout(nudgeTimer);
+    // off, then on again a moment later: a pulse already running starts over
+    nudgeTimer = setTimeout(() => {
+      guideNudge = true;
+      nudgeTimer = setTimeout(() => (guideNudge = false), 2600);
+    }, 21);
+  }
+  let wasAway = false;
+  $effect(() => {
+    const away = guideAway;
+    if (away && !wasAway)
+      untrack(() => {
+        if (app.settings?.guide_done.includes("pill-seen")) return;
+        guideDone("pill-seen");
+        nudgeGuide();
+      });
+    wasAway = away;
+  });
+
   /** Every level of every session's folder: Prod/Web counts Prod as well. */
   const folders = $derived(new Set(app.store.session.flatMap((s) => s.folder.split("/").filter(Boolean).map((_, i, p) => p.slice(0, i + 1).join("/")))).size);
 </script>
@@ -1327,7 +1422,15 @@
   <Account onsettings={() => openSettings("sync")} />
 {/snippet}
 
-<svelte:window onpointermovecapture={active} onkeydown={active} onkeydowncapture={keydown} oninputcapture={cleanInput} onchangecapture={clampNumber} onclick={() => ([tabMenu, showTasks, layoutsMenu, workspaceMenu] = [null, null, null, null])} />
+<svelte:window
+  onpointermovecapture={active}
+  onkeydown={active}
+  onkeydowncapture={keydown}
+  oninputcapture={cleanInput}
+  onchangecapture={clampNumber}
+  onclick={() => ([tabMenu, showTasks, layoutsMenu, workspaceMenu] = [null, null, null, null])}
+  onpointerdown={(e) => guidePop && !(e.target as Element).closest?.(".guide-pop, .guide-button") && closeGuide()}
+/>
 
 {#if ready}
   <div class="app">
@@ -1436,6 +1539,27 @@
         </div>
         <!-- the tools act on tabs, so they come as the tabs do: files and snippets with a terminal tab, broadcast with two tabs -->
         <div class="tools row">
+          <!-- Getting started's progress while tabs hide the start screen: a ring, the name and
+               "3/8", opening the list in a popover under it. First, so it reads before the tools. -->
+          {#if guideAway}
+            {@const label = _("Getting started: {n} of {total} done", { n: guideDoneCount, total: guide.length })}
+            <button
+              bind:this={guideButton}
+              class="guide-button"
+              class:open={!!guidePop}
+              class:nudge={guideNudge}
+              title={label}
+              aria-label={label}
+              aria-expanded={!!guidePop}
+              onclick={() => (guidePop ? closeGuide() : openGuide())}
+            >
+              <svg class="steps-ring" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6.5" pathLength="100" />
+                <circle class="fill" cx="8" cy="8" r="6.5" pathLength="100" stroke-dasharray="{(guideDoneCount / guide.length) * 100} 100" />
+              </svg>
+              <span>{_("Getting started")}</span><span class="count">{guideDoneCount}/{guide.length}</span>
+            </button>
+          {/if}
           {#if tasks.length}
             <button
               class="flat tasks"
@@ -1869,6 +1993,28 @@
       }}
     />
   {/if}
+  {#if guidePop && app.settings?.guide && strip.length}
+    <!-- Getting started away from the start screen. A `.menu`, so website views step aside for it
+         and it takes the keys (Escape or Tab closes it); a step picked closes it, then is done. -->
+    <div
+      class="menu guide-pop"
+      style:inset-inline-end="{guidePop.end}px"
+      style:top="{guidePop.top}px"
+      {@attach menu(closeGuide)}
+    >
+      <Guide
+        inset
+        onstep={(s) => {
+          closeGuide();
+          guideStep(s);
+        }}
+        onimport={() => {
+          closeGuide();
+          showImport = true;
+        }}
+      />
+    </div>
+  {/if}
   {#if showSnippets}
     <Snippets target={snippetTarget ? titleOf(snippetTarget) : ""} broadcast={broadcasting} onrun={(s) => runSnippet(s)} onclose={() => ((showSnippets = false), refocus())} />
   {/if}
@@ -2059,6 +2205,66 @@
   }
   .corner .settings {
     margin-inline-start: auto;
+  }
+  /* Getting started's progress at the tab bar's end: a ring filling with the steps done, the
+     name and the count, on an amber wash with an amber edge (the accent as a fill, as a picked
+     button wears it) so it stands out from the quiet tools beside it: it's where the list went. */
+  .tools .guide-button {
+    flex: none;
+    gap: var(--gap);
+    padding: 2px 8px 2px 5px;
+    border: 1px solid var(--picked-line);
+    background: var(--gold-soft);
+    color: var(--fg);
+    font-size: var(--t-s);
+    font-weight: 500;
+  }
+  .tools .guide-button:hover:not(:disabled),
+  .tools .guide-button.open {
+    background: var(--picked);
+    color: var(--fg);
+  }
+  .guide-button .count {
+    font-family: var(--short);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  /* a ring widening out of its edge and fading, twice */
+  .guide-button.nudge {
+    animation: guide-nudge 1.2s var(--ease-out) 2;
+  }
+  @keyframes guide-nudge {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-fill) 70%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 8px transparent;
+    }
+  }
+  .steps-ring {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    rotate: -90deg;
+    fill: none;
+    /* the track, what's left to do: a hairline's `--line` vanished on the amber wash */
+    stroke: color-mix(in srgb, var(--weak) 55%, transparent);
+    stroke-width: 2;
+  }
+  .steps-ring .fill {
+    stroke: var(--gold-fill);
+    stroke-linecap: round;
+  }
+  /* the list away from the start screen, hanging from the tab bar's end over the panes */
+  .guide-pop {
+    width: min(377px, calc(100vw - 2 * 13px));
+    max-height: calc(100vh - var(--titlebar) - var(--bar) - 3 * 13px);
+    overflow: auto;
+    padding: 0;
+  }
+  /* placed by its end already: not moved back by its width, as a menu at the pointer is (app.css) */
+  :global([dir="rtl"]) .guide-pop {
+    translate: none;
   }
   .rack :global(.on) {
     color: var(--gold);

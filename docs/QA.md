@@ -57,6 +57,9 @@ The macOS build ships unsigned, and nobody has run these on a Mac yet.
   Apple secrets yet.
 - The Co-op idle clock (`CGEventSourceSecondsSinceLastEventType`): compiled only by the
   release and nightly builds.
+- Getting started away from the start screen: the pill at the tab bar's end, its popover
+  under it (lined up with the pill's end, the keyboard on Try it, Escape back to the
+  terminal), the palette's Getting started and the Done toast's Show.
 
 ## Linux
 
@@ -64,6 +67,8 @@ The macOS build ships unsigned, and nobody has run these on a Mac yet.
   maximising, and the polish pass's sizes; the window menu (Minimize, Maximize, Close) a
   right-click on the bar's free space opens.
 - The clipboard on X11 and Wayland, in terminals and in Co-op.
+- Getting started away from the start screen, as under macOS: the pill, its popover and where
+  the keyboard goes, on X11 and Wayland.
 
 ## Right to left
 
