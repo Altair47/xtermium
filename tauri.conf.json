@@ -46,6 +46,14 @@
       "NOTICE": "NOTICE",
       "THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
     },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "assets/xtermium.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "assets/xtermium.desktop"
+      }
+    },
     "macOS": {
       "signingIdentity": "-"
     }
