@@ -56,8 +56,8 @@ jobs:
           - os: ubuntu-22.04
             args: ""
           # One app for both Macs (scripts/rdp.mjs joins the RDP helper's two builds with lipo).
-          # Ad-hoc signed and not notarized: there is no Apple Developer ID yet. Built on every
-          # pull request (build.yml), but the app hasn't been run on a Mac.
+          # Signed with the Developer ID certificate and notarized when the repository has the
+          # Apple secrets (scripts/apple-env.sh), ad-hoc signed without them.
           - os: macos-latest
             args: --target universal-apple-darwin
     runs-on: ${{ matrix.os }}
@@ -99,6 +99,17 @@ jobs:
       - id: notes
         run: node scripts/changelog.mjs
 
+      # Developer ID signing and notarization, when the repository has the Apple secrets.
+      - if: runner.os == 'macOS'
+        run: sh scripts/apple-env.sh
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+
       - id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
@@ -112,6 +123,12 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - if: runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          app=target/universal-apple-darwin/release/bundle/macos/xtermium.app
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$app"
 
       # The portable build, a download beside the installers (Scoop unpacks the MSI instead): the
       # files the MSI puts in its folder, without an installer. A missing one fails the step. The
