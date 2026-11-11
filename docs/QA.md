@@ -73,8 +73,7 @@ The macOS build ships unsigned, and nobody has run these on a Mac yet.
 ## Right to left
 
 - The Arabic locale with the new title bar, the sidebar row on the tab line and the
-  Getting started guide: its one-line rows and the open one (hint and Try it lined up with the
-  title), and the pill at the tab bar's end with its popover hanging from the pill's end.
+  Getting started guide.
 
 ## Windows
 

@@ -2262,6 +2262,10 @@
     overflow: auto;
     padding: 0;
   }
+  /* placed by its end already: not moved back by its width, as a menu at the pointer is (app.css) */
+  :global([dir="rtl"]) .guide-pop {
+    translate: none;
+  }
   .rack :global(.on) {
     color: var(--gold);
   }

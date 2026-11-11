@@ -12,7 +12,7 @@
   export type GuideRow = { id: Step; title: string; hint: string; done: boolean; known: boolean; keys: string };
 
   /** The steps and where each stands, read where it's called (in a `$derived`, it follows them).
-   *  App.svelte reads it too: for the sidebar's progress button and the toast a new tick brings. */
+   *  App.svelte reads it too: for the tab bar's progress pill and the toast a new tick brings. */
   export function guideRows(): GuideRow[] {
     const s = app.settings!;
     const did = (id: Step) => s.guide_done.includes(id);

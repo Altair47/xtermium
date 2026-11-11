@@ -586,8 +586,9 @@ under it its hint in the long face at `--t-s` (`weak`) and a Try it button (the 
 primary; Do it again, an ordinary button, on a done step). Clicking another row opens that one
 instead, so a step can be read before it's done; only Try it does the step, for real (panes and
 broadcast open two local shells to show on), and the next step opens after it. The words wrap,
-so a narrow window never puts them under the shortcut. A step is done when the state it leads to is there (a saved session, a tunnel, a lock, an account)
-or once it was done; done rows step back to `weak`. While the list shows with nothing saved, the
+so a narrow window never puts them under the shortcut. A step is done when the state it leads
+to is there (a saved session, a tunnel, a lock, an account) or once it was done; done rows step
+back to `weak`. While the list shows with nothing saved, the
 "No saved sessions yet" line goes (the list says it). A new install starts with it on; installs
 from before it don't. Hide puts it away with an Undo toast; Settings › General › Getting started
 turns it on again and Start over clears its ticks.
@@ -595,16 +596,17 @@ turns it on again and Start over clears its ticks.
 Most steps open a tab, which hides the start screen, so the list is reachable from there too.
 While it's on, unfinished and behind tabs, the tab strip's tools start with its progress: an
 amber pill (a `gold-soft` wash with a `picked-line` edge, `picked` on hover and while open)
-holding a 16px ring filling in `gold-fill` over a `weak` track at 55%,
-"Getting started" in `fg` at `--t-s` and 500, and "2/8" in the short face at 600. It is the one
-tinted thing in the strip, where the eye goes, and over nothing (a card floating on the panes
-would cover output and sit under website views). The first time it appears on a
-device it pulses twice, an amber halo spreading 8px and fading; after that the tick's toast says
-where the list went. Reduced motion stops the pulse. It opens the same list in a popover (a `.menu`, 377 wide, the list inset
-without its own edge) hanging under it, its end lined up with the button's; the open step's Try it
-takes the keyboard, opening another row keeps it in the popover, Escape closes it. A step ticked away from the list brings a toast, "Done: … Next: …", with Show
-opening the popover, and the palette's "Getting started" opens it as well (turning the list back
-on if it was hidden).
+holding a 16px ring filling in `gold-fill` over a `weak` track at 55%, "Getting started" in `fg`
+at `--t-s` and 500, and "2/8" in the short face at 600. It is the one tinted thing in the strip,
+where the eye goes, and over nothing (a card floating on the panes would cover output and sit
+under website views). The first time it appears on a device it pulses twice, an amber halo
+spreading 8px and fading; after that the tick's toast says where the list went. Reduced motion
+stops the pulse. It opens the same list in a popover (a `.menu`, 377 wide, the list inset without
+its own edge) hanging under it, its end lined up with the pill's, right to left too; the open
+step's Try it takes the keyboard, opening another row keeps it in the popover, Escape closes it.
+A step ticked away from the list brings a toast, "Done: … Next: …", with Show opening the
+popover, and the palette's "Getting started" opens it as well (turning the list back on if it
+was hidden). A workspace switch that ticks a step does so without a toast.
 
 The prompt is real. A character typed there (outside any field, with no dialog, palette or menu
 open) opens a local shell, and every key typed is held until the shell can take it, then handed
