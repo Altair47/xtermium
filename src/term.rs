@@ -1985,7 +1985,8 @@ pub fn code_args(kind: &Kind, cwd: &str, user: &str) -> Result<Vec<String>, Stri
             // OSC 7 hands over a URL's path: "/C:/Users/…" on Windows.
             let cwd = cwd.strip_prefix('/').filter(|p| cfg!(windows) && p.get(1..2) == Some(":")).unwrap_or(cwd);
             let home = directories::UserDirs::new().map(|d| d.home_dir().display().to_string()).unwrap_or_default();
-            let folder = [cwd, dir.here(), &home].into_iter().find(|d| !d.is_empty() && std::path::Path::new(d).is_dir());
+            let dir = crate::paths::expand(dir.here()).display().to_string();
+            let folder = [cwd, &dir, &home].into_iter().find(|d| !d.is_empty() && std::path::Path::new(d).is_dir());
             Ok(vec![folder.ok_or("No folder to open.")?.to_string()])
         }
         _ => Err("Only SSH sessions and local shells open in VS Code.".into()),
@@ -2090,8 +2091,14 @@ fn run_argv(
     rx: UnboundedReceiver<Ctl>,
     feed: impl FnMut(&[u8]),
 ) -> anyhow::Result<()> {
-    if !dir.is_empty() && !std::path::Path::new(dir).is_dir() {
+    // `~` and `~/…` are the home folder, in the working folder and in the program's own path.
+    let folder = crate::paths::expand(dir);
+    if !dir.is_empty() && !folder.is_dir() {
         anyhow::bail!("the working folder {dir} doesn't exist");
+    }
+    let mut argv = argv;
+    if let Some(p) = argv.first_mut().filter(|p| p.starts_with('~')) {
+        *p = crate::paths::expand(p).display().to_string();
     }
     let argv = through_cmd(argv, &std::env::var("PATH").unwrap_or_default());
     let mut parts = argv.iter();
@@ -2110,7 +2117,7 @@ fn run_argv(
         cmd.env(k, v);
     }
     if !dir.is_empty() {
-        cmd.cwd(dir);
+        cmd.cwd(folder);
     } else if let Some(d) = directories::UserDirs::new() {
         cmd.cwd(d.home_dir());
     }
@@ -2420,6 +2427,10 @@ mod tests {
         };
         assert_eq!(run("no-such-agent --x", ""), "no-such-agent wasn't found: install it, or check that it's on your PATH");
         assert!(run("no-such-agent", "/no/such/folder").contains("doesn't exist"));
+        // `~` is the home folder: it is there, what isn't under it still isn't.
+        assert!(run("no-such-agent", "~/").contains("wasn't found"));
+        assert!(run("~/no-such-agent", "~").contains("wasn't found"));
+        assert!(run("no-such-agent", "~/no-such-xtermium-folder").contains("doesn't exist"));
     }
 
     /// Agents installed with npm are `.cmd` shims on Windows; they run, in the session's folder.
