@@ -376,6 +376,9 @@ impl Settings {
         }
         self.ssh_keepalive = self.ssh_keepalive.min(3600);
         self.rdp_quality = self.rdp_quality.min(2);
+        if !crate::settings::COOP_IDLE.contains(&self.coop_idle) {
+            self.coop_idle = d.coop_idle;
+        }
         if self.automation_port < 1024 {
             self.automation_port = d.automation_port;
         }

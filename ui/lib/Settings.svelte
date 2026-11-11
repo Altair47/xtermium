@@ -1139,6 +1139,16 @@ xtermium close 3`}</pre>
       </select>
       <span></span>
       <p class="weak">{_("How the websites and BMC consoles you share look to the others: Low sends 2 pictures a second for slow links, Average 4, High 8 in full detail.")}</p>
+      <span>{_("End the ring when away")}</span>
+      <select bind:value={s.coop_idle}>
+        <option value={60}>{_("After 1 hour")}</option>
+        <option value={120}>{_("After {n} hours", { n: 2 })}</option>
+        <option value={480}>{_("After {n} hours", { n: 8 })}</option>
+        <option value={1440}>{_("After 1 day")}</option>
+        <option value={0}>{_("Never")}</option>
+      </select>
+      <span></span>
+      <p class="weak">{_("A ring you started ends by itself once you haven't moved the mouse or pressed a key for this long, so a forgotten ring doesn't stay open.")}</p>
     </div>
   {:else if page === "appearance"}
     <div class="form">

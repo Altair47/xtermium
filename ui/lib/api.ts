@@ -191,6 +191,8 @@ export type Settings = {
   coop_button: boolean;
   /** The pictures of websites and BMC consoles shared in a ring: how often and how finely (src/settings.rs `Quality`). */
   coop_quality: "low" | "average" | "high";
+  /** Minutes away from the mouse and keyboard after which a ring you started ends; 0: never. */
+  coop_idle: number;
   confirm_close: boolean;
   auto_reconnect: boolean;
   restore_tabs: boolean;

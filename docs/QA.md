@@ -27,6 +27,10 @@ Needs two (or three) Pro accounts on separate machines, joined in one ring throu
   and clicks read from inside a shared page.
 - A shared terminal drawn at each viewer's own font and zoom while the owner resizes or zooms.
 - The picture quality setting's three levels as a viewer sees them.
+- A pop-up or new-tab link of a shared website shared with the ring by itself, clicked by the
+  owner and by a guest with control (checked here with a faked ring and a faked pop-up event).
+- The ring ending after the owner's idle time (Settings › Account and sync › End the ring when
+  away): only the idle clock and the setting were tested, not a ring left alone for an hour.
 
 ## BMC consoles
 
@@ -49,6 +53,10 @@ The macOS build ships unsigned, and nobody has run these on a Mac yet.
 - The app's own title bar: the overlay style with its three buttons, dragging.
 - The per-system shortcuts (⌘ in place of Ctrl), as the wiki's shortcut table lists them.
 - Opening the unsigned `.dmg` past Gatekeeper, as the Installation page describes it.
+- Developer ID signing and notarization (scripts/apple-env.sh): no build has run with the
+  Apple secrets yet.
+- The Co-op idle clock (`CGEventSourceSecondsSinceLastEventType`): compiled only by the
+  release and nightly builds.
 
 ## Linux
 
