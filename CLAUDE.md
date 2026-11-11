@@ -210,8 +210,10 @@ CARGO_TARGET_DIR=target/work npm run tauri build -- --debug --no-bundle   # a te
 ## How the owner works
 
 - **Every change that adds, changes, removes, breaks or deprecates a feature, or changes the
-  project, is documented in the wiki** (https://github.com/xtermium/xtermium/wiki; its pages are kept in the website's
-  repository and pushed once the change has shipped). The README stays light: what xtermium is,
+  project, is documented in the wiki** (https://github.com/xtermium/xtermium/wiki). It is this
+  repository's GitHub wiki and the only one: no other xtermium repository keeps wiki pages. Edit
+  its pages in a clone of `git@github.com:xtermium/xtermium.wiki.git` and push once the change
+  has shipped. The README stays light: what xtermium is,
   install, a short feature list and links to the wiki; never add menus, limits or steps to it.
 - Requests come as numbered lists; do all of them, verify in the running app, then report briefly
   per item with what was tested and what couldn't be.
