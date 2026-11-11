@@ -60,6 +60,8 @@
     attach?: number;
     /** Terminals: the shell's folder (Meta). */
     cwd?: string;
+    /** A website's pop-up or new-tab link, from a tab the ring shares: shared too, once it has started. */
+    share?: boolean;
   };
   /** "tiles": a pane for every ticked tab, sized to fit however many there are (broadcast ticks them all). */
   type Layout = "single" | "columns" | "rows" | "grid" | "tiles";
@@ -206,15 +208,18 @@
   /** Saved sessions with a tab, by `sessionKey`: true while one of those tabs is up (the sidebar marks them). */
   const live = $derived(tabs.filter((t) => !coopTab(t)).reduce((m, t) => m.set(sessionKey(t.session), !!m.get(sessionKey(t.session)) || t.alive), new Map<string, boolean>()));
 
-  /** Opens a tab and returns its key; undefined if the session opened outside xtermium. */
-  function open(session: Session): number | undefined {
+  /** Opens a tab and returns its key; undefined if the session opened outside xtermium. A tab that
+   *  a website tab the ring shares opened (`from`: a pop-up, a link for a new tab, whoever clicked
+   *  it, the owner or a guest driving the page) is shared with the ring as well. */
+  function open(session: Session, from?: Tab): number | undefined {
     siteIcon(session);
     if (session.kind.type === "browser" && app.settings?.web === "External") {
       openUrl(session.kind.url).catch((e) => (app.status = String(e)));
       return;
     }
     const key = nextKey++;
-    tabs.push({ key, session, id: 0, title: session.name, alive: true, broadcast: true });
+    const share = !!from?.id && !!app.coop.ring?.owner && app.coop.shared.includes(from.id);
+    tabs.push({ key, session, id: 0, title: session.name, alive: true, broadcast: true, share });
     toPane(key);
     return key;
   }
@@ -257,6 +262,15 @@
     const free = panes.indexOf(null);
     if (layout !== "tiles" && free >= 0) panes[free] = key;
     toast(_("{name} shared {title}.", { name: r.owner_name || _("Someone"), title: r.title }), panes.includes(key) ? undefined : { label: _("Show"), run: () => show(key) });
+  }
+
+  // The owner's ring ends when they have been away (coop.rs `idle_watch`). Windows and macOS say
+  // when the computer last had input; elsewhere xtermium tells the backend of its own, once a minute.
+  let activeAt = 0;
+  function active() {
+    if (!app.coop.ring?.owner || app.os === "windows" || app.os === "macos" || Date.now() - activeAt < 60_000) return;
+    activeAt = Date.now();
+    invoke("coop_active");
   }
 
   /** The ring's owner puts a tab of theirs in front of everyone in it, or takes it back. */
@@ -386,14 +400,20 @@
   });
   // A website's pop-up opens as a tab of its own, with the same login (and SSH gateway).
   listen<{ id: number; url: string }>("web-popup", (e) => {
-    const from = tabs.find((t) => t.id === e.payload.id)?.session;
+    const tab = tabs.find((t) => t.id === e.payload.id);
+    const from = tab?.session;
     if (from?.kind.type !== "browser") return;
-    open({ ...$state.snapshot(from), name: new URL(e.payload.url).host, kind: { ...$state.snapshot(from.kind), url: e.payload.url } });
+    open({ ...$state.snapshot(from), name: new URL(e.payload.url).host, kind: { ...$state.snapshot(from.kind), url: e.payload.url } }, tab);
   });
 
   /** A tab's backend is up: remember its id, and answer automation if it asked for this tab. */
   function started(key: number, id: number) {
     update(key, { id });
+    const t = tabs.find((t) => t.key === key);
+    if (t?.share) {
+      t.share = false;
+      share(t, true);
+    }
     if (arriving?.key === key) arriving.up = true;
     const command = typeWhenUp.get(key);
     if (command) {
@@ -1307,7 +1327,7 @@
   <Account onsettings={() => openSettings("sync")} />
 {/snippet}
 
-<svelte:window onkeydowncapture={keydown} oninputcapture={cleanInput} onchangecapture={clampNumber} onclick={() => ([tabMenu, showTasks, layoutsMenu, workspaceMenu] = [null, null, null, null])} />
+<svelte:window onpointermovecapture={active} onkeydown={active} onkeydowncapture={keydown} oninputcapture={cleanInput} onchangecapture={clampNumber} onclick={() => ([tabMenu, showTasks, layoutsMenu, workspaceMenu] = [null, null, null, null])} />
 
 {#if ready}
   <div class="app">

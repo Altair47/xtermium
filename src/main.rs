@@ -2102,6 +2102,7 @@ fn main() {
             coop::coop_rename,
             coop::coop_traffic,
             coop::coop_end,
+            coop::coop_active,
             coop::coop_leave,
             coop::coop_share,
             coop::coop_cursor,

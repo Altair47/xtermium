@@ -23,7 +23,7 @@ use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, T
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tauri::async_runtime::{JoinHandle, spawn};
@@ -74,6 +74,8 @@ const GONE_TAB: &str = "That tab isn't shared with you any more.";
 const WIRE: u8 = 5;
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const PRO_EVERY: Duration = Duration::from_secs(5 * 60);
+/// How often the owner's ring looks at how long the owner has been away (`idle_watch`).
+const IDLE_EVERY: Duration = Duration::from_secs(60);
 /// The UI hears of changes at most this often (20 Hz): cursors would flood it otherwise.
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 /// How often the owner's pointer over a shared website or console is read from its page (15 Hz).
@@ -1634,6 +1636,25 @@ impl Ring {
         }
     }
 
+    /// Ends the ring once the owner has been away from the mouse and keyboard for as long as
+    /// Settings › Account and sync › Terminal Co-op allows: a ring left open is a way in. The
+    /// setting is read each minute, so a change applies to the ring that is on.
+    async fn idle_watch(self: Arc<Self>) {
+        loop {
+            tokio::time::sleep(IDLE_EVERY).await;
+            let minutes = self.handle.state::<App>().settings.lock().unwrap().coop_idle;
+            if idle_out(minutes, idle()) {
+                let _ = call(&self.handle, reqwest::Method::DELETE, &format!("/v1/coop/rings/{}", self.id), None).await;
+                let long = match minutes {
+                    60 => "an hour".to_string(),
+                    1440 => "a day".to_string(),
+                    m => format!("{} hours", m / 60),
+                };
+                return self.finish(Some("idle"), &format!("The ring ended because you were away for {long}."));
+            }
+        }
+    }
+
     // ---- a viewer ----
 
     /// Waits for the owner's yes, then connects and stays up to date until the ring ends.
@@ -1993,10 +2014,66 @@ pub async fn coop_create(handle: AppHandle) -> Res<Payload> {
     }
     ring.keep(spawn(ring.clone().accept_loop()));
     ring.keep(spawn(ring.clone().watch()));
+    ring.keep(spawn(ring.clone().idle_watch()));
     ring.keep(spawn(ring.clone().emitter()));
     *CURRENT.lock().unwrap() = Some(ring.clone());
     ring.notify();
     Ok(ring.payload())
+}
+
+/// When the owner last used xtermium, in seconds since 1970 (`coop_active`): what `idle` goes by
+/// where the system doesn't say when it last had input.
+static ACTIVE: AtomicU64 = AtomicU64::new(0);
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// The owner moved the mouse or pressed a key in xtermium (the UI says so at most once a minute
+/// while its ring is on, on the systems `idle` needs it).
+#[tauri::command]
+pub fn coop_active() {
+    ACTIVE.store(now_secs(), Relaxed);
+}
+
+/// How long this computer has had no mouse or keyboard input, in any program.
+#[cfg(windows)]
+fn idle() -> Duration {
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    let mut last = LASTINPUTINFO { cbSize: size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+    // No answer: not away, so a ring is never ended on a guess.
+    if !unsafe { GetLastInputInfo(&mut last) }.as_bool() {
+        return Duration::ZERO;
+    }
+    // Both count milliseconds since the system started and wrap together, after 49 days.
+    Duration::from_millis(unsafe { GetTickCount() }.wrapping_sub(last.dwTime).into())
+}
+
+/// How long this Mac has had no mouse or keyboard input, in any program.
+#[cfg(target_os = "macos")]
+fn idle() -> Duration {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event: u32) -> f64;
+    }
+    // 0: the login session's combined state; !0: any kind of input event.
+    let secs = unsafe { CGEventSourceSecondsSinceLastEventType(0, !0) };
+    Duration::try_from_secs_f64(secs).unwrap_or(Duration::ZERO)
+}
+
+/// How long xtermium itself has had no mouse or keyboard input (`coop_active`).
+/// ponytail: Linux has no one call for the whole desktop's idle time (X11 and each Wayland
+/// compositor differ), so input in other programs doesn't count here; ask the desktop
+/// (org.freedesktop.ScreenSaver, ext-idle-notify) if rings end too early for people.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn idle() -> Duration {
+    Duration::from_secs(now_secs().saturating_sub(ACTIVE.load(Relaxed)))
+}
+
+/// Away for as long as the setting allows (`minutes`; 0: never too long).
+fn idle_out(minutes: u32, idle: Duration) -> bool {
+    minutes > 0 && idle >= Duration::from_secs(u64::from(minutes) * 60)
 }
 
 /// The owner's dialog polls this every 2 s: who asks to join, and the passcode.
@@ -2423,6 +2500,20 @@ pub async fn coop_ask_control(ring_tab: u32, want: bool) -> Res<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A ring ends once its owner has been away for as long as the setting says, never when it says never.
+    #[test]
+    fn idle_ends_a_ring() {
+        let mins = |m: u64| Duration::from_secs(m * 60);
+        assert!(!idle_out(120, mins(119)));
+        assert!(idle_out(120, mins(120)));
+        assert!(!idle_out(0, mins(100_000)), "never");
+        // The system's own idle clock answers, and the test's computer was used within a day.
+        assert!(idle() < mins(1440) || cfg!(not(any(windows, target_os = "macos"))));
+        let mut s = crate::settings::Settings { coop_idle: 7, ..Default::default() };
+        s.sanitize();
+        assert_eq!(s.coop_idle, 120, "an unknown value falls back to the default, 2 hours");
+    }
 
     fn hello(user: &str) -> Hello {
         Hello { user_id: user.into(), name: "Sam".into(), image_url: None, wire: WIRE }

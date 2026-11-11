@@ -37,6 +37,9 @@ pub enum Cursor {
     Underline,
 }
 
+/// What `coop_idle` can be, in minutes: 1, 2 and 8 hours, a day, and never.
+pub const COOP_IDLE: [u32; 5] = [60, 120, 480, 1440, 0];
+
 /// How finely, and how often, a shared website or BMC console's picture goes to a Terminal Co-op
 /// ring (coop.rs `shoot`): the owner's choice for every viewer.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
@@ -147,6 +150,9 @@ pub struct Settings {
     pub coop_button: bool,
     /// The pictures of websites and BMC consoles you share in a ring.
     pub coop_quality: Quality,
+    /// A ring you started ends once you haven't touched the mouse or keyboard for this many
+    /// minutes (`COOP_IDLE` has the choices); 0: never.
+    pub coop_idle: u32,
     /// Ask before closing a tab whose connection is still up.
     pub confirm_close: bool,
     /// Reconnect SSH tabs whose connection dropped, a few times with growing waits.
@@ -435,6 +441,7 @@ impl Default for Settings {
             account_button: true,
             coop_button: true,
             coop_quality: Quality::Average,
+            coop_idle: 120,
             confirm_close: true,
             auto_reconnect: true,
             restore_tabs: false,
